@@ -37,7 +37,19 @@ class MaerklinProtocol:
         packet = ALL_ADDRESSES[address] + (T[1] if func else T[0]) + self.velocity_bytes(speed, reverse)
         return bytes(packet)
 
-    def turn_packet(self, address, func: bool):
+    def velocity_bytes(self, speed: int, reverse: bool):
+        raise NotImplementedError()
+
+    def turn_packet(self, address: int, func: bool):
+        raise NotImplementedError()
+
+
+class Motorola1(MaerklinProtocol):
+
+    def velocity_bytes(self, speed: int, reverse: bool):
+        return T[speed & 1] + T[(speed >> 1) & 1] + T[(speed >> 2) & 1] + T[speed >> 3]
+
+    def turn_packet(self, address: int, func: bool):
         """
         This packet indicates that a train should change direction.
 
@@ -47,15 +59,6 @@ class MaerklinProtocol:
         """
         packet = ALL_ADDRESSES[address] + (T[1] if func else T[0]) + self.velocity_bytes(1, False)
         return bytes(packet)
-
-    def velocity_bytes(self, speed: int, reverse: bool):
-        raise NotImplementedError()
-
-
-class Motorola1(MaerklinProtocol):
-
-    def velocity_bytes(self, speed: int, reverse: bool):
-        return T[speed & 1] + T[(speed >> 1) & 1] + T[(speed >> 2) & 1] + T[speed >> 3]
 
 
 class Motorola2(MaerklinProtocol):
@@ -73,6 +76,9 @@ class Motorola2(MaerklinProtocol):
             raise ValueError()
         bits = [speed & 1, b2, (speed >> 1) & 1, b4, (speed >> 2) & 1, b6, speed >> 3, b8]
         return tuple(0 if b else 63 for b in bits)
+
+    def turn_packet(self, address: int, func: bool):
+        return None
 
 
 class SignalGenerator:
@@ -93,22 +99,30 @@ class SignalGenerator:
         self._active = False
         self._data = {}  # address -> (speed, reverse, func)
         self._packets = {}
+        self._turn_packets = {}
         self._turn_addresses = []
         self.immediate_repetitions = 2
         self._idle_packet = protocol.velocity_packet(80, 0, False, False)
+        self._override_protocols = {}
 
-    def set(self, address: int, speed: int, reverse: bool, func: bool):
+    def set(self, address: int, speed: int, reverse: bool, func: bool, protocol: MaerklinProtocol = None):
         assert 0 < address < 80
         assert 0 <= speed <= 14
+        if protocol is None and address in self._override_protocols:
+            del self._override_protocols[address]
+        elif protocol is not None:
+            self._override_protocols[address] = protocol
         if address in self._data and self._data[address][1] != reverse:
             self._turn_addresses.append(address)
         self._data[address] = (speed, reverse, func)
-        self._packets[address] = self.protocol.velocity_packet(address, speed, reverse, func)
+        self._packets[address] = (protocol or self.protocol).velocity_packet(address, speed, reverse, func)
+        self._turn_packets[address] = (protocol or self.protocol).turn_packet(address, func)
 
     def _send(self, packet):
         self._ser.write(packet)
         time.sleep(len(packet) * 208e-6)
-        time.sleep(1250e-6)  # >= 3 t-bits (6 bytes) pause between signals
+        # time.sleep(1250e-6)  # >= 3 t-bits (6 bytes) pause between signals
+        time.sleep(350e-6)  # >= 3 t-bits (6 bytes) pause between signals
 
     def run(self):
         assert not self._active
@@ -119,10 +133,12 @@ class SignalGenerator:
             for address, vel_packet in dict(self._packets).items():
                 if address in self._turn_addresses:
                     self._turn_addresses.remove(address)
-                    for _rep in range(self.immediate_repetitions):
-                        self._send(self.protocol.turn_packet(address, False))
+                    if self._turn_packets[address] is not None:
+                        for _rep in range(2):
+                            self._send(self._turn_packets[address])
                 for _rep in range(self.immediate_repetitions):
                     self._send(vel_packet)
+                time.sleep(6200e-6 - 1250e-6)
 
     def start(self):
         assert not self._active
@@ -134,5 +150,5 @@ class SignalGenerator:
 
 if __name__ == '__main__':
     gen = SignalGenerator('COM1', Motorola2())
-    gen.set(48, 0, False, False)
+    gen.set(24, 5, True, True)
     gen.run()
