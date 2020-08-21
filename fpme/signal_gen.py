@@ -62,7 +62,8 @@ class SignalGenerator:
             baudrate=38400,
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
-            bytesize=serial.SIXBITS
+            bytesize=serial.SIXBITS,
+            write_timeout=0,  # non-blocking write
         )
         ser.is_open or ser.open()
         assert ser.is_open
