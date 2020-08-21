@@ -10,21 +10,21 @@ ser = serial.Serial(
     bytesize=serial.SIXBITS
 )
 
-ser.is_open or ser.open()
-assert ser.is_open
+ser.is_open[2] or ser.open[2]()
+assert ser.is_open[2]
 
 
-ZERO = (63, 63)  # 416 ms pause
-ONE = (0, 0)
-OPEN = (0, 63)
+TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
+T = TERNARY_BITS
 
-# ternary encoding (0, 1, 2/open)
-addr_60 = (*ZERO, *OPEN, *ZERO, *OPEN)  # 60, ICE
-addr_24 = (*ZERO, *OPEN, *OPEN, *ZERO)  # 24, E-Lok (DB)
-addr_1 = (*ONE, *ZERO, *ZERO, *ZERO)  # 72, E-Lok (BW)
-addr_78 = (*ZERO, *OPEN, *OPEN, *OPEN)  # 78, Dampf
-addr_72 = (*ZERO, *ZERO, *OPEN, *OPEN)  # 72, Diesel
-addr_21 = (*ZERO, *ONE, *OPEN, *ZERO)  # 21, S-Bahn
+
+# ternary encoding (0, 1, 2/T[2])
+addr_60 = (*T[0], *T[2], *T[0], *T[2])  # 60, ICE
+addr_24 = (*T[0], *T[2], *T[2], *T[0])  # 24, E-Lok (DB)
+addr_1 = (*T[1], *T[0], *T[0], *T[0])  # 72, E-Lok (BW)
+addr_78 = (*T[0], *T[2], *T[2], *T[2])  # 78, Dampf
+addr_72 = (*T[0], *T[0], *T[2], *T[2])  # 72, Diesel
+addr_21 = (*T[0], *T[1], *T[2], *T[0])  # 21, S-Bahn
 
 
 def address_to_bytes(address: int):
@@ -40,16 +40,16 @@ def address_to_bytes(address: int):
 
 def all_addresses():
     result = []
-    for bit1 in (ZERO, ONE, OPEN):
-        for bit2 in (ZERO, ONE, OPEN):
-            for bit3 in (ZERO, ONE, OPEN):
-                for bit4 in (ZERO, ONE, OPEN):
+    for bit1 in TERNARY_BITS:
+        for bit2 in TERNARY_BITS:
+            for bit3 in TERNARY_BITS:
+                for bit4 in TERNARY_BITS:
                     result.append(bit1 + bit2 + bit3 + bit4)
     return result
 
 
 def bool_to_bytes(bool):
-    return ONE if bool else ZERO
+    return T[1] if bool else T[0]
 
 
 def int4_to_bytes(number):
@@ -58,7 +58,7 @@ def int4_to_bytes(number):
 
 def packet(address, func=False, speed=0):  # speed=1 Richtungswechsel
     packet = address
-    packet += ONE if func else ZERO
+    packet += T[1] if func else T[0]
     packet += int4_to_bytes(speed)
     return bytes(packet)
 
