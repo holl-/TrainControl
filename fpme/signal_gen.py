@@ -1,78 +1,102 @@
+import threading
 import time
-
 import serial
-
-ser = serial.Serial(
-    port='COM1',
-    baudrate=38400,
-    parity=serial.PARITY_NONE,
-    stopbits=serial.STOPBITS_ONE,
-    bytesize=serial.SIXBITS
-)
-
-ser.is_open[2] or ser.open[2]()
-assert ser.is_open[2]
 
 
 TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
 T = TERNARY_BITS
 
 
-# ternary encoding (0, 1, 2/T[2])
-addr_60 = (*T[0], *T[2], *T[0], *T[2])  # 60, ICE
-addr_24 = (*T[0], *T[2], *T[2], *T[0])  # 24, E-Lok (DB)
-addr_1 = (*T[1], *T[0], *T[0], *T[0])  # 72, E-Lok (BW)
-addr_78 = (*T[0], *T[2], *T[2], *T[2])  # 78, Dampf
-addr_72 = (*T[0], *T[0], *T[2], *T[2])  # 72, Diesel
-addr_21 = (*T[0], *T[1], *T[2], *T[0])  # 21, S-Bahn
-
-
-def address_to_bytes(address: int):
-    return {
-        1: addr_1,
-        21: addr_21,
-        24: addr_24,
-        60: addr_60,
-        72: addr_72,
-        78: addr_78,
-    }[address]
-
-
-def all_addresses():
+def _all_addresses():
     result = []
     for bit1 in TERNARY_BITS:
         for bit2 in TERNARY_BITS:
             for bit3 in TERNARY_BITS:
                 for bit4 in TERNARY_BITS:
                     result.append(bit1 + bit2 + bit3 + bit4)
-    return result
+    return tuple(result)
 
 
-def bool_to_bytes(bool):
-    return T[1] if bool else T[0]
+ALL_ADDRESSES = _all_addresses()
 
 
-def int4_to_bytes(number):
-    return bool_to_bytes(number & 1) + bool_to_bytes((number >> 1) & 1) + bool_to_bytes((number >> 2) & 1) + bool_to_bytes(number >> 3)
+class MaerklinProtocol:
+
+    def packet(self, address: int, speed: int, func: bool):
+        """
+        Generate the bytes for RS-232 to send a Märklin-Motorola message to a locomotive.
+
+        :param address: locomotove address between 1 and 80
+        :param func: whether function is active
+        :param speed: speed value: -14 to 14, 1 for direction change
+        :return: package bytes
+        """
+        packet = ALL_ADDRESSES[address] + (T[1] if func else T[0]) + self.velocity_bytes(speed)
+        return bytes(packet)
+
+    def velocity_bytes(self, speed):
+        raise NotImplementedError()
 
 
-def packet(address, func=False, speed=0):  # speed=1 Richtungswechsel
-    packet = address
-    packet += T[1] if func else T[0]
-    packet += int4_to_bytes(speed)
-    return bytes(packet)
+class Motorola1(MaerklinProtocol):
+
+    def velocity_bytes(self, speed):
+        return T[speed & 1] + T[(speed >> 1) & 1] + T[(speed >> 2) & 1] + T[speed >> 3]
 
 
-def scan_all():
-    for addr in all_addresses()[15:17]:
-        print(addr)
-        for cycle in range(5000):
-            ser.write(packet(addr, True, 8))
-            time.sleep(9 * 416e-6)
-            time.sleep(1250e-6)  # 3 t-bits pause between signals
+class Motorola2(MaerklinProtocol):
+
+    ALL_SPEEDS = [
+        # -14, ... 14
+    ]
+
+    def velocity_bytes(self, speed):
+        return self.ALL_SPEEDS[speed]  # TODO
 
 
-while True:
-    ser.write(packet(addr_78, True, 6))
-    time.sleep(9 * 416e-6)  # packet is 9 t-bits long (18 bytes)
-    time.sleep(1250e-6)  # 3 t-bits pause between signals
+class SignalGenerator:
+
+    def __init__(self, serial_port: str, protocol: MaerklinProtocol):
+        ser = serial.Serial(
+            port=serial_port,
+            baudrate=38400,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            bytesize=serial.SIXBITS
+        )
+        ser.is_open or ser.open()
+        assert ser.is_open
+        self._ser = ser
+        self.protocol = protocol
+        self._active = False
+        self.data = {}  # address -> (speed, func)
+        self.immediate_repetitions = 2
+
+    def set(self, address, speed, func):
+        self.data[address] = (speed, func)
+
+    def run(self):
+        assert not self._active
+        self._active = True
+        while self._active:
+            if not self.data:
+                pass  # TODO idle signal
+            for address, (speed, func) in self.data.items():
+                for _rep in range(self.immediate_repetitions):
+                    packet = self.protocol.packet(address, speed, func)
+                    self._ser.write(packet)
+                    time.sleep(len(packet) * 208e-6)
+                    time.sleep(1250e-6)  # >= 3 t-bits (6 bytes) pause between signals
+
+    def start(self):
+        assert not self._active
+        threading.Thread(target=self.run, name='RS_232_Signal_Generator').start()
+
+    def stop(self):
+        self._active = False
+
+
+if __name__ == '__main__':
+    gen = SignalGenerator('COM1', Motorola1())
+    gen.set(78, 6, True)
+    gen.run()

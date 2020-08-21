@@ -3,12 +3,28 @@ import json
 from fpme import signal_gen
 
 
+GENERATOR = signal_gen.SignalGenerator('COM1', signal_gen.Motorola2())
+
+
 class Train:
 
-    def __init__(self, name, address):
+    def __init__(self, name, address, speeds=(-14, -12, -9, -7, -4, 0, 4, 7, 9, 12, 14)):
         self.name = name
         self.address = address
-        self.speed = 0.0
+        self.speeds = speeds
+        self.speed_level = speeds.index(0)
+        self.func_active = False
+
+    def accelerate(self, delta_level):
+        self.speed_level = max(0, min(self.speed_level + delta_level, len(self.speeds) - 1))
+        self._update()
+
+    def stop(self):
+        self.speed_level = self.speeds.index(0)
+        self._update()
+
+    def _update(self):
+        GENERATOR.set(self.address, self.speeds[self.speed_level], self.func_active)
 
 
 TRAINS = [
@@ -43,7 +59,7 @@ def get_speed(name):
     if name not in DRIVERS:
         return 0
     train = DRIVERS[name]
-    return train.speed
+    return train.speeds[train.speed_level] / 14.
 
 
 def get_train_name(name):
@@ -57,22 +73,18 @@ def accelerate(name: str, delta: int, step_size=1/6.):
     if name not in DRIVERS or delta == 0:
         return
     train = DRIVERS[name]
-    new_speed = train.speed + delta * step_size
-    new_speed = max(-1, min(new_speed, 1))
-    train.speed = new_speed
-    srcp.send(train.address, new_speed)
+    train.accelerate(delta)
 
 
 def stop(name=None):
     if name is None:
-        srcp.set_power(False)
+        GENERATOR.stop()
     else:
         if name not in DRIVERS:
             return
         train = DRIVERS[name]
-        train.speed = 0
-        srcp.send(train.address, speed=None)
+        train.stop()
 
 
 def start():
-    srcp.set_power(True)
+    GENERATOR.start()

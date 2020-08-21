@@ -6,7 +6,6 @@ import dash_html_components as html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 from dash.exceptions import PreventUpdate
-from flask import request
 
 from fpme import logic
 
@@ -152,9 +151,9 @@ def update_speedometer_color(name, accelerations, decelerations):
     client_input(name, accelerations, decelerations)
     if logic.can_control(name):
         speed = logic.get_speed(name)
-        if abs(speed) > 0.9:
+        if abs(speed) > 0.95:
             return 'danger'
-        if abs(speed) > 0.6:
+        if abs(speed) > 0.7:
             return 'warning'
         if speed > 0:
             return 'success'
