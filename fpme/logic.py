@@ -28,11 +28,11 @@ class Train:
 
 
 TRAINS = [
-    Train('ICE', 60),
-    Train('E-Lok (DB)', 24),
+    Train('ICE', 60, (-12, -9, -6, -4, 0, 4, 6, 9, 14)),
+    Train('E-Lok (DB)', 24, (-14, -9, -7, -4, 0, 4, 7, 9, 14)),
     Train('E-Lok (BW)', 1),
-    Train('S-Bahn', 21),
-    Train('Dampf-Lok', 78),
+    Train('S-Bahn', 48, (-14, -10, -7, -4, 0, 4, 7, 10, 14)),
+    Train('Dampf-Lok', 78, (-12, -9, -7, -4, 0, 4, 7, 9, 14)),
     Train('Diesel-Lok', 72),
 ]
 TRAINS = {train.name: train for train in TRAINS}

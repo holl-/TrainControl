@@ -33,7 +33,7 @@ class MaerklinProtocol:
         :return: package bytes
         """
         packet = ALL_ADDRESSES[address] + (T[1] if func else T[0]) + self.velocity_bytes(speed, reverse)
-        print(packet)
+        # print(packet)
         return bytes(packet)
 
     def velocity_bytes(self, speed: int, reverse: bool):
@@ -87,6 +87,7 @@ class SignalGenerator:
 
     def set(self, address, speed, func):
         self.data[address] = (speed, func)
+        # TODO send reverse signal if speed reverses (E-Lok DB does not change direction)
 
     def run(self):
         assert not self._active
@@ -94,7 +95,7 @@ class SignalGenerator:
         while self._active:
             if not self.data:
                 pass  # TODO idle signal
-            for address, (speed, func) in self.data.items():
+            for address, (speed, func) in dict(self.data).items():
                 for _rep in range(self.immediate_repetitions):
                     packet = self.protocol.packet(address, abs(speed), speed < 0, func)  # TODO emergency break through speed reversal?
                     self._ser.write(packet)
@@ -110,6 +111,6 @@ class SignalGenerator:
 
 
 if __name__ == '__main__':
-    gen = SignalGenerator('COM1', Motorola2())
-    gen.set(78, 8, False)
+    gen = SignalGenerator('COM1', Motorola1())
+    gen.set(48, 0, False)
     gen.run()

@@ -153,7 +153,7 @@ def update_speedometer_color(name, accelerations, decelerations):
         speed = logic.get_speed(name)
         if abs(speed) > 0.95:
             return 'danger'
-        if abs(speed) > 0.7:
+        if abs(speed) > 0.6:
             return 'warning'
         if speed > 0:
             return 'success'
