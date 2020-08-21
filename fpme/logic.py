@@ -10,7 +10,7 @@ GENERATOR = signal_gen.SignalGenerator('COM1', signal_gen.Motorola2())
 
 class Train:
 
-    def __init__(self, name, address, speeds=(-14, -9, -7, -4, 0, 4, 7, 9, 14), protocol=None):
+    def __init__(self, name, address, speeds=(-14, -10, -8, -6, -4, 0, 4, 6, 8, 10, 14)):
         self.name = name
         self.address = address
         self.speeds = speeds
@@ -19,20 +19,23 @@ class Train:
         self.protocol = protocol
 
     def accelerate(self, delta_level):
+        old_speed = self.speeds[self.speed_level]
         self.speed_level = max(0, min(self.speed_level + delta_level, len(self.speeds) - 1))
-        self._update()
+        new_speed = self.speeds[self.speed_level]
+        if new_speed != 0:
+            reverse = new_speed < 0
+        else:
+            reverse = old_speed < 0
+        GENERATOR.set(self.address, abs(new_speed), reverse, self.func_active)
 
     def stop(self):
+        old_speed = self.speeds[self.speed_level]
+        was_reverse = old_speed < 0
         self.speed_level = self.speeds.index(0)
-        self._update()
-
-    def _update(self):
-        speed = self.speeds[self.speed_level]
-        GENERATOR.set(self.address, abs(speed), speed < 0, self.func_active, protocol=self.protocol)
+        GENERATOR.set(self.address, 0, not was_reverse, self.func_active)
 
     def __repr__(self):
         return self.name
-
 
 TRAINS = [
     Train('ICE', 60, (-12, -9, -6, -4, 0, 4, 6, 9, 14)),
@@ -77,7 +80,14 @@ def get_speed(name):
     if name not in DRIVERS:
         return 0
     train = DRIVERS[name]
-    return train.speeds[train.speed_level] / 14.
+    zero_level = train.speeds.index(0)
+    current_level = train.speed_level
+    if current_level == zero_level:
+        return 0
+    elif current_level > zero_level:
+        return (current_level - zero_level) / (len(train.speeds) - 1 - zero_level)
+    else:
+        return (current_level - zero_level) / zero_level
 
 
 def get_train_name(name):
