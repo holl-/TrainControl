@@ -8,7 +8,7 @@ GENERATOR = signal_gen.SignalGenerator('COM1', signal_gen.Motorola2())
 
 class Train:
 
-    def __init__(self, name, address, speeds=(-14, -12, -9, -7, -4, 0, 4, 7, 9, 12, 14)):
+    def __init__(self, name, address, speeds=(-14, -9, -7, -4, 0, 4, 7, 9, 14)):
         self.name = name
         self.address = address
         self.speeds = speeds
@@ -24,7 +24,8 @@ class Train:
         self._update()
 
     def _update(self):
-        GENERATOR.set(self.address, self.speeds[self.speed_level], self.func_active)
+        speed = self.speeds[self.speed_level]
+        GENERATOR.set(self.address, abs(speed), speed < 0, self.func_active)
 
 
 TRAINS = [
