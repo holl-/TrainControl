@@ -10,7 +10,7 @@ GENERATOR = signal_gen.SignalGenerator('COM1', signal_gen.Motorola2())
 
 class Train:
 
-    def __init__(self, name, address, speeds=(-14, -10, -8, -6, -4, 0, 4, 6, 8, 10, 14)):
+    def __init__(self, name, address, speeds=(-14, -10, -8, -6, -4, 0, 4, 6, 8, 10, 14), protocol=None):
         self.name = name
         self.address = address
         self.speeds = speeds
@@ -26,16 +26,17 @@ class Train:
             reverse = new_speed < 0
         else:
             reverse = old_speed < 0
-        GENERATOR.set(self.address, abs(new_speed), reverse, self.func_active)
+        GENERATOR.set(self.address, abs(new_speed), reverse, self.func_active, protocol=self.protocol)
 
     def stop(self):
         old_speed = self.speeds[self.speed_level]
         was_reverse = old_speed < 0
         self.speed_level = self.speeds.index(0)
-        GENERATOR.set(self.address, 0, not was_reverse, self.func_active)
+        GENERATOR.set(self.address, 0, not was_reverse, self.func_active, protocol=self.protocol)
 
     def __repr__(self):
         return self.name
+
 
 TRAINS = [
     Train('ICE', 60, (-12, -9, -6, -4, 0, 4, 6, 9, 14)),
