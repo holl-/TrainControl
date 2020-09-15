@@ -84,17 +84,6 @@ class Motorola2(MaerklinProtocol):
 class SignalGenerator:
 
     def __init__(self, serial_port: str, protocol: MaerklinProtocol):
-        ser = serial.Serial(
-            port=serial_port,
-            baudrate=38400,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            bytesize=serial.SIXBITS,
-            write_timeout=0,  # non-blocking write
-        )
-        ser.is_open or ser.open()
-        assert ser.is_open
-        self._ser = ser
         self.protocol = protocol
         self._active = False
         self._data = {}  # address -> (speed, reverse, func)
@@ -104,6 +93,27 @@ class SignalGenerator:
         self.immediate_repetitions = 2
         self._idle_packet = protocol.velocity_packet(80, 0, False, False)
         self._override_protocols = {}
+        self._short_circuted = False
+        self.stop_on_short_circuit = False
+        self.on_short_circuit = None  # function without parameters
+        self._ser = self._init_serial(serial_port)
+
+    def _init_serial(self, serial_port):
+        ser = serial.Serial(
+            port=serial_port,
+            baudrate=38400,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            bytesize=serial.SIXBITS,
+            write_timeout=0,  # non-blocking write
+            rtscts=False,  # no flow control
+            dsrdtr=False,  # no flow control
+        )
+        ser.is_open or ser.open()
+        assert ser.is_open
+        ser.setRTS(False)
+        ser.setDTR(True)
+        return ser
 
     def set(self, address: int, speed: int, reverse: bool, func: bool, protocol: MaerklinProtocol = None):
         assert 0 < address < 80
@@ -118,28 +128,6 @@ class SignalGenerator:
         self._packets[address] = (protocol or self.protocol).velocity_packet(address, speed, reverse, func)
         self._turn_packets[address] = (protocol or self.protocol).turn_packet(address, func)
 
-    def _send(self, packet):
-        self._ser.write(packet)
-        time.sleep(len(packet) * 208e-6)
-        # time.sleep(1250e-6)  # >= 3 t-bits (6 bytes) pause between signals
-        time.sleep(350e-6)  # >= 3 t-bits (6 bytes) pause between signals
-
-    def run(self):
-        assert not self._active
-        self._active = True
-        while self._active:
-            if not self._data:
-                self._send(self._idle_packet)
-            for address, vel_packet in dict(self._packets).items():
-                if address in self._turn_addresses:
-                    self._turn_addresses.remove(address)
-                    if self._turn_packets[address] is not None:
-                        for _rep in range(2):
-                            self._send(self._turn_packets[address])
-                for _rep in range(self.immediate_repetitions):
-                    self._send(vel_packet)
-                time.sleep(6200e-6 - 1250e-6)
-
     def start(self):
         assert not self._active
         threading.Thread(target=self.run, name='RS_232_Signal_Generator').start()
@@ -147,8 +135,47 @@ class SignalGenerator:
     def stop(self):
         self._active = False
 
+    @property
+    def is_sending(self):
+        return self._active and not self._short_circuted
+
+    def run(self):
+        assert not self._active
+        self._active = True
+        while self._active:
+            self._short_circuted, newly_short_circuited = self._ser.getCTS(), self._ser.getCTS() and not self._short_circuted
+            if self._short_circuted:
+                newly_short_circuited and self.on_short_circuit()
+                if self.stop_on_short_circuit:
+                    return
+                else:
+                    time.sleep(0.1)
+            else:  # Send data on serial port
+                if not self._data:
+                    self._send(self._idle_packet)
+                for address, vel_packet in dict(self._packets).items():
+                    if address in self._turn_addresses:
+                        self._turn_addresses.remove(address)
+                        if self._turn_packets[address] is not None:
+                            for _rep in range(2):
+                                self._send(self._turn_packets[address])
+                    for _rep in range(self.immediate_repetitions):
+                        self._send(vel_packet)
+                    time.sleep(6200e-6 - 1250e-6)
+
+    def _send(self, packet):
+        self._ser.write(packet)
+        time.sleep(len(packet) * 208e-6)
+        # time.sleep(1250e-6)  # >= 3 t-bits (6 bytes) pause between signals
+        time.sleep(350e-6)  # >= 3 t-bits (6 bytes) pause between signals
+
 
 if __name__ == '__main__':
     gen = SignalGenerator('COM1', Motorola2())
-    gen.set(24, 5, True, True)
-    gen.run()
+    # time.sleep(10)
+    # gen.set(24, 5, True, True)
+    # gen.run()
+    while True:
+        print(gen._ser.getCTS())
+        time.sleep(0.5)
+    # gen._ser.getDSR()
