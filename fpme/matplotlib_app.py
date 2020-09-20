@@ -3,29 +3,66 @@ from matplotlib.widgets import Button
 
 from fpme import logic
 
+
+TRAIN_NAMES = list(sorted(logic.TRAINS.keys()))
+
 fig, ax = plt.subplots()
+fig.canvas.set_window_title('Modelleisenbahn Steuerung')
 plt.subplots_adjust(bottom=0.2)
+b = plt.bar(range(1 + len(TRAIN_NAMES)), [0] * (1 + len(TRAIN_NAMES)),
+            color=['red'] + ['gray'] * len(TRAIN_NAMES),
+            width=[0.9] + [0.5] * len(TRAIN_NAMES),
+            tick_label=['Power'] + TRAIN_NAMES)
+plt.xticks(rotation=15)
+plt.ylim((0, 1.05))
+
+
+def update():
+    power = logic.is_power_on()
+    b.patches[0].set_height(0.5 * b.patches[0].get_height() + 0.5 * power)
+    for i, name in enumerate(TRAIN_NAMES):
+        set_train_speed(b.patches[i+1], logic.TRAINS[name].speed, power)
+
+
+def set_train_speed(rectangle, speed, power):
+    rectangle.set_height(0.5 * rectangle.get_height() + 0.5 * abs(speed))
+    if speed != 0:
+        rectangle.set_color(('green' if speed > 0 else 'blue') if power else 'gray')
 
 
 def start(_event):
     logic.start()
+    update()
     plt.draw()
 
 
 def stop(_event):
-    logic.stop()
+    if logic.is_power_on():
+        logic.stop()
+    else:
+        for train in logic.TRAINS.values():
+            train.stop()
+    update()
     plt.draw()
 
 
-start_button = Button(plt.axes([0.81, 0.05, 0.1, 0.075]), 'Start')
+y = 0.02
+start_button = Button(plt.axes([0.81, y, 0.1, 0.075]), 'Start')
 start_button.on_clicked(start)
-stop_button = Button(plt.axes([0.7, 0.05, 0.1, 0.075]), 'Stop')
+stop_button = Button(plt.axes([0.7, y, 0.1, 0.075]), 'Stop')
 stop_button.on_clicked(stop)
-normal_drivers = Button(plt.axes([0.1, 0.05, 0.2, 0.075]), 'Normal drivers')
+normal_drivers = Button(plt.axes([0.1, y, 0.2, 0.075]), 'Normal drivers')
 normal_drivers.on_clicked(lambda _: logic.load_drivers())
-switch_drivers = Button(plt.axes([0.31, 0.05, 0.1, 0.075]), 'Switch')
+switch_drivers = Button(plt.axes([0.31, y, 0.1, 0.075]), 'Switch')
 switch_drivers.on_clicked(lambda _: logic.switch_drivers())
 
+
+def show():
+    while True:
+        update()
+        plt.pause(0.05)
+
+
 if __name__ == '__main__':
-    plt.show()
+    show()
 

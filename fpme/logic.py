@@ -37,6 +37,17 @@ class Train:
         self.speed_level = self.speeds.index(0)
         GENERATOR.set(self.address, 0, not was_reverse, self.func_active, protocol=self.protocol)
 
+    @property
+    def speed(self):
+        zero_level = self.speeds.index(0)
+        current_level = self.speed_level
+        if current_level == zero_level:
+            return 0
+        elif current_level > zero_level:
+            return (current_level - zero_level) / (len(self.speeds) - 1 - zero_level)
+        else:
+            return (current_level - zero_level) / zero_level
+
     def __repr__(self):
         return self.name
 
@@ -84,14 +95,7 @@ def get_speed(name):
     if name not in DRIVERS:
         return 0
     train = DRIVERS[name]
-    zero_level = train.speeds.index(0)
-    current_level = train.speed_level
-    if current_level == zero_level:
-        return 0
-    elif current_level > zero_level:
-        return (current_level - zero_level) / (len(train.speeds) - 1 - zero_level)
-    else:
-        return (current_level - zero_level) / zero_level
+    return train.speed
 
 
 def get_train_name(name):
@@ -120,3 +124,7 @@ def stop(name=None):
 
 def start():
     GENERATOR.start()
+
+
+def is_power_on():
+    return GENERATOR.is_sending
