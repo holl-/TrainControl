@@ -1,3 +1,4 @@
 {
-  "port": ""
+  "serial-port": "",
+  "server-port": 8051
 }

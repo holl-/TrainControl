@@ -8,7 +8,7 @@ from fpme import signal_gen
 with open('../config.json') as CONFIG_FILE:
     CONFIG = json.load(CONFIG_FILE)
 
-GENERATOR = signal_gen.SignalGenerator(CONFIG['port'] or None, signal_gen.Motorola2())
+GENERATOR = signal_gen.SignalGenerator(CONFIG['serial-port'] or None, signal_gen.Motorola2())
 
 
 class Train:
