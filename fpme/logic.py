@@ -5,7 +5,10 @@ import numpy
 from fpme import signal_gen
 
 
-GENERATOR = signal_gen.SignalGenerator('COM1', signal_gen.Motorola2())
+with open('../config.json') as CONFIG_FILE:
+    CONFIG = json.load(CONFIG_FILE)
+
+GENERATOR = signal_gen.SignalGenerator(CONFIG['port'] or None, signal_gen.Motorola2())
 
 
 class Train:

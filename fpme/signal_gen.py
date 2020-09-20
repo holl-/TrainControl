@@ -83,7 +83,7 @@ class Motorola2(MaerklinProtocol):
 
 class SignalGenerator:
 
-    def __init__(self, serial_port: str, protocol: MaerklinProtocol):
+    def __init__(self, serial_port: str or None, protocol: MaerklinProtocol):
         self.protocol = protocol
         self._active = False
         self._data = {}  # address -> (speed, reverse, func)
@@ -96,7 +96,7 @@ class SignalGenerator:
         self._short_circuted = False
         self.stop_on_short_circuit = False
         self.on_short_circuit = None  # function without parameters
-        self._ser = self._init_serial(serial_port)
+        self._ser = serial_port and self._init_serial(serial_port)
 
     def _init_serial(self, serial_port):
         ser = serial.Serial(
