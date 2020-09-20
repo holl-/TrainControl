@@ -1,7 +1,5 @@
 import json
 
-import numpy
-
 from fpme import signal_gen
 
 
@@ -21,9 +19,15 @@ class Train:
         self.func_active = False
         self.protocol = protocol
 
-    def accelerate(self, delta_level):
+    def accelerate(self, delta_level, not_backward=None, not_forward=None):
+        if delta_level == 0:
+            return
         old_speed = self.speeds[self.speed_level]
         self.speed_level = max(0, min(self.speed_level + delta_level, len(self.speeds) - 1))
+        if not_backward:
+            self.speed_level = max(self.speeds.index(0), self.speed_level)
+        if not_forward:
+            self.speed_level = min(self.speed_level, self.speeds.index(0))
         new_speed = self.speeds[self.speed_level]
         if new_speed != 0:
             reverse = new_speed < 0
@@ -62,68 +66,13 @@ TRAINS = [
 ]
 TRAINS = {train.name: train for train in TRAINS}
 
-DRIVERS = {}  # name -> Train
-
-
-def load_drivers(file='../users.json'):
-    with open(file) as users:
-        user_dict = json.load(users)
-        DRIVERS.clear()
-        for user_name, train_name in user_dict.items():
-            DRIVERS[user_name] = TRAINS[train_name]
-
-
-load_drivers()
-
-
-def switch_drivers():
-    perm = numpy.random.permutation(len(DRIVERS))
-    drivers = numpy.array(tuple(DRIVERS.keys()))[perm]
-    trains = list([DRIVERS[d] for d in drivers])
-    trains.append(trains.pop(0))
-    DRIVERS.clear()
-    for driver, train in zip(drivers, trains):
-        DRIVERS[driver] = train
-    print(DRIVERS)
-
-
-def can_control(name):
-    return name in DRIVERS
-
-
-def get_speed(name):
-    if name not in DRIVERS:
-        return 0
-    train = DRIVERS[name]
-    return train.speed
-
-
-def get_train_name(name):
-    if name not in DRIVERS:
-        return ''
-    train = DRIVERS[name]
-    return train.name
-
-
-def accelerate(name: str, delta: int, step_size=1/6.):
-    if name not in DRIVERS or delta == 0:
-        return
-    train = DRIVERS[name]
-    train.accelerate(delta)
-
-
-def stop(name=None):
-    if name is None:
-        GENERATOR.stop()
-    else:
-        if name not in DRIVERS:
-            return
-        train = DRIVERS[name]
-        train.stop()
-
 
 def start():
     GENERATOR.start()
+
+
+def stop():
+    GENERATOR.stop()
 
 
 def is_power_on():

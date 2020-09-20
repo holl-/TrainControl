@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 
-from fpme import logic
+from fpme import trains, drivers
 
 
-TRAIN_NAMES = list(sorted(logic.TRAINS.keys()))
+TRAIN_NAMES = list(sorted(trains.TRAINS.keys()))
 
 fig, ax = plt.subplots()
 fig.canvas.set_window_title('Modelleisenbahn Steuerung')
@@ -18,10 +18,10 @@ plt.ylim((0, 1.05))
 
 
 def update():
-    power = logic.is_power_on()
+    power = trains.is_power_on()
     b.patches[0].set_height(0.5 * b.patches[0].get_height() + 0.5 * power)
     for i, name in enumerate(TRAIN_NAMES):
-        set_train_speed(b.patches[i+1], logic.TRAINS[name].speed, power)
+        set_train_speed(b.patches[i+1], trains.TRAINS[name].speed, power)
 
 
 def set_train_speed(rectangle, speed, power):
@@ -31,16 +31,16 @@ def set_train_speed(rectangle, speed, power):
 
 
 def start(_event):
-    logic.start()
+    trains.start()
     update()
     plt.draw()
 
 
 def stop(_event):
-    if logic.is_power_on():
-        logic.stop()
+    if trains.is_power_on():
+        trains.stop()
     else:
-        for train in logic.TRAINS.values():
+        for train in trains.TRAINS.values():
             train.stop()
     update()
     plt.draw()
@@ -52,9 +52,9 @@ start_button.on_clicked(start)
 stop_button = Button(plt.axes([0.7, y, 0.1, 0.075]), 'Stop')
 stop_button.on_clicked(stop)
 normal_drivers = Button(plt.axes([0.1, y, 0.2, 0.075]), 'Normal drivers')
-normal_drivers.on_clicked(lambda _: logic.load_drivers())
+normal_drivers.on_clicked(lambda _: drivers.load_train_drivers())
 switch_drivers = Button(plt.axes([0.31, y, 0.1, 0.075]), 'Switch')
-switch_drivers.on_clicked(lambda _: logic.switch_drivers())
+switch_drivers.on_clicked(lambda _: drivers.switch_drivers())
 
 
 def show():

@@ -8,7 +8,7 @@ import dash_daq as daq
 from dash.dependencies import Input, Output
 from dash.exceptions import PreventUpdate
 
-from fpme import logic
+from fpme import drivers, trains
 
 
 class Client:
@@ -17,6 +17,8 @@ class Client:
         self.name = name
         self.accelerations = 0
         self.decelerations = 0
+        self.reverses = 0
+        self.stops = 0
 
 
 CLIENTS = {}
@@ -28,28 +30,37 @@ CONTROL_UPDATE_INPUTS = [
     Input('accelerate', 'n_clicks'),
     Input('decelerate', 'n_clicks'),
     Input('reverse', 'n_clicks'),
-    Input('stop-train-placeholder', 'children'),
+    Input('stop-train', 'n_clicks'),
     Input('main-update', 'n_intervals'),
 ]
 
 
-def handle_control_input(name, accelerations, decelerations, reverses, stops, _):
+def handle_control_input(name: str, index: int, accelerations: int, decelerations: int, reverses: int, stops: int, _):
     with INPUT_LOCK:
-        if name not in logic.DRIVERS:
-            return
-        if accelerations is None and decelerations is None:
+        train, reverse = drivers.get_train(name, index)
+        if not train:
+            raise PreventUpdate()
+        if accelerations is None and decelerations is None and reverses is None and stops is None:
             CLIENTS[name] = Client(name)
+        client = CLIENTS[name]
+
         accelerations = accelerations or 0
         decelerations = decelerations or 0
-        if name in CLIENTS:
-            client = CLIENTS[name]
-            diff = accelerations - client.accelerations - (decelerations - client.decelerations)
-            logic.accelerate(name, diff)
-            client.accelerations = accelerations
-            client.decelerations = decelerations
-    if not logic.can_control(name):
-        raise PreventUpdate()
+        reverses = reverses or 0
+        stops = stops or 0
 
+        if reverses > client.reverses and train.speed == 0:
+            reverse = reverse ^ bool(-1 ** (reverses - client.reverses))
+            drivers.set_reverse(name, index, reverse)
+        effective_acceleration = accelerations - client.accelerations - (decelerations - client.decelerations)
+        train.accelerate(-effective_acceleration if reverse else effective_acceleration, not_backward=not reverse, not_forward=reverse)
+        if stops > client.stops:
+            train.stop()
+
+        client.accelerations = accelerations
+        client.decelerations = decelerations
+        client.reverses = reverses
+        client.stops = stops
 
 
 with open('../login_text.md') as file:
@@ -93,9 +104,9 @@ tasks = html.Div(style={}, children=[
     ]
 )
 
-control_layout = html.Div(id='control', style={'display': 'none'}, children=[
-    # html.H2('', id='train-name', style={'textAlign': 'center'}),
-    html.Div(style={}, children=[
+
+def build_control(index):
+    return html.Div(style={}, children=[
         html.Div(style={'display': 'inline-block', 'vertical-align': 'top'}, children=[
             daq.Gauge(id='speed', color={'gradient': True, 'ranges': {'green': [0, 6*25], 'yellow': [6*25, 8*25], 'red': [8*25, 10*25]}},
                       value=250, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=True, size=300),
@@ -117,7 +128,11 @@ control_layout = html.Div(id='control', style={'display': 'none'}, children=[
                 html.Button('Strom', id='stop-all', style={'width': '100%', 'height': '100%', 'background-color': '#cc0000', 'color': 'white'}),
             ]),
         ]),
-    ]),
+    ])
+
+
+control_layout = html.Div(id='control', style={'display': 'none'}, children=[
+    build_control(0),
     tasks,
     html.Div(id='stop-train-placeholder', style={'display': 'none'}),
     html.Div(id='stop-all-placeholder', style={'display': 'none'}),
@@ -134,52 +149,38 @@ app.layout = html.Div(children=[
 
 @app.callback(Output('login', 'style'), [Input('main-update', 'n_intervals'), Input('name', 'value')])
 def hide_login(_n_intervals, name):
-    if logic.can_control(name):
+    if drivers.get_train(name, 0)[0]:
         return {'display': 'none'}
     raise PreventUpdate()
 
 
 @app.callback(Output('control', 'style'), [Input('main-update', 'n_intervals'), Input('name', 'value')])
 def show_control(_n_intervals, name):
-    if logic.can_control(name):
+    if drivers.get_train(name, 0)[0]:
         return {}
     raise PreventUpdate()
 
 
 @app.callback(Output('speed', 'label'), CONTROL_UPDATE_INPUTS)
 def set_train_name(name, *args):
-    handle_control_input(name, *args)
-    speed = logic.get_speed(name)
-    train = logic.get_train_name(name)
-    if speed == 0:
-        return train
-    if speed > 0:
-        return train + " - Vorwärts"
-    else:
-        return train + ' - Rückwärts'
+    handle_control_input(name, 0, *args)
+    train, reverse = drivers.get_train(name, 0)
+    return train.name + (" - Rückwärts" if reverse else " - Vorwärts")
 
 
 @app.callback(Output('speed', 'value'), CONTROL_UPDATE_INPUTS)
 def update_speedometer(name, *args):
-    handle_control_input(name, *args)
-    speed = logic.get_speed(name)
-    return int(round(abs(speed) * 250))
-
-
-@app.callback(Output('stop-train-placeholder', 'children'), [Input('stop-train', 'n_clicks'), Input('name', 'value')])
-def stop_train(n_clicks, name):
-    if n_clicks is not None:
-        logic.stop(name)
-    return str(n_clicks)
+    handle_control_input(name,0,  *args)
+    train, _ = drivers.get_train(name, 0)
+    return int(round(abs(train.speed) * 250))
 
 
 @app.callback(Output('stop-all-placeholder', 'children'), [Input('stop-all', 'n_clicks'), Input('name', 'value')])
-def stop_train(n_clicks, _name):
+def power_off(n_clicks, _name):
     if n_clicks is not None:
-        logic.stop()
+        trains.stop()
     return str(n_clicks)
 
 
 if __name__ == '__main__':
     app.run_server(debug=True, host='0.0.0.0', port=8051)
-
