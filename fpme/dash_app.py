@@ -4,6 +4,7 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
+import dash_daq as daq
 from dash.dependencies import Input, Output
 from dash.exceptions import PreventUpdate
 
@@ -85,7 +86,10 @@ control_layout = html.Div(id='control', style={'display': 'none'}, children=[
     html.Div(style={'width': '100%', 'height': 60}, children=[
         html.Button('-', id='decelerate', style={'width': '20%', 'height': '100%', 'display': 'inline-block', 'vertical-align': 'top'}),
         html.Div(style={'width': '60%', 'height': '100%', 'display': 'inline-block', 'vertical-align': 'center'}, children=[
-            dbc.Progress('Geschwindigkeit', value=50, color='success', className="mb-3", id='speed', style={'height': '100%'}),
+            # dbc.Progress('Geschwindigkeit', value=50, color='success', className="mb-3", id='speed', style={'height': '100%'}),
+            daq.GraduatedBar(id='speed', value=1, min=-1, max=1.001, step=0.05, size=350,
+                             color={'gradient': True, 'ranges': {'gray': [-1, 0], 'green': [0, 0.4], 'yellow':[.4, .7], 'red':[.7, 1]}},
+                             style={'height': '100%'}),
         ]),
         html.Button('+', id='accelerate', style={'width': '20%', 'height': '100%', 'display': 'inline-block', 'vertical-align': 'top'}),
     ]),
@@ -128,38 +132,63 @@ def set_train_name(_n_intervals, name):
     raise PreventUpdate()
 
 
-@app.callback(Output('speed', 'value'), [Input('name', 'value'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks'), Input('stop-train-placeholder', 'children')])
-def update_speedometer(name, accelerations, decelerations, *args):
-    client_input(name, accelerations, decelerations)
-    if logic.can_control(name):
-        speed = logic.get_speed(name)
-        return int(round(abs(speed) * 100))
-    raise PreventUpdate()
+# @app.callback(Output('speed', 'value'), [Input('name', 'value'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks'), Input('stop-train-placeholder', 'children')])
+# def update_speedometer(name, accelerations, decelerations, *args):
+#     client_input(name, accelerations, decelerations)
+#     if logic.can_control(name):
+#         speed = logic.get_speed(name)
+#         return int(round(abs(speed) * 100))
+#     raise PreventUpdate()
+#
+#
+# @app.callback(Output('speed', 'children'), [Input('name', 'value'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks')])
+# def update_speedometer_text(name, accelerations, decelerations):
+#     client_input(name, accelerations, decelerations)
+#     if logic.can_control(name):
+#         speed = logic.get_speed(name)
+#         return '' if speed >= 0 else 'Rückwärts'
+#     raise PreventUpdate()
+#
+#
+# @app.callback(Output('speed', 'color'), [Input('name', 'value'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks')])
+# def update_speedometer_color(name, accelerations, decelerations):
+#     client_input(name, accelerations, decelerations)
+#     if logic.can_control(name):
+#         speed = logic.get_speed(name)
+#         if abs(speed) > 0.95:
+#             return 'danger'
+#         if abs(speed) > 0.6:
+#             return 'warning'
+#         if speed > 0:
+#             return 'success'
+#         if speed < 0:
+#             return 'info'
+#     raise PreventUpdate()
 
 
-@app.callback(Output('speed', 'children'), [Input('name', 'value'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks')])
-def update_speedometer_text(name, accelerations, decelerations):
-    client_input(name, accelerations, decelerations)
-    if logic.can_control(name):
-        speed = logic.get_speed(name)
-        return '' if speed >= 0 else 'Rückwärts'
-    raise PreventUpdate()
-
-
-@app.callback(Output('speed', 'color'), [Input('name', 'value'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks')])
-def update_speedometer_color(name, accelerations, decelerations):
-    client_input(name, accelerations, decelerations)
-    if logic.can_control(name):
-        speed = logic.get_speed(name)
-        if abs(speed) > 0.95:
-            return 'danger'
-        if abs(speed) > 0.6:
-            return 'warning'
-        if speed > 0:
-            return 'success'
-        if speed < 0:
-            return 'info'
-    raise PreventUpdate()
+# @app.callback(Output('speed', 'color'), [Input('name', 'value'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks')])
+# def update_speedometer_color(name, accelerations, decelerations):
+#     client_input(name, accelerations, decelerations)
+#     if logic.can_control(name):
+#         speed = logic.get_speed(name)
+#         print(speed)
+#         if speed == 0:
+#             return {'gradient': True, 'ranges': {'gray': [-1, 0], 'green': [0, 0.4], 'yellow': [.4, .7], 'red': [.7, 1]}}
+#             return {'ranges': {'white': [-1, 1]}}
+#         if speed > 0:
+#             return {'gradient': True, 'ranges': {'gray': [-1, 0], 'green': [0, 0.4], 'yellow': [.4, .7], 'red': [.7, 1]}}
+#         else:
+#             return {'gradient': True, 'ranges': {'gray': [0, 1], 'green': [-.4, 0], 'yellow': [-.7, -.4], 'red': [-1, -.7]}}
+#
+#         if abs(speed) > 0.95:
+#             return 'danger'
+#         if abs(speed) > 0.6:
+#             return 'warning'
+#         if speed > 0:
+#             return 'success'
+#         if speed < 0:
+#             return 'info'
+#     raise PreventUpdate()
 
 
 @app.callback(Output('stop-train-placeholder', 'children'), [Input('stop-train', 'n_clicks'), Input('name', 'value')])
@@ -177,5 +206,5 @@ def stop_train(n_clicks, _name):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0', port=1111)
+    app.run_server(debug=True, host='0.0.0.0', port=8051)
 
