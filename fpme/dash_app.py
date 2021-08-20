@@ -165,7 +165,8 @@ def show_control(_n_intervals, name):
 def set_train_name(name, *args):
     handle_control_input(name, 0, *args)
     train, reverse = drivers.get_train(name, 0)
-    return train.name + (" - Rückwärts" if reverse else " - Vorwärts")
+    return "◀ " + train.name if reverse else train.name + " ▶"  # ⬅➡
+    # return train.name + (" - Rückwärts" if reverse else " - Vorwärts")
 
 
 @app.callback(Output('speed', 'value'), CONTROL_UPDATE_INPUTS)
