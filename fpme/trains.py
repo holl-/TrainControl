@@ -1,4 +1,7 @@
 import json
+import time
+
+import numpy
 
 from fpme import signal_gen
 
@@ -11,46 +14,47 @@ GENERATOR = signal_gen.SignalGenerator(CONFIG['serial-port'] or None, signal_gen
 
 class Train:
 
-    def __init__(self, name, address, speeds=(-14, -10, -8, -6, -4, 0, 4, 6, 8, 10, 14), protocol=None):
-        self.name = name
-        self.address = address
-        self.speeds = speeds
-        self.speed_level = speeds.index(0)
+    def __init__(self, name: str, address: int, snap_to_speeds=(-14, -10, -8, -6, -4, 0, 4, 6, 8, 10, 14), protocol=None):
+        self.name: str = name
+        self.address: int = address
+        self.snap_to_speeds: tuple = snap_to_speeds  # -14 to 14
+        self.abs_speed: int = 0  # 0 to 14
+        self.in_reverse = False
         self.func_active = False
-        self.protocol = protocol
-
-    def accelerate(self, delta_level, not_backward=None, not_forward=None):
-        if delta_level == 0:
-            return
-        old_speed = self.speeds[self.speed_level]
-        self.speed_level = max(0, min(self.speed_level + delta_level, len(self.speeds) - 1))
-        if not_backward:
-            self.speed_level = max(self.speeds.index(0), self.speed_level)
-        if not_forward:
-            self.speed_level = min(self.speed_level, self.speeds.index(0))
-        new_speed = self.speeds[self.speed_level]
-        if new_speed != 0:
-            reverse = new_speed < 0
-        else:
-            reverse = old_speed < 0
-        GENERATOR.set(self.address, abs(new_speed), reverse, self.func_active, protocol=self.protocol)
-
-    def stop(self):
-        old_speed = self.speeds[self.speed_level]
-        was_reverse = old_speed < 0
-        self.speed_level = self.speeds.index(0)
-        GENERATOR.set(self.address, 0, not was_reverse, self.func_active, protocol=self.protocol)
+        self.protocol = protocol  # special protocol for this train
 
     @property
-    def speed(self):
-        zero_level = self.speeds.index(0)
-        current_level = self.speed_level
-        if current_level == zero_level:
-            return 0
-        elif current_level > zero_level:
-            return (current_level - zero_level) / (len(self.speeds) - 1 - zero_level)
+    def signed_speed(self):
+        return -self.abs_speed if self.in_reverse else self.abs_speed
+
+    def reverse(self):
+        self.in_reverse = not self.in_reverse
+        self.abs_speed = 0
+
+    def set_signed_speed(self, signed_speed: int):
+        self.abs_speed = abs(signed_speed)
+        if signed_speed != 0:
+            self.in_reverse = signed_speed < 0
+
+    def accelerate_snap(self, signed_times: int):
+        if signed_times < 0 and self.is_parked:
+            return
+        if self.signed_speed in self.snap_to_speeds:
+            speed_level = self.snap_to_speeds.index(self.signed_speed)
         else:
-            return (current_level - zero_level) / zero_level
+            speed_level = numpy.argmin([abs(s - self.signed_speed) for s in self.snap_to_speeds])  # closest level
+        forward_times = -signed_times if self.in_reverse else signed_times
+        new_speed_level = max(0, min(speed_level + forward_times, len(self.snap_to_speeds) - 1))
+        self.abs_speed = abs(self.snap_to_speeds[new_speed_level])
+        GENERATOR.set(self.address, self.abs_speed, self.in_reverse, self.func_active, protocol=self.protocol)
+
+    def stop(self):
+        self.abs_speed = 0
+        GENERATOR.set(self.address, 0, not self.in_reverse, self.func_active, protocol=self.protocol)
+
+    @property
+    def is_parked(self):
+        return self.abs_speed == 0
 
     def __repr__(self):
         return self.name
@@ -64,15 +68,21 @@ TRAINS = [
     Train('Dampf-Lok', 78, (-12, -9, -7, -6, -5, -4, 0, 4, 5, 6, 7, 9, 14)),
     Train('Diesel-Lok', 72),
 ]
-TRAINS = {train.name: train for train in TRAINS}
 
 
-def start():
+POWER_OFF_TIME = 0
+
+
+def power_on():
+    print("Power on")
     GENERATOR.start()
 
 
-def stop():
+def power_off():
+    print("Power off")
     GENERATOR.stop()
+    global POWER_OFF_TIME
+    POWER_OFF_TIME = time.perf_counter()
 
 
 def is_power_on():
