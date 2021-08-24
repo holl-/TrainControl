@@ -120,7 +120,7 @@ def build_control(index):
 
 
 switch_trains = html.Div([
-    *[html.Button(train.name, id=f'switch-to-{train.name}') for train in trains.TRAINS],
+    *[html.Button(train.name, id=f'switch-to-{train.name}', disabled=True) for train in trains.TRAINS],
     html.Div([], style={'display': 'inline-block', 'width': 10, 'height': 10}),
     html.Button("Aussteigen", id='release-train')
 ])
