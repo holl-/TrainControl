@@ -297,4 +297,6 @@ def display_admin_speeds(_n):
 
 if __name__ == '__main__':
     # trains.power_on()
-    app.run_server(debug=True, host='0.0.0.0', port=8051)  # TODO port 80
+    import waitress
+    waitress.serve(app.server, port=8051)  # TODO port 80
+    # app.run_server(debug=True, host='0.0.0.0', port=8051)
