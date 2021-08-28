@@ -1,3 +1,5 @@
+import math
+import random
 import threading
 import time
 from typing import Dict
@@ -45,7 +47,7 @@ def clear_inactive_clients():
         if client.is_inactive():
             del CLIENTS[client.user_id]
             if client.train is not None:
-                client.train.stop()
+                client.train.set_target_speed(0)
 
 # INPUT_LOCK = threading.Lock()
 
@@ -98,8 +100,7 @@ def build_control(index):
         ]),
         html.Div([], style={'display': 'inline-block', 'width': 40, 'height': 300, 'vertical-align': 'bottom'}),
         html.Div(style={'display': 'inline-block', 'vertical-align': 'top'}, children=[
-            daq.Gauge(id='speed', color={'gradient': True, 'ranges': {'green': [0, 6*25], 'yellow': [6*25, 8*25], 'red': [8*25, 10*25]}},
-                      value=250, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=True, size=300),
+            daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=True, size=300),
         ]),
         html.Div([], style={'display': 'inline-block', 'width': 40, 'height': 300, 'vertical-align': 'bottom'}),
         html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'top'}, children=[
@@ -154,6 +155,7 @@ admin_controls.append(html.Div(style={'height': 60}, children=[
 app.layout = html.Div(children=[
     dcc.Location(id='url', refresh=False),
     dcc.Interval(id='main-update', interval=Client.PING_TIME * 1000),
+    dcc.Interval(id='speed-update', interval=200),
     html.Div('id', id='user-id', style={'display': 'none'}),
     html.Div([], id='admin-controls'),
     welcome_layout,
@@ -222,8 +224,8 @@ def release_train(user_id, n_clicks):
     raise PreventUpdate()
 
 
-@app.callback(Output('speed', 'value'),
-              [Input('user-id', 'children'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks'), Input('reverse', 'n_clicks'), Input('stop-train', 'n_clicks'), Input('main-update', 'n_intervals')])
+@app.callback([Output('speed', 'value'), Output('speed', 'max'), Output('speed', 'color')],
+              [Input('user-id', 'children'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks'), Input('reverse', 'n_clicks'), Input('stop-train', 'n_clicks'), Input('speed-update', 'n_intervals')])
 def train_control_and_speedometer_update(user_id, accelerations, decelerations, reverses, stops, _n):
     client = CLIENTS[user_id]
     if client.train is None:
@@ -236,12 +238,19 @@ def train_control_and_speedometer_update(user_id, accelerations, decelerations, 
             client.train.reverse()
     effective_acceleration = accelerations - client.accelerations - (decelerations - client.decelerations)
     if effective_acceleration != 0:
-        client.train.accelerate_snap(effective_acceleration)
+        client.train.accelerate(effective_acceleration)
     if stops > client.stops:
-        client.train.stop()
+        client.train.emergency_stop()
 
     client.accelerations, client.decelerations, client.reverses, client.stops = accelerations, decelerations, reverses, stops
-    return int(round(client.train.abs_speed / 14 * 250))
+    speed = int(round(abs(client.train.signed_actual_speed)))
+    max_speed = int(round(client.train.max_speed))
+    if speed > 10:
+        speed += int(round(0.4 * math.sin(time.time()) + 0.7 * math.sin(time.time() * 1.3) + 0.3 * math.sin(time.time() * 0.7) + random.random() * 0.2))
+
+    color = {'gradient': True, 'ranges': {'green': [0, .6 * max_speed], 'yellow': [.6 * max_speed, .8 * max_speed], 'red': [.8 * max_speed, max_speed]}}
+
+    return speed, max_speed, color
 
 
 @app.callback(Output('power-off', 'style'), [Input('power-off', 'n_clicks')])
@@ -286,13 +295,13 @@ def show_admin_controls(path):
 for train in trains.TRAINS:
     @app.callback(Output(f'admin-speedometer-{train.name}', 'style'), [Input(f'admin-slider-{train.name}', 'value')])
     def set_speed_admin(value, train=train):
-        train.set_signed_speed(value)
+        train.set_target_speed(value / 14 * train.max_speed)
         raise PreventUpdate()
 
 
 @app.callback([Output(f'admin-speedometer-{train.name}', 'value') for train in trains.TRAINS], [Input('main-update', 'n_intervals')])
 def display_admin_speeds(_n):
-    return [0.5 * (1 + train.signed_speed / 14) for train in trains.TRAINS]
+    return [0.5 * (1 + train.signed_actual_speed / train.max_speed) for train in trains.TRAINS]
 
 
 if __name__ == '__main__':
