@@ -210,6 +210,8 @@ def main_update(user_id, _n_intervals, *n_clicks):
         for train, prev_clicks, bt_n_clicks in zip(trains.TRAINS, client.train_clicks, n_clicks):
             if bt_n_clicks is not None and bt_n_clicks > prev_clicks:
                 if all([c.train != train for c in CLIENTS.values()]):  # train not in use
+                    if client.train is not None:
+                        client.train.set_target_speed(0)
                     client.train = train
         client.train_clicks = [new if new is not None else old for new, old in zip(n_clicks, client.train_clicks)]
         return [({} if client.train is not None else {'display': 'none'}), label, *blocked_trains, release_disabled]
@@ -220,7 +222,10 @@ def main_update(user_id, _n_intervals, *n_clicks):
 @app.callback(Output('release-train', 'style'), [Input('user-id', 'children'), Input('release-train', 'n_clicks')])
 def release_train(user_id, n_clicks):
     if n_clicks is not None and n_clicks > 0:
-        CLIENTS[user_id].train = None
+        client = CLIENTS[user_id]
+        if client.train is not None:
+            client.train.set_target_speed(0)
+            client.train = None
     raise PreventUpdate()
 
 
