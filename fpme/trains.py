@@ -1,6 +1,7 @@
 import json
 import math
 import time
+import warnings
 
 import numpy
 
@@ -56,6 +57,9 @@ class Train:
         return direction < 0
 
     def update(self, dt: float):
+        if not is_power_on():
+            self._speed = 0
+            return
         if self._target_speed == self._speed:
             return
         acceleration = self.acceleration if abs(self._target_speed) > abs(self._speed) else self.break_acc
@@ -72,7 +76,7 @@ class Train:
         if new_state != self._broadcasting_state:
             self._broadcasting_state = new_state
             GENERATOR.set(self.address, speed_level, self.in_reverse, self._func_active, protocol=self.protocol)
-            print(f"Updating signal to speed {-speed_level if self.in_reverse else speed_level}")
+            # print(f"Updating signal to speed {-speed_level if self.in_reverse else speed_level}")
 
     def emergency_stop(self):
         self._target_speed = 0.
@@ -112,30 +116,14 @@ TRAINS = [
 ]
 
 
-def update_trains(dt):
-    for train in TRAINS:
-        train.update(dt)
-
-
-TRAIN_UPDATE_PERIOD = 0.1
-
-schedule_at_fixed_rate(update_trains, TRAIN_UPDATE_PERIOD)
-
-
 POWER_OFF_TIME = 0
-
-# TRAINS[0]._speed = -300
-# TRAINS[0].set_signed_speed(-300)
-# TRAINS[3].set_signed_speed(100)
 
 
 def power_on():
-    print("Power on")
     GENERATOR.start()
 
 
 def power_off():
-    print("Power off")
     GENERATOR.stop()
     global POWER_OFF_TIME
     POWER_OFF_TIME = time.perf_counter()
@@ -143,3 +131,16 @@ def power_off():
 
 def is_power_on():
     return GENERATOR.is_sending
+
+
+def update_trains(dt):
+    try:
+        for train in TRAINS:
+            train.update(dt)
+    except Exception as exc:
+        warnings.warn(f"Exception in update_trains(): {exc}")
+
+
+TRAIN_UPDATE_PERIOD = 0.1
+
+schedule_at_fixed_rate(update_trains, TRAIN_UPDATE_PERIOD)

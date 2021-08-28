@@ -247,9 +247,10 @@ def train_control_and_speedometer_update(user_id, accelerations, decelerations, 
     max_speed = int(round(client.train.max_speed))
     if speed > 10:
         speed += int(round(0.4 * math.sin(time.time()) + 0.7 * math.sin(time.time() * 1.3) + 0.3 * math.sin(time.time() * 0.7) + random.random() * 0.2))
-
     color = {'gradient': True, 'ranges': {'green': [0, .6 * max_speed], 'yellow': [.6 * max_speed, .8 * max_speed], 'red': [.8 * max_speed, max_speed]}}
-
+    if not trains.is_power_on():
+        speed = 0
+        color = 'blue'
     return speed, max_speed, color
 
 
