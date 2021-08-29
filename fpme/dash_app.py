@@ -28,6 +28,7 @@ class Client:
         self.decelerations = 0
         self.reverses = 0
         self.stops = 0
+        self.switches = 0
         self.train = None
         self.last_input_perf_counter = time.perf_counter()
         self.train_clicks = [0] * len(trains.TRAINS)
@@ -141,15 +142,15 @@ track_switch_controls = html.Div(className="radio-group", children=[
         labelStyle={'display': 'block'}),
     " ",
     dbc.RadioItems(
-        id="switch-direction",
+        id="switch-is_arrival",
         className="btn-group",
         labelClassName="btn btn-secondary",
         labelCheckedClassName="active",
         options=[
-            {"label": "🡸", "value": '<'},
-            {"label": "🡺", "value": '>'},
+            {"label": "🡸", "value": False},
+            {"label": "🡺", "value": True},
         ],
-        value='<',
+        value=True,
         labelStyle={'display': 'block'}),
     " ",
     dbc.RadioItems(
@@ -331,21 +332,29 @@ def display_admin_speeds(_n):
 
 
 @app.callback([Output('switch-tracks-status', 'children'), Output('switch-tracks-button', 'disabled')],
-              [Input('user-id', 'children'), Input('switch-track', 'value'), Input('switch-platform', 'value'), Input('switch-direction', 'value')])
-def is_switch_impossible(user_id, track: str, platform: int, direction: str):
-    if direction == '>':  # enter station
+              [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
+               Input('switch-track', 'value'), Input('switch-platform', 'value'), Input('switch-is_arrival', 'value'), Input('switch-tracks-button', 'n_clicks')])
+def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: bool, n_clicks: int):
+    client = CLIENTS[user_id]
+
+    if n_clicks is not None and n_clicks > client.switches:
+        client.switches = n_clicks
+        switches.set_switches(arrival=is_arrival, platform=platform, track=track)
+
+    if is_arrival:
         possible = switches.get_possible_arrival_platforms(track)
         setting_possible = platform in possible
-    elif direction == '<':  # exit station
+    else:
         possible = switches.get_possible_departure_tracks(platform)
         setting_possible = track in possible
-    else:
-        raise PreventUpdate()
+
     if setting_possible:
-        status = "Eingestellt" if len(possible) == 1 else "Nicht eingestellt"
+        correct = switches.are_switches_correct_for(is_arrival, platform, track)
+        status = "Eingestellt" if correct or len(possible) == 1 else "Nicht eingestellt"
     else:
+        correct = False
         status = f"Nur {', '.join(str(p) for p in possible)} möglich." if len(possible) > 1 else f"Fährt immer auf {possible[0]}"
-    return status, not setting_possible
+    return status, not setting_possible or correct
 
 
 if __name__ == '__main__':
