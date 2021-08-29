@@ -13,7 +13,7 @@ import dash_daq as daq
 from dash.dependencies import Input, Output
 from dash.exceptions import PreventUpdate
 
-from fpme import trains
+from fpme import trains, switches
 
 
 class Client:
@@ -51,41 +51,13 @@ def clear_inactive_clients():
 
 # INPUT_LOCK = threading.Lock()
 
-app = dash.Dash('Modelleisenbahn', external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash('Modelleisenbahn', external_stylesheets=[dbc.themes.BOOTSTRAP, 'radio-buttons.css'])
 
 with open('../welcome_text.md') as file:
     welcome_text = file.read()
 welcome_layout = html.Div(id='welcome', children=[
     dcc.Markdown(welcome_text),
 ])
-
-# tasks = html.Div(style={}, children=[
-#         dbc.Row(
-#             [
-#                 dbc.Col(html.Div("Person")),
-#                 dbc.Col(html.Div("von Grünstein")),
-#                 dbc.Col(html.Div("mit ICE")),
-#                 dbc.Col(html.Div("nach Waldbrunn")),
-#             ],
-#         ),
-#         dbc.Row(
-#             [
-#                 dbc.Col(html.Div("Güter")),
-#                 dbc.Col(html.Div("von Waldbrunn")),
-#                 dbc.Col(html.Div("-")),
-#                 dbc.Col(html.Div("nach Neuffen")),
-#             ],
-#         ),
-#         dbc.Row(
-#             [
-#                 dbc.Col(html.Div("Person")),
-#                 dbc.Col(html.Div("von Bav. Film Studios")),
-#                 dbc.Col(html.Div("-")),
-#                 dbc.Col(html.Div("nach Aubing")),
-#             ],
-#         ),
-#     ]
-# )
 
 
 def build_control(index):
@@ -152,6 +124,53 @@ admin_controls.append(html.Div(style={'height': 60}, children=[
 ]))
 
 
+track_switch_controls = html.Div(className="radio-group", children=[
+    "Weichen: ",
+    dbc.RadioItems(
+        id="switch-track",
+        className="btn-group",
+        labelClassName="btn btn-secondary",
+        labelCheckedClassName="active",
+        options=[
+            {"label": "A", "value": 'A'},
+            {"label": "B", "value": 'B'},
+            {"label": "C", "value": 'C'},
+            {"label": "D", "value": 'D'},
+        ],
+        value='A',
+        labelStyle={'display': 'block'}),
+    " ",
+    dbc.RadioItems(
+        id="switch-direction",
+        className="btn-group",
+        labelClassName="btn btn-secondary",
+        labelCheckedClassName="active",
+        options=[
+            {"label": "🡸", "value": '<'},
+            {"label": "🡺", "value": '>'},
+        ],
+        value='<',
+        labelStyle={'display': 'block'}),
+    " ",
+    dbc.RadioItems(
+        id="switch-platform",
+        className="btn-group",
+        labelClassName="btn btn-secondary",
+        labelCheckedClassName="active",
+        options=[
+            {"label": "1", "value": 1},
+            {"label": "2", "value": 2},
+            {"label": "3", "value": 3},
+        ],
+        value=1,
+        labelStyle={'display': 'block'}),
+    " ",
+    html.Div(id='switch-tracks-status', style={'display': 'inline-block'}),
+    " ",
+    html.Button('Stellen', id='switch-tracks-button')
+])
+
+
 app.layout = html.Div(children=[
     dcc.Location(id='url', refresh=False),
     dcc.Interval(id='main-update', interval=Client.PING_TIME * 1000),
@@ -161,6 +180,7 @@ app.layout = html.Div(children=[
     welcome_layout,
     switch_trains,
     control_layout,
+    track_switch_controls,
 ])
 app.config.suppress_callback_exceptions = True
 
@@ -308,6 +328,24 @@ for train in trains.TRAINS:
 @app.callback([Output(f'admin-speedometer-{train.name}', 'value') for train in trains.TRAINS], [Input('main-update', 'n_intervals')])
 def display_admin_speeds(_n):
     return [0.5 * (1 + train.signed_actual_speed / train.max_speed) for train in trains.TRAINS]
+
+
+@app.callback([Output('switch-tracks-status', 'children'), Output('switch-tracks-button', 'disabled')],
+              [Input('user-id', 'children'), Input('switch-track', 'value'), Input('switch-platform', 'value'), Input('switch-direction', 'value')])
+def is_switch_impossible(user_id, track: str, platform: int, direction: str):
+    if direction == '>':  # enter station
+        possible = switches.get_possible_arrival_platforms(track)
+        setting_possible = platform in possible
+    elif direction == '<':  # exit station
+        possible = switches.get_possible_departure_tracks(platform)
+        setting_possible = track in possible
+    else:
+        raise PreventUpdate()
+    if setting_possible:
+        status = "Eingestellt" if len(possible) == 1 else "Nicht eingestellt"
+    else:
+        status = f"Nur {', '.join(str(p) for p in possible)} möglich." if len(possible) > 1 else f"Fährt immer auf {possible[0]}"
+    return status, not setting_possible
 
 
 if __name__ == '__main__':
