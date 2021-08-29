@@ -1,7 +1,12 @@
 import threading
 import time
+from multiprocessing import Value, Process, Queue
 
 import serial
+
+
+SERIAL_PORT = None  # 'COM1'
+
 
 TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
 T = TERNARY_BITS
@@ -81,39 +86,65 @@ class Motorola2(MaerklinProtocol):
         return None
 
 
+class ProcessSpawningGenerator:
+
+    def __init__(self):
+        self._active = Value('b', False)
+        self._short_circuited = Value('b', False)
+        self._queue = Queue()
+        self._process = Process(target=setup_generator, args=(self._queue, self._active, self._short_circuited))
+        self._process.start()
+
+    def set(self, address: int, speed: int, reverse: bool, func: bool, protocol: MaerklinProtocol = None):
+        self._queue.put(('set', address, speed, reverse, func, protocol))
+
+    def start(self):
+        self._queue.put(('start',))
+
+    def stop(self):
+        self._active.value = False
+
+    @property
+    def is_sending(self):
+        return bool(self._active.value) and not bool(self._short_circuited.value)
+
+
+def setup_generator(queue: Queue, active: Value, short_circuited: Value):
+    gen = SignalGenerator(active, short_circuited)
+    while True:
+        cmd = queue.get(block=True)
+        getattr(gen, cmd[0])(*cmd[1:])
+
+
 class SignalGenerator:
 
-    def __init__(self, serial_port: str or None, protocol: MaerklinProtocol):
-        self.protocol = protocol
-        self._active = False
+    def __init__(self, active: Value, short_circuited: Value):
+        self.protocol = Motorola2()
+        self._active = active
         self._data = {}  # address -> (speed, reverse, func)
         self._packets = {}
         self._turn_packets = {}
         self._turn_addresses = []
         self.immediate_repetitions = 2
-        self._idle_packet = protocol.velocity_packet(80, 0, False, False)
+        self._idle_packet = self.protocol.velocity_packet(80, 0, False, False)
         self._override_protocols = {}
-        self._short_circuted = False
+        self._short_circuited = short_circuited
         self.stop_on_short_circuit = False
         self.on_short_circuit = None  # function without parameters
-        self._ser = serial_port and self._init_serial(serial_port)
-
-    def _init_serial(self, serial_port):
-        ser = serial.Serial(
-            port=serial_port,
-            baudrate=38400,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            bytesize=serial.SIXBITS,
-            write_timeout=0,  # non-blocking write
-            rtscts=False,  # no flow control
-            dsrdtr=False,  # no flow control
-        )
-        ser.is_open or ser.open()
-        assert ser.is_open
-        ser.setRTS(False)
-        ser.setDTR(True)
-        return ser
+        if SERIAL_PORT is not None:
+            ser = serial.Serial(port=SERIAL_PORT, baudrate=38400, parity=serial.PARITY_NONE,
+                                stopbits=serial.STOPBITS_ONE, bytesize=serial.SIXBITS,
+                                write_timeout=0,  # non-blocking write
+                                rtscts=False,  # no flow control
+                                dsrdtr=False,  # no flow control
+                                )
+            ser.is_open or ser.open()
+            assert ser.is_open, f"Failed to open serial port {SERIAL_PORT}"
+            ser.setRTS(False)
+            ser.setDTR(True)
+            self._ser = ser
+        else:
+            self._ser = None
 
     def set(self, address: int, speed: int, reverse: bool, func: bool, protocol: MaerklinProtocol = None):
         assert 0 < address < 80
@@ -129,22 +160,19 @@ class SignalGenerator:
         self._turn_packets[address] = (protocol or self.protocol).turn_packet(address, func)
 
     def start(self):
-        assert not self._active
+        assert not self._active.value
         threading.Thread(target=self.run, name='RS_232_Signal_Generator').start()
 
-    def stop(self):
-        self._active = False
-
-    @property
-    def is_sending(self):
-        return self._active and not self._short_circuted
-
     def run(self):
-        assert not self._active
-        self._active = True
-        while self._active:
-            self._short_circuted, newly_short_circuited = self._ser.getCTS(), self._ser.getCTS() and not self._short_circuted
-            if self._short_circuted:
+        assert not self._active.value
+        self._active.value = True
+        while self._active.value:
+            if self._ser is None:
+                print(f"Here be signal: {self._packets}")
+                time.sleep(0.5)
+                continue
+            self._short_circuited.value, newly_short_circuited = self._ser.getCTS(), self._ser.getCTS() and not self._short_circuited.value
+            if self._short_circuited.value:
                 newly_short_circuited and self.on_short_circuit()
                 if self.stop_on_short_circuit:
                     return
@@ -171,11 +199,15 @@ class SignalGenerator:
 
 
 if __name__ == '__main__':
-    gen = SignalGenerator('COM1', Motorola2())
-    # time.sleep(10)
-    # gen.set(24, 5, True, True)
-    # gen.run()
-    while True:
-        print(gen._ser.getCTS())
-        time.sleep(0.5)
-    # gen._ser.getDSR()
+    gen = ProcessSpawningGenerator()
+    print(f"Sending: {gen.is_sending}")
+    gen.set(1, 0, False, False)
+    gen.start()
+    print(f"Sending: {gen.is_sending}")
+    time.sleep(1)
+    print(f"Sending: {gen.is_sending}")
+    gen.set(1, 14, True, False)
+    time.sleep(4)
+    gen.stop()
+    time.sleep(2)
+    gen.start()

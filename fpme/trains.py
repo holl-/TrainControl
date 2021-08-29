@@ -1,4 +1,3 @@
-import json
 import math
 import time
 import warnings
@@ -7,12 +6,6 @@ import numpy
 
 from helper import schedule_at_fixed_rate
 from fpme import signal_gen
-
-
-with open('../config.json') as CONFIG_FILE:
-    CONFIG = json.load(CONFIG_FILE)
-
-GENERATOR = signal_gen.SignalGenerator(CONFIG['serial-port'] or None, signal_gen.Motorola2())
 
 
 class Train:
@@ -118,6 +111,8 @@ TRAINS = [
 
 POWER_OFF_TIME = 0
 
+GENERATOR: signal_gen.ProcessSpawningGenerator = None
+
 
 def power_on():
     GENERATOR.start()
@@ -143,4 +138,8 @@ def update_trains(dt):
 
 TRAIN_UPDATE_PERIOD = 0.1
 
-schedule_at_fixed_rate(update_trains, TRAIN_UPDATE_PERIOD)
+
+def setup():
+    global GENERATOR
+    GENERATOR = signal_gen.ProcessSpawningGenerator()
+    schedule_at_fixed_rate(update_trains, TRAIN_UPDATE_PERIOD)

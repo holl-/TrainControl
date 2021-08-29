@@ -349,6 +349,7 @@ def is_switch_impossible(user_id, track: str, platform: int, direction: str):
 
 
 if __name__ == '__main__':
+    trains.setup()
     # trains.power_on()
     import waitress
     waitress.serve(app.server, port=8051)  # TODO port 80
