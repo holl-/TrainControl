@@ -120,12 +120,6 @@ switch_trains = html.Div([
 TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in trains.TRAINS]
 
 
-control_layout = html.Div(id='control', style={'display': 'none'}, children=[
-    build_control(0),
-    html.Div(id='stop-train-placeholder', style={'display': 'none'}),
-])
-
-
 admin_controls = []
 for train in trains.TRAINS:
     admin_controls.append(html.Div([
@@ -190,6 +184,13 @@ track_switch_controls = html.Div(className="radio-group", children=[
 ])
 
 
+control_layout = html.Div(id='control', style={'display': 'none'}, children=[
+    build_control(0),
+    html.Div(id='stop-train-placeholder', style={'display': 'none'}),
+    track_switch_controls,
+])
+
+
 app.layout = html.Div(children=[
     dcc.Location(id='url', refresh=False),
     dcc.Interval(id='main-update', interval=Client.PING_TIME * 1000),
@@ -199,7 +200,6 @@ app.layout = html.Div(children=[
     welcome_layout,
     switch_trains,
     control_layout,
-    track_switch_controls,
 ])
 app.config.suppress_callback_exceptions = True
 
@@ -365,7 +365,7 @@ def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: boo
 
     if setting_possible:
         correct = switches.are_switches_correct_for(is_arrival, platform, track)
-        status = "Eingestellt" if correct or len(possible) == 1 else "Nicht eingestellt"
+        status = "Korrekt gestellt" if correct or len(possible) == 1 else ""
     else:
         correct = False
         status = f"Nur {', '.join(str(p) for p in possible)} möglich." if len(possible) > 1 else f"Fährt immer auf {possible[0]}"
