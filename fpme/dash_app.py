@@ -352,9 +352,12 @@ def display_admin_speeds(_n):
 def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: bool, n_clicks: int):
     client = get_client(user_id)
 
+    locked: float = switches.check_lock(is_arrival, platform, track)
+
     if n_clicks is not None and n_clicks > client.switches:
         client.switches = n_clicks
-        switches.set_switches(arrival=is_arrival, platform=platform, track=track)
+        if not locked:
+            switches.set_switches(arrival=is_arrival, platform=platform, track=track)
 
     if is_arrival:
         possible = switches.get_possible_arrival_platforms(track)
@@ -362,14 +365,18 @@ def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: boo
     else:
         possible = switches.get_possible_departure_tracks(platform)
         setting_possible = track in possible
-
     if setting_possible:
         correct = switches.are_switches_correct_for(is_arrival, platform, track)
-        status = "Korrekt gestellt" if correct or len(possible) == 1 else ""
+        if correct or len(possible) == 1:
+            status = "Korrekt gestellt"
+        elif locked:
+            status = f"Warte auf anderen Zug ({int(locked)+1} s)"
+        else:
+            status = ""
     else:
         correct = False
         status = f"Nur {', '.join(str(p) for p in possible)} möglich." if len(possible) > 1 else f"Fährt immer auf {possible[0]}"
-    return status, not setting_possible or correct
+    return status, not setting_possible or correct or locked
 
 
 if __name__ == '__main__':

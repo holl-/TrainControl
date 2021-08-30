@@ -1,6 +1,6 @@
-from typing import Dict
+import time
 
-STATE = {i: None for i in range(1, 4)}  # key = platform number,  False=straight, True=curved
+LOCK_TIME_SEC = 10.  # switches are locked in position for this long a after being operated
 
 ARRIVAL_CONFIGURATIONS = {
     'A': {
@@ -36,6 +36,10 @@ DEPARTURE_CONFIGURATIONS = {
     }
 }
 
+SWITCHES = range(1, 4)
+STATES = {switch: None for switch in SWITCHES}  # key = platform number,  False=straight, True=curved, None=unknown
+LOCK_RELEASE_TIME = {switch: 0. for switch in SWITCHES}
+
 
 def _get_target_configuration(arrival: bool, platform: int, track: str):
     if arrival:
@@ -52,24 +56,33 @@ def get_possible_departure_tracks(from_platform: int) -> tuple:
     return tuple(DEPARTURE_CONFIGURATIONS[from_platform].keys())
 
 
+def check_lock(arrival: bool, platform: int, track: str) -> float:
+    target = _get_target_configuration(arrival, platform, track)
+    for switch, target_state in target.items():
+        if time.time() < LOCK_RELEASE_TIME[switch]:
+            return LOCK_RELEASE_TIME[switch] - time.time()
+    return 0
+
+
 def set_switches(arrival: bool, platform: int, track: str):
     target = _get_target_configuration(arrival, platform, track)
     for switch, target_state in target.items():
-        current_state = STATE[switch]
+        LOCK_RELEASE_TIME[switch] = time.time() + LOCK_TIME_SEC
+        current_state = STATES[switch]
         if current_state != target_state:
-            _set_switch(switch, target_state)
+            _operate_switch(switch, target_state)
 
 
-def _set_switch(switch: int, curved: bool):
+def _operate_switch(switch: int, curved: bool):
     """ Sends a signal to the specified track switch. """
     print(f"Setting switch {switch} to state curved={curved}")
-    STATE[switch] = curved
+    STATES[switch] = curved
 
 
 def are_switches_correct_for(arrival: bool, platform: int, track: str):
     target = _get_target_configuration(arrival, platform, track)
     for switch, target_state in target.items():
-        if STATE[switch] != target_state:
+        if STATES[switch] != target_state:
             return False
     return True
 
