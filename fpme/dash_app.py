@@ -19,11 +19,15 @@ from fpme import trains, switches
 class Client:
     PING_TIME = 1.0
     GLOBAL_ID_COUNTER = 0
+    APP_INSTANCE_ID = int(time.time())
 
-    def __init__(self, addr):
+    def __init__(self, addr, user_id=None):
         self.addr = addr  # IP
-        self.user_id = str(Client.GLOBAL_ID_COUNTER)  # generated after website loaded, stored in 'user-id' div component
-        Client.GLOBAL_ID_COUNTER += 1
+        if user_id is None:
+            self.user_id = f'{Client.APP_INSTANCE_ID}-{Client.GLOBAL_ID_COUNTER}'  # generated after website loaded, stored in 'user-id' div component
+            Client.GLOBAL_ID_COUNTER += 1
+        else:
+            self.user_id = user_id
         self.accelerations = 0
         self.decelerations = 0
         self.reverses = 0
@@ -41,6 +45,20 @@ class Client:
 
 
 CLIENTS: Dict[str, Client] = {}  # id -> Client
+
+
+def get_client(user_id: str or None) -> Client:
+    """
+    Args:
+        user_id: if `str`, looks up or creates a client with the given ID, if `None`, generates a new ID.
+    """
+    if user_id in CLIENTS:
+        return CLIENTS[user_id]
+    else:
+        client = Client(request.remote_addr, user_id)
+        print(f"Registered client {client}")
+        CLIENTS[client.user_id] = client
+        return client
 
 
 def clear_inactive_clients():
@@ -189,10 +207,7 @@ app.config.suppress_callback_exceptions = True
 @app.callback(Output('user-id', 'children'), [Input('url', 'pathname')])
 def generate_id(url):
     if url:
-        client = Client(request.remote_addr)
-        CLIENTS[client.user_id] = client
-        print(f"Registered client {client} (loaded {url})")
-        return client.user_id
+        return get_client(None).user_id
     else:
         raise PreventUpdate()
 
@@ -209,7 +224,7 @@ def hide_welcome(*n_clicks):
                Output('release-train', 'disabled')],
               [Input('user-id', 'children'), Input('main-update', 'n_intervals'), *TRAIN_BUTTONS])
 def main_update(user_id, _n_intervals, *n_clicks):
-    client = CLIENTS[user_id]
+    client = get_client(user_id)
     client.last_input_perf_counter = time.perf_counter()
     clear_inactive_clients()
 
@@ -243,7 +258,7 @@ def main_update(user_id, _n_intervals, *n_clicks):
 @app.callback(Output('release-train', 'style'), [Input('user-id', 'children'), Input('release-train', 'n_clicks')])
 def release_train(user_id, n_clicks):
     if n_clicks is not None and n_clicks > 0:
-        client = CLIENTS[user_id]
+        client = get_client(user_id)
         if client.train is not None:
             client.train.set_target_speed(0)
             client.train = None
@@ -253,7 +268,7 @@ def release_train(user_id, n_clicks):
 @app.callback([Output('speed', 'value'), Output('speed', 'max'), Output('speed', 'color')],
               [Input('user-id', 'children'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks'), Input('reverse', 'n_clicks'), Input('stop-train', 'n_clicks'), Input('speed-update', 'n_intervals')])
 def train_control_and_speedometer_update(user_id, accelerations, decelerations, reverses, stops, _n):
-    client = CLIENTS[user_id]
+    client = get_client(user_id)
     if client.train is None:
         raise PreventUpdate()
 
@@ -335,7 +350,7 @@ def display_admin_speeds(_n):
               [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
                Input('switch-track', 'value'), Input('switch-platform', 'value'), Input('switch-is_arrival', 'value'), Input('switch-tracks-button', 'n_clicks')])
 def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: bool, n_clicks: int):
-    client = CLIENTS[user_id]
+    client = get_client(user_id)
 
     if n_clicks is not None and n_clicks > client.switches:
         client.switches = n_clicks
