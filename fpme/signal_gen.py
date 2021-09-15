@@ -166,6 +166,7 @@ class SignalGenerator:
     def run(self):
         assert not self._active.value
         self._active.value = True
+        self._time_started_sending = time.perf_counter()
         while self._active.value:
             if self._ser is None:
                 print(f"Here be signal: {self._packets}")
@@ -189,13 +190,17 @@ class SignalGenerator:
                                 self._send(self._turn_packets[address])
                     for _rep in range(self.immediate_repetitions):
                         self._send(vel_packet)
-                    time.sleep(6200e-6 - 1250e-6)
+                    # time.sleep(6200e-6 - 1250e-6)
 
     def _send(self, packet):
         self._ser.write(packet)
-        time.sleep(len(packet) * 208e-6)
+        # time.sleep(len(packet) * 208e-6)
         # time.sleep(1250e-6)  # >= 3 t-bits (6 bytes) pause between signals
-        time.sleep(350e-6)  # >= 3 t-bits (6 bytes) pause between signals
+        t = time.perf_counter()
+        while time.perf_counter() < t + 5.944e-3:
+            pass  # manual sleep, time.sleep() is not precise enough
+        # time.sleep(350e-6)  # >= 3 t-bits (6 bytes) pause between signals
+        # Measured: 1.7 ms between equal packets in pair, 6 ms between different pairs
 
 
 if __name__ == '__main__':
