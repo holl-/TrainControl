@@ -5,7 +5,7 @@ from multiprocessing import Value, Process, Queue
 import serial
 
 
-SERIAL_PORT = None  # 'COM1'
+SERIAL_PORT = 'COM5'  # None  # 'COM1'
 
 
 TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
@@ -130,11 +130,12 @@ class SignalGenerator:
         self._override_protocols = {}
         self._short_circuited = short_circuited
         self.stop_on_short_circuit = False
-        self.on_short_circuit = None  # function without parameters
+        self.on_short_circuit = lambda: print("Short circuit detected")  # function without parameters
+        self._time_started_sending = None  # wait a bit before detecting short circuits
         if SERIAL_PORT is not None:
             ser = serial.Serial(port=SERIAL_PORT, baudrate=38400, parity=serial.PARITY_NONE,
                                 stopbits=serial.STOPBITS_ONE, bytesize=serial.SIXBITS,
-                                write_timeout=0,  # non-blocking write
+                                write_timeout=None,  # non-blocking write
                                 rtscts=False,  # no flow control
                                 dsrdtr=False,  # no flow control
                                 )
@@ -172,9 +173,11 @@ class SignalGenerator:
                 print(f"Here be signal: {self._packets}")
                 time.sleep(0.5)
                 continue
-            self._short_circuited.value, newly_short_circuited = self._ser.getCTS(), self._ser.getCTS() and not self._short_circuited.value
+            short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS() # 0.1 seconds to test for short circuits
+            self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
             if self._short_circuited.value:
-                newly_short_circuited and self.on_short_circuit()
+                if newly_short_circuited and self.on_short_circuit is not None:
+                    self.on_short_circuit()
                 if self.stop_on_short_circuit:
                     return
                 else:
@@ -205,14 +208,11 @@ class SignalGenerator:
 
 if __name__ == '__main__':
     gen = ProcessSpawningGenerator()
-    print(f"Sending: {gen.is_sending}")
-    gen.set(1, 0, False, False)
     gen.start()
-    print(f"Sending: {gen.is_sending}")
-    time.sleep(1)
-    print(f"Sending: {gen.is_sending}")
-    gen.set(1, 14, True, False)
-    time.sleep(4)
-    gen.stop()
-    time.sleep(2)
-    gen.start()
+    # gen.set(24, 1, False, False, protocol=Motorola1())
+    # time.sleep(1)
+    gen.set(72, 7, False, False, protocol=Motorola1())
+    for i in range(1000):
+        # time.sleep(1)
+        gen.set(72, int(input()), False, False)
+        print(f"Short-circuited (CTS): {gen._short_circuited.value}")
