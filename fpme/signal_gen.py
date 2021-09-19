@@ -129,7 +129,7 @@ class SignalGenerator:
         self._idle_packet = self.protocol.velocity_packet(80, 0, False, False)
         self._override_protocols = {}
         self._short_circuited = short_circuited
-        self.stop_on_short_circuit = False
+        self.stop_on_short_circuit = True
         self.on_short_circuit = lambda: print("Short circuit detected")  # function without parameters
         self._time_started_sending = None  # wait a bit before detecting short circuits
         if SERIAL_PORT is not None:
@@ -173,36 +173,30 @@ class SignalGenerator:
                 print(f"Here be signal: {self._packets}")
                 time.sleep(0.5)
                 continue
-            short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS() # 0.1 seconds to test for short circuits
+            short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
             self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
             if self._short_circuited.value:
                 if newly_short_circuited and self.on_short_circuit is not None:
                     self.on_short_circuit()
                 if self.stop_on_short_circuit:
                     return
-                else:
-                    time.sleep(0.1)
-            else:  # Send data on serial port
-                if not self._data:
-                    self._send(self._idle_packet)
-                for address, vel_packet in dict(self._packets).items():
-                    if address in self._turn_addresses:
-                        self._turn_addresses.remove(address)
-                        if self._turn_packets[address] is not None:
-                            for _rep in range(2):
-                                self._send(self._turn_packets[address])
-                    for _rep in range(self.immediate_repetitions):
-                        self._send(vel_packet)
-                    # time.sleep(6200e-6 - 1250e-6)
+            # Send data on serial port
+            if not self._data:
+                self._send(self._idle_packet)
+            for address, vel_packet in dict(self._packets).items():
+                if address in self._turn_addresses:
+                    self._turn_addresses.remove(address)
+                    if self._turn_packets[address] is not None:
+                        for _rep in range(2):
+                            self._send(self._turn_packets[address])
+                for _rep in range(self.immediate_repetitions):
+                    self._send(vel_packet)
 
     def _send(self, packet):
         self._ser.write(packet)
-        # time.sleep(len(packet) * 208e-6)
-        # time.sleep(1250e-6)  # >= 3 t-bits (6 bytes) pause between signals
         t = time.perf_counter()
         while time.perf_counter() < t + 5.944e-3:
             pass  # manual sleep, time.sleep() is not precise enough
-        # time.sleep(350e-6)  # >= 3 t-bits (6 bytes) pause between signals
         # Measured: 1.7 ms between equal packets in pair, 6 ms between different pairs
 
 
@@ -211,8 +205,13 @@ if __name__ == '__main__':
     gen.start()
     # gen.set(24, 1, False, False, protocol=Motorola1())
     # time.sleep(1)
-    gen.set(72, 7, False, False, protocol=Motorola1())
+    # gen.set(24, 7, False, False, protocol=Motorola1())  # E-Lok (DB)
+    # gen.set(60, 7, False, False)  # ICE
+    # gen.set(1, 7, False, False)  # E-Lok (BW)
+    # gen.set(48, 7, False, False)  # S-Bahn
+    # gen.set(72, 0, False, False)  # Diesel
+    gen.set(78, 0, False, False)  # Dampf
     for i in range(1000):
         # time.sleep(1)
-        gen.set(72, int(input()), False, False)
+        gen.set(78, int(input()), False, False)
         print(f"Short-circuited (CTS): {gen._short_circuited.value}")
