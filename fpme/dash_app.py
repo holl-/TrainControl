@@ -99,7 +99,7 @@ def build_control(index):
                 html.Button('+', id='accelerate', style={'width': '100%', 'height': '100%', 'background-color': '#33cc33', 'color': 'white'}),
             ]),
             html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '20%'}, children=[
-                html.Button('<->', id='reverse', style={'width': '100%', 'height': '100%', 'background-color': '#A0A0FF', 'color': 'white'}),
+                html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%', 'background-color': '#A0A0FF', 'color': 'white'}),
             ]),
             html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '30%'}, children=[
                 html.Button('-', id='decelerate', style={'width': '100%', 'height': '100%', 'background-color': '#33cc33', 'color': 'white'}),
@@ -383,5 +383,5 @@ if __name__ == '__main__':
     trains.setup()
     # trains.power_on()
     import waitress
-    waitress.serve(app.server, port=8051)  # TODO port 80
+    waitress.serve(app.server, port=80)
     # app.run_server(debug=True, host='0.0.0.0', port=8051)
