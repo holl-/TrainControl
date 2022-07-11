@@ -1,8 +1,19 @@
+"""
+                   3
+D =================================== 3
+   \\             //           ######
+    \\   2       //            ######
+C =================================== 2
+       //
+B =================================== 1
+    // 1                           ##
+A //                               ##
+"""
 import time
 
-LOCK_TIME_SEC = 10.  # switches are locked in position for this long a after being operated
+LOCK_TIME_SEC = 10.  # switches are locked in position for this long after being operated
 
-ARRIVAL_CONFIGURATIONS = {
+ARRIVAL_CONFIGURATIONS = {  # Driving rightwards
     'A': {
         1: {1: True},
         2: {1: False}
@@ -18,7 +29,7 @@ ARRIVAL_CONFIGURATIONS = {
         2: {}
     },
 }
-DEPARTURE_CONFIGURATIONS = {
+DEPARTURE_CONFIGURATIONS = {  # Driving leftwards
     1: {
         'A': {1: True},
         'B': {1: False},
@@ -77,7 +88,7 @@ def _operate_switch(switch: int, curved: bool):
     """ Sends a signal to the specified track switch. """
     print(f"Setting switch {switch} to state curved={curved}")
     from .relay8 import pulse
-    if pulse(switch * 2 + int(curved)):
+    if pulse(switch * 2 - 1 + int(curved)):
         STATES[switch] = curved
 
 
