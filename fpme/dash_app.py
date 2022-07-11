@@ -380,6 +380,7 @@ def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: boo
 
 
 if __name__ == '__main__':
+    import relay8
     trains.setup()
     # trains.power_on()
     import waitress

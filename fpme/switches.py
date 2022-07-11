@@ -76,7 +76,9 @@ def set_switches(arrival: bool, platform: int, track: str):
 def _operate_switch(switch: int, curved: bool):
     """ Sends a signal to the specified track switch. """
     print(f"Setting switch {switch} to state curved={curved}")
-    STATES[switch] = curved
+    from .relay8 import pulse
+    if pulse(switch * 2 + int(curved)):
+        STATES[switch] = curved
 
 
 def are_switches_correct_for(arrival: bool, platform: int, track: str):
