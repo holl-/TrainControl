@@ -354,7 +354,7 @@ def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: boo
 
     locked: float = switches.check_lock(is_arrival, platform, track)
 
-    if n_clicks is not None and n_clicks > client.switches:
+    if n_clicks is not None and n_clicks > client.switches:  # Set switches
         client.switches = n_clicks
         if not locked:
             switches.set_switches(arrival=is_arrival, platform=platform, track=track)
@@ -379,9 +379,29 @@ def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: boo
     return status, not setting_possible or correct or locked
 
 
-if __name__ == '__main__':
-    trains.setup()
+def get_ip():
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    ip = s.getsockname()[0]
+    s.close()
+    return ip
+
+
+def start_app(serial_port: str = None,
+              port: int = 80):
+    try:
+        import relay8
+        print("Relay initialized, track switches online.")
+    except AssertionError as err:
+        print(err)
+    trains.setup(serial_port)
     # trains.power_on()
     import waitress
-    waitress.serve(app.server, port=80)
-    # app.run_server(debug=True, host='0.0.0.0', port=8051)
+    print(f"Starting server on {get_ip()}:{port}")
+    waitress.serve(app.server, port=port)
+    # app.run_server(debug=True, host='0.0.0.0', port=port)
+
+
+if __name__ == '__main__':
+    start_app()

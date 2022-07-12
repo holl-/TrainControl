@@ -1,8 +1,20 @@
+"""
+                   3
+D =================================== 3
+   \\             //           ######
+    \\   2       //            ######
+C =================================== 2
+       //
+B =================================== 1
+    // 1                           ##
+A //                               ##
+"""
 import time
+from typing import Dict
 
-LOCK_TIME_SEC = 10.  # switches are locked in position for this long a after being operated
+LOCK_TIME_SEC = 10.  # switches are locked in position for this long after being operated
 
-ARRIVAL_CONFIGURATIONS = {
+ARRIVAL_CONFIGURATIONS = {  # Driving rightwards
     'A': {
         1: {1: True},
         2: {1: False}
@@ -18,7 +30,7 @@ ARRIVAL_CONFIGURATIONS = {
         2: {}
     },
 }
-DEPARTURE_CONFIGURATIONS = {
+DEPARTURE_CONFIGURATIONS = {  # Driving leftwards
     1: {
         'A': {1: True},
         'B': {1: False},
@@ -41,7 +53,8 @@ STATES = {switch: None for switch in SWITCHES}  # key = platform number,  False=
 LOCK_RELEASE_TIME = {switch: 0. for switch in SWITCHES}
 
 
-def _get_target_configuration(arrival: bool, platform: int, track: str):
+def _get_target_configuration(arrival: bool, platform: int, track: str) -> Dict[int, bool]:
+    """ Returns the required track switches and their corresponding state. Raises KeyError for invalid configurations """
     if arrival:
         return ARRIVAL_CONFIGURATIONS[track][platform]
     else:
@@ -57,7 +70,10 @@ def get_possible_departure_tracks(from_platform: int) -> tuple:
 
 
 def check_lock(arrival: bool, platform: int, track: str) -> float:
-    target = _get_target_configuration(arrival, platform, track)
+    try:
+        target = _get_target_configuration(arrival, platform, track)
+    except KeyError:
+        return -1
     for switch, target_state in target.items():
         if time.time() < LOCK_RELEASE_TIME[switch]:
             return LOCK_RELEASE_TIME[switch] - time.time()
@@ -76,7 +92,9 @@ def set_switches(arrival: bool, platform: int, track: str):
 def _operate_switch(switch: int, curved: bool):
     """ Sends a signal to the specified track switch. """
     print(f"Setting switch {switch} to state curved={curved}")
-    STATES[switch] = curved
+    from .relay8 import pulse
+    if pulse(switch * 2 - 1 + int(curved)):
+        STATES[switch] = curved
 
 
 def are_switches_correct_for(arrival: bool, platform: int, track: str):
