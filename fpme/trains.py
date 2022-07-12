@@ -14,6 +14,7 @@ class Train:
                  name: str,
                  address: int,
                  speeds=tuple([i * 20 for i in range(15)]),
+                 speeds_max=None,
                  acceleration=20.,
                  has_built_in_acceleration=False,
                  protocol=None):
@@ -103,9 +104,9 @@ TRAINS = [
     Train('ICE', address=60, acceleration=40., speeds=(0, 21, 43, 64, 86, 107, 129, 150, 171, 193, 214, 236, 257, 279, 300)),
     Train('E-Lok (DB)', address=24, protocol=signal_gen.Motorola1(), speeds=(0, 18, 36, 54, 71, 89, 107, 125, 143, 161, 179, 196, 214, 232, 250)),
     Train('E-Lok (BW)', address=1, acceleration=30., has_built_in_acceleration=True, speeds=(0, 18, 36, 54, 71, 89, 107, 125, 143, 161, 179, 196, 214, 232, 250)),
-    Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=True, speeds=(0, 16, 31, 47, 63, 79, 94, 110, 126, 141, 157, 173, 189, 204, 220)),
+    Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=False, speeds=(0, 16, 31, 47, 63, 79, 94, 110, 126, 141, 157, 173, 189, 204, 220)),
     Train('Dampf-Lok', address=78, speeds=(0, 14, 29, 43, 57, 71, 86, 100, 114, 129, 143, 157, 171, 186, 200)),
-    Train('Diesel-Lok', address=72, speeds=(0, 14, 29, 43, 57, 71, 86, 100, 114, 129, 143, 157, 171, 186, 200)),
+    Train('Diesel-Lok', address=72, speeds=(0, 0.1, 1, 133, 151, 172, 176, 195, 202, 209, 210, 212, 214, 215, 217)),
 ]
 
 
