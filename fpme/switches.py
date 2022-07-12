@@ -10,6 +10,7 @@ B =================================== 1
 A //                               ##
 """
 import time
+from typing import Dict
 
 LOCK_TIME_SEC = 10.  # switches are locked in position for this long after being operated
 
@@ -52,7 +53,8 @@ STATES = {switch: None for switch in SWITCHES}  # key = platform number,  False=
 LOCK_RELEASE_TIME = {switch: 0. for switch in SWITCHES}
 
 
-def _get_target_configuration(arrival: bool, platform: int, track: str):
+def _get_target_configuration(arrival: bool, platform: int, track: str) -> Dict[int, bool]:
+    """ Returns the required track switches and their corresponding state. Raises KeyError for invalid configurations """
     if arrival:
         return ARRIVAL_CONFIGURATIONS[track][platform]
     else:
@@ -68,7 +70,10 @@ def get_possible_departure_tracks(from_platform: int) -> tuple:
 
 
 def check_lock(arrival: bool, platform: int, track: str) -> float:
-    target = _get_target_configuration(arrival, platform, track)
+    try:
+        target = _get_target_configuration(arrival, platform, track)
+    except KeyError:
+        return -1
     for switch, target_state in target.items():
         if time.time() < LOCK_RELEASE_TIME[switch]:
             return LOCK_RELEASE_TIME[switch] - time.time()

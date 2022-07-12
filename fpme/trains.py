@@ -139,7 +139,7 @@ def update_trains(dt):
 TRAIN_UPDATE_PERIOD = 0.1
 
 
-def setup():
+def setup(serial_port: str or None):
     global GENERATOR
-    GENERATOR = signal_gen.ProcessSpawningGenerator()
+    GENERATOR = signal_gen.ProcessSpawningGenerator(serial_port)
     schedule_at_fixed_rate(update_trains, TRAIN_UPDATE_PERIOD)

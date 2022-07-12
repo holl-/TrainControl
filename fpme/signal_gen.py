@@ -5,9 +5,6 @@ from multiprocessing import Value, Process, Queue
 import serial
 
 
-SERIAL_PORT = 'COM5'  # None  # 'COM1'
-
-
 TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
 T = TERNARY_BITS
 
@@ -88,11 +85,11 @@ class Motorola2(MaerklinProtocol):
 
 class ProcessSpawningGenerator:
 
-    def __init__(self):
+    def __init__(self, serial_port: str):
         self._active = Value('b', False)
         self._short_circuited = Value('b', False)
         self._queue = Queue()
-        self._process = Process(target=setup_generator, args=(self._queue, self._active, self._short_circuited))
+        self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited))
         self._process.start()
 
     def set(self, address: int, speed: int, reverse: bool, func: bool, protocol: MaerklinProtocol = None):
@@ -109,8 +106,8 @@ class ProcessSpawningGenerator:
         return bool(self._active.value) and not bool(self._short_circuited.value)
 
 
-def setup_generator(queue: Queue, active: Value, short_circuited: Value):
-    gen = SignalGenerator(active, short_circuited)
+def setup_generator(serial_port: str, queue: Queue, active: Value, short_circuited: Value):
+    gen = SignalGenerator(serial_port, active, short_circuited)
     while True:
         cmd = queue.get(block=True)
         getattr(gen, cmd[0])(*cmd[1:])
@@ -118,7 +115,7 @@ def setup_generator(queue: Queue, active: Value, short_circuited: Value):
 
 class SignalGenerator:
 
-    def __init__(self, active: Value, short_circuited: Value):
+    def __init__(self, serial_port: str, active: Value, short_circuited: Value):
         self.protocol = Motorola2()
         self._active = active
         self._data = {}  # address -> (speed, reverse, func)
@@ -132,15 +129,15 @@ class SignalGenerator:
         self.stop_on_short_circuit = True
         self.on_short_circuit = lambda: print("Short circuit detected")  # function without parameters
         self._time_started_sending = None  # wait a bit before detecting short circuits
-        if SERIAL_PORT is not None:
-            ser = serial.Serial(port=SERIAL_PORT, baudrate=38400, parity=serial.PARITY_NONE,
+        if serial_port:
+            ser = serial.Serial(port=serial_port, baudrate=38400, parity=serial.PARITY_NONE,
                                 stopbits=serial.STOPBITS_ONE, bytesize=serial.SIXBITS,
                                 write_timeout=None,  # non-blocking write
                                 rtscts=False,  # no flow control
                                 dsrdtr=False,  # no flow control
                                 )
             ser.is_open or ser.open()
-            assert ser.is_open, f"Failed to open serial port {SERIAL_PORT}"
+            assert ser.is_open, f"Failed to open serial port {serial_port}"
             ser.setRTS(False)
             ser.setDTR(True)
             self._ser = ser

@@ -4,4 +4,4 @@
 
 * Klicke auf einen Zug, um die Steuerung zu aktivieren
 * Steuere die Geschwindigkeit mit **+** und **-**
-* Wechsle die Richtung im Stillstand mit ◄ ►
+* Wechsle die Richtung im Stillstand mit <->
