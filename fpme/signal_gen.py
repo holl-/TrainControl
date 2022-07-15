@@ -176,6 +176,7 @@ class SignalGenerator:
                 if newly_short_circuited and self.on_short_circuit is not None:
                     self.on_short_circuit()
                 if self.stop_on_short_circuit:
+                    self._active.value = False
                     return
             # Send data on serial port
             if not self._data:
