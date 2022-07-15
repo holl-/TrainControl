@@ -53,6 +53,13 @@ STATES = {switch: None for switch in SWITCHES}  # key = platform number,  False=
 LOCK_RELEASE_TIME = {switch: 0. for switch in SWITCHES}
 
 
+RELAY_CHANNEL_BY_SWITCH_STATE = {
+    1: {False: 1, True: 2},
+    2: {False: 3, True: 4},
+    3: {False: 8, True: 7},
+}
+
+
 def _get_target_configuration(arrival: bool, platform: int, track: str) -> Dict[int, bool]:
     """ Returns the required track switches and their corresponding state. Raises KeyError for invalid configurations """
     if arrival:
@@ -93,7 +100,8 @@ def _operate_switch(switch: int, curved: bool):
     """ Sends a signal to the specified track switch. """
     print(f"Setting switch {switch} to state curved={curved}")
     from .relay8 import pulse
-    if pulse(switch * 2 - 1 + int(curved)):
+    channel = RELAY_CHANNEL_BY_SWITCH_STATE[switch][curved]
+    if pulse(channel):
         STATES[switch] = curved
 
 
