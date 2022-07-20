@@ -136,7 +136,10 @@ admin_controls.append(html.Div(style={'height': 60}, children=[
     ]),
 ]))
 admin_controls.append(html.Div(children=[
-    dcc.Checklist(id='admin-checklist', options=[{'label': "Weichen Sperren", 'value': 'lock-all-switches'}], value=[])
+    dcc.Checklist(id='admin-checklist', options=[
+        {'label': "Weichen Sperren", 'value': 'lock-all-switches'},
+        {'label': "Geschwindigkeitsbeschränkung auf 150 km/h", 'value': 'global-speed-limit'},
+    ], value=[])
 ]))
 
 
@@ -351,8 +354,8 @@ def display_admin_speeds(_n):
 
 @app.callback([Output('admin-checklist', 'style')], [Input('admin-checklist', 'value')])
 def admin_checklist_update(selection):
-    lock = 'lock-all-switches' in selection
-    switches.set_all_locked(lock)
+    switches.set_all_locked('lock-all-switches' in selection)
+    trains.set_global_speed_limit(150 if 'global-speed-limit' in selection else None)
     raise PreventUpdate
 
 

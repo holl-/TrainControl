@@ -28,6 +28,7 @@ class Train:
         self.acceleration: float = acceleration
         self.break_acc: float = 2 * acceleration
         # State
+        self._limit = None
         self._target_speed: float = 0.  # signed speed in kmh, -0 means parked in reverse
         self._speed: float = 0.  # signed speed in kmh
         self._func_active = False
@@ -50,7 +51,12 @@ class Train:
         direction = math.copysign(1, self._speed if self._speed != 0 else self._target_speed)
         return direction < 0
 
-    def update(self, dt: float):
+    def set_speed_limit(self, limit: float or None):
+        self._limit = limit
+        if limit is not None and self._target_speed > limit:
+            self._target_speed = limit
+
+    def _update(self, dt: float):  # called by update_trains()
         if not is_power_on():
             self._speed = 0
             return
@@ -83,7 +89,8 @@ class Train:
         self._target_speed = - math.copysign(0, self._target_speed)
 
     def set_target_speed(self, signed_speed: float):
-        self._target_speed = max(-self.max_speed, min(signed_speed, self.max_speed))
+        max_speed = self.max_speed if self._limit is None else min(self.max_speed, self._limit)
+        self._target_speed = max(-max_speed, min(signed_speed, max_speed))
 
     def accelerate(self, signed_times: int, resolution=6):
         if signed_times < 0 and self.is_parked:
@@ -129,10 +136,10 @@ def is_power_on():
     return GENERATOR.is_sending
 
 
-def update_trains(dt):
+def update_trains(dt):  # repeatedly called from setup()
     try:
         for train in TRAINS:
-            train.update(dt)
+            train._update(dt)
     except Exception as exc:
         warnings.warn(f"Exception in update_trains(): {exc}")
 
@@ -144,3 +151,8 @@ def setup(serial_port: str or None):
     global GENERATOR
     GENERATOR = signal_gen.ProcessSpawningGenerator(serial_port)
     schedule_at_fixed_rate(update_trains, TRAIN_UPDATE_PERIOD)
+
+
+def set_global_speed_limit(limit: float or None):
+    for train in TRAINS:
+        train.set_speed_limit(limit)
