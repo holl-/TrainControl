@@ -51,6 +51,7 @@ DEPARTURE_CONFIGURATIONS = {  # Driving leftwards
 SWITCHES = range(1, 4)
 STATES = {switch: None for switch in SWITCHES}  # key = platform number,  False=straight, True=curved, None=unknown
 LOCK_RELEASE_TIME = {switch: 0. for switch in SWITCHES}
+ALL_LOCKED = False
 
 
 RELAY_CHANNEL_BY_SWITCH_STATE = {
@@ -77,6 +78,8 @@ def get_possible_departure_tracks(from_platform: int) -> tuple:
 
 
 def check_lock(arrival: bool, platform: int, track: str) -> float:
+    if ALL_LOCKED:
+        return float('inf')
     try:
         target = _get_target_configuration(arrival, platform, track)
     except KeyError:
@@ -94,6 +97,17 @@ def set_switches(arrival: bool, platform: int, track: str):
         current_state = STATES[switch]
         if current_state != target_state:
             _operate_switch(switch, target_state)
+
+
+def set_all_locked(locked: bool):
+    global ALL_LOCKED
+    ALL_LOCKED = locked
+    if locked:
+        target = {1: True, 2: False, 3: False}
+        for switch, target_state in target.items():
+            current_state = STATES[switch]
+            if current_state != target_state:
+                _operate_switch(switch, target_state)
 
 
 def _operate_switch(switch: int, curved: bool):

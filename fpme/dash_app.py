@@ -135,6 +135,9 @@ admin_controls.append(html.Div(style={'height': 60}, children=[
         html.Button('Strom aus', id='power-off-admin', style={'width': '100%', 'height': '100%', 'background-color': '#cc0000', 'color': 'white'}),
     ]),
 ]))
+admin_controls.append(html.Div(children=[
+    dcc.Checklist(id='admin-checklist', options=[{'label': "Weichen Sperren", 'value': 'lock-all-switches'}], value=[])
+]))
 
 
 track_switch_controls = html.Div(className="radio-group", children=[
@@ -346,6 +349,13 @@ def display_admin_speeds(_n):
     return [0.5 * (1 + train.signed_actual_speed / train.max_speed) for train in trains.TRAINS]
 
 
+@app.callback([Output('admin-checklist', 'style')], [Input('admin-checklist', 'value')])
+def admin_checklist_update(selection):
+    lock = 'lock-all-switches' in selection
+    switches.set_all_locked(lock)
+    raise PreventUpdate
+
+
 @app.callback([Output('switch-tracks-status', 'children'), Output('switch-tracks-button', 'disabled')],
               [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
                Input('switch-track', 'value'), Input('switch-platform', 'value'), Input('switch-is_arrival', 'value'), Input('switch-tracks-button', 'n_clicks')])
@@ -369,6 +379,8 @@ def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: boo
         correct = switches.are_switches_correct_for(is_arrival, platform, track)
         if correct or len(possible) == 1:
             status = "Korrekt gestellt"
+        elif locked == float('inf'):
+            status = "Weichen momentan gesperrt."
         elif locked:
             status = f"Warte auf anderen Zug ({int(locked)+1} s)"
         else:
