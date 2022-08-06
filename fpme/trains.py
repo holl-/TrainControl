@@ -26,7 +26,6 @@ class Train:
         self.speeds: tuple = speeds  # 14 entries
         self.has_built_in_acceleration: bool = has_built_in_acceleration
         self.acceleration: float = acceleration
-        self.break_acc: float = 2 * acceleration
         # State
         self._limit = None
         self._target_speed: float = 0.  # signed speed in kmh, -0 means parked in reverse
@@ -66,14 +65,14 @@ class Train:
             return
         if self._target_speed == self._speed:
             return
-        acceleration = self.acceleration if abs(self._target_speed) > abs(self._speed) else self.break_acc
+        acceleration = self.acceleration if abs(self._target_speed) > abs(self._speed) else self.acceleration * 2
         if self._target_speed > self._speed:
             self._speed = min(self._speed + acceleration * dt, self._target_speed)
         else:
             self._speed = max(self._speed - acceleration * dt, self._target_speed)
-        self.update_signal()
+        self._update_signal()
 
-    def update_signal(self):
+    def _update_signal(self):
         target_level = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
         if self.has_built_in_acceleration:
             speed_level = target_level
@@ -169,6 +168,8 @@ TRAIN_UPDATE_PERIOD = 0.1
 def setup(serial_port: str or None):
     global GENERATOR
     GENERATOR = signal_gen.ProcessSpawningGenerator(serial_port)
+    for train in TRAINS:
+        train._update_signal()  # Broadcast initial states, otherwise trains will keep going with previous speed
     schedule_at_fixed_rate(update_trains, TRAIN_UPDATE_PERIOD)
 
 
