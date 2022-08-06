@@ -158,7 +158,7 @@ class SignalGenerator:
         self._turn_packets[address] = (protocol or self.protocol).turn_packet(address, func)
 
     def start(self):
-        assert not self._active.value
+        # assert not self._active.value  # ToDo this breaks the app sometimes
         threading.Thread(target=self.run, name='RS_232_Signal_Generator').start()
 
     def run(self):
