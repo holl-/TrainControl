@@ -1,6 +1,3 @@
-import math
-import random
-import threading
 import time
 from typing import Dict
 
@@ -10,14 +7,15 @@ import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
 import dash_daq as daq
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
+from dash import callback_context
 
 from fpme import trains, switches
 
 
 class Client:
-    PING_TIME = 1.0
+    PING_TIME = 2.0  # Max time between main updates
     GLOBAL_ID_COUNTER = 0
     APP_INSTANCE_ID = int(time.time())
 
@@ -28,32 +26,29 @@ class Client:
             Client.GLOBAL_ID_COUNTER += 1
         else:
             self.user_id = user_id
-        self.accelerations = 0
-        self.decelerations = 0
-        self.reverses = 0
-        self.stops = 0
-        self.switches = 0
         self.train = None
         self.last_input_perf_counter = time.perf_counter()
-        self.train_clicks = [0] * len(trains.TRAINS)
 
     def __repr__(self):
         return f"{self.user_id} @ {self.addr} controlling {self.train}"
 
     def is_inactive(self):
-        return time.perf_counter() - self.last_input_perf_counter > Client.PING_TIME * 4
+        return time.perf_counter() - self.last_input_perf_counter > Client.PING_TIME * 2.5
 
 
 CLIENTS: Dict[str, Client] = {}  # id -> Client
 
 
-def get_client(user_id: str or None) -> Client:
+def get_client(user_id: str or None, register_heartbeat=True) -> Client:
     """
     Args:
         user_id: if `str`, looks up or creates a client with the given ID, if `None`, generates a new ID.
     """
     if user_id in CLIENTS:
-        return CLIENTS[user_id]
+        client = CLIENTS[user_id]
+        if register_heartbeat:
+            client.last_input_perf_counter = time.perf_counter()
+        return client
     else:
         client = Client(request.remote_addr, user_id)
         print(f"Registered client {client}")
@@ -68,7 +63,6 @@ def clear_inactive_clients():
             if client.train is not None:
                 client.train.set_target_speed(0)
 
-# INPUT_LOCK = threading.Lock()
 
 app = dash.Dash('Modelleisenbahn', external_stylesheets=[dbc.themes.BOOTSTRAP, 'radio-buttons.css'])
 
@@ -79,42 +73,49 @@ welcome_layout = html.Div(id='welcome', children=[
 ])
 
 
-def build_control(index):
+def build_control():
     return html.Div(style={}, children=[
         html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'center'}, children=[
             html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '40%'}, children=[
-                html.Button('Strom an', id='power-on', style={'width': '100%', 'height': '100%'}, disabled=True),
+                html.Button('⌁', id='power-on', style={'width': '100%', 'height': '100%', 'font-size': '66px'}, disabled=True),  # ⌁⚡
             ]),
             html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '60%'}, children=[
-                html.Button('Strom aus', id='power-off', style={'width': '100%', 'height': '100%', 'background-color': '#cc0000', 'color': 'white'}),
+                html.Button('⚠', id='power-off', style={'width': '100%', 'height': '100%', 'font-size': '66px', 'background-color': '#cc0000', 'color': 'white'}),
             ]),
         ]),
         html.Div([], style={'display': 'inline-block', 'width': 40, 'height': 300, 'vertical-align': 'bottom'}),
         html.Div(style={'display': 'inline-block', 'vertical-align': 'top'}, children=[
-            daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=True, size=300),
+            daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=False, size=300),
         ]),
-        html.Div([], style={'display': 'inline-block', 'width': 40, 'height': 300, 'vertical-align': 'bottom'}),
-        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'top'}, children=[
-            html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '30%'}, children=[
-                html.Button('+', id='accelerate', style={'width': '100%', 'height': '100%', 'background-color': '#33cc33', 'color': 'white'}),
+        dcc.Store('target-speed-store'),
+        dcc.Store('acceleration-store'),
+        dcc.Store('needle-velocity'),
+        html.Div(children=[
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 80}, children=[
+                html.Button('🛑', id='stop-train', style={'width': '100%', 'height': '100%', 'font-size': '48px', 'background-color': '#FF8000', 'color': 'white'}),  # ⛔
             ]),
-            html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '20%'}, children=[
-                html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%', 'background-color': '#A0A0FF', 'color': 'white'}),
+            html.Div(style={'display': 'inline-block', 'vertical-align': 'bottom', 'width': 400}, children=[
+                dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}),
             ]),
-            html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '30%'}, children=[
-                html.Button('-', id='decelerate', style={'width': '100%', 'height': '100%', 'background-color': '#33cc33', 'color': 'white'}),
+            html.Div(style={'display': 'inline-block', 'width': 80, 'height': 30}, children=[
+                html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%'}),  # , 'background-color': '#A0A0FF', 'color': 'white'
             ]),
-            html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '20%'}, children=[
-                html.Button('Nothalt', id='stop-train', style={'width': '100%', 'height': '100%', 'background-color': '#dd5500', 'color': 'white'}),
-            ]),
-        ]),
+        ])
     ])
 
 
+TRAIN_LABELS = {  # 🚄 🚅 🚂 🛲 🚉 🚆 🚋 🚇
+    'ICE': "🚅 ICE",
+    'E-Lok (DB)': "🚉 DB",
+    'E-Lok (BW)': "🚉 BW",
+    'S-Bahn': "Ⓢ Bahn",
+    'Dampf-Lok': "🚂 Dampf",
+    'Diesel-Lok': "🛲 Diesel",
+}
 switch_trains = html.Div([
-    *[html.Button(train.name, id=f'switch-to-{train.name}', disabled=True) for train in trains.TRAINS],
+    *[html.Button(TRAIN_LABELS[train.name], id=f'switch-to-{train.name}', disabled=True) for train in trains.TRAINS],
     html.Div([], style={'display': 'inline-block', 'width': 10, 'height': 10}),
-    html.Button("Aussteigen", id='release-train')
+    html.Button("🚪⬏", id='release-train')  # Aussteigen
 ])
 # disable button when train in use
 TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in trains.TRAINS]
@@ -122,7 +123,7 @@ TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in train
 
 admin_controls = []
 for train in trains.TRAINS:
-    admin_controls.append(html.Div([
+    admin_controls.append(html.Div(style={'width': '80%'}, children=[
         train.name,
         dcc.Slider(id=f'admin-slider-{train.name}', min=-14, max=14, value=0, marks={0: '0', 14: 'Vorwärts', -14: 'Rückwärts'}),
         dbc.Progress(id=f'admin-speedometer-{train.name}', value=0.5, max=1),
@@ -191,16 +192,17 @@ track_switch_controls = html.Div(className="radio-group", children=[
 
 
 control_layout = html.Div(id='control', style={'display': 'none'}, children=[
-    build_control(0),
+    build_control(),
     html.Div(id='stop-train-placeholder', style={'display': 'none'}),
-    track_switch_controls,
+    # track_switch_controls,
 ])
 
 
 app.layout = html.Div(children=[
     dcc.Location(id='url', refresh=False),
     dcc.Interval(id='main-update', interval=Client.PING_TIME * 1000),
-    dcc.Interval(id='speed-update', interval=200),
+    dcc.Interval('client-interval', interval=1000 / 20),
+    dcc.Store(id='power-status-store', data=False),
     html.Div('id', id='user-id', style={'display': 'none'}),
     html.Div([], id='admin-controls'),
     welcome_layout,
@@ -227,19 +229,51 @@ def hide_welcome(*n_clicks):
 
 @app.callback([Output('control', 'style'), Output('speed', 'label'),
                *[Output(f'switch-to-{train.name}', 'disabled') for train in trains.TRAINS],
-               Output('release-train', 'disabled')],
-              [Input('user-id', 'children'), Input('main-update', 'n_intervals'), *TRAIN_BUTTONS])
-def main_update(user_id, _n_intervals, *n_clicks):
+               Output('release-train', 'disabled'),
+               Output('power-on', 'disabled'),
+               Output('speed', 'max'), Output('speed', 'color'),
+               Output('speed-control', 'max'), Output('speed-control', 'marks'),  # Speedometer settings
+               Output('power-status-store', 'data'),
+               Output('acceleration-store', 'data')],
+              [Input('user-id', 'children'), Input('main-update', 'n_intervals'), Input('power-off', 'n_clicks'), Input('power-on', 'n_clicks'), Input('reverse', 'n_clicks'), Input('release-train', 'n_clicks'), *TRAIN_BUTTONS])
+def main_update(user_id, _n_intervals, _n_power_off, _n_power_on, _n_reverse, _n_release, *_n_clicks):
+    trigger = callback_context.triggered[0]
+    trigger_id, trigger_prop = trigger["prop_id"].split(".")
     client = get_client(user_id)
-    client.last_input_perf_counter = time.perf_counter()
     clear_inactive_clients()
 
+    # Button actions
+    if trigger_id == 'power-off':
+        assert _n_power_off is not None
+        trains.power_off()
+    elif trigger_id == 'power-on':
+        assert _n_power_on is not None
+        trains.power_on()
+        time.sleep(0.2)
+    elif trigger_id.startswith('switch-to-'):
+        if client.train is None or client.train.is_parked:
+            new_train_name = trigger_id[len('switch-to-'):]
+            new_train = trains.get_by_name(new_train_name)
+            if all([c.train != new_train for c in CLIENTS.values()]):  # train not in use
+                if client.train is not None:
+                    client.train.set_target_speed(0)  # Stop the train we're exiting
+                client.train = new_train
+    elif trigger_id == 'release-train' and client.train is not None:
+        if client.train:
+            client.train.set_target_speed(0)
+            client.train = None
+    elif trigger_id == 'reverse':
+        if client.train:
+            client.train.reverse()
+
+    # Gather info to display
     if client.train is None:
         label = " "
     else:
-        label = "◀ " + client.train.name if client.train.in_reverse else client.train.name + " ▶"  # ⬅➡
+        train_name = TRAIN_LABELS[client.train.name]
+        label = "◀ " + train_name if client.train.in_reverse else train_name + " ▶"  # ⬅➡
     if not trains.is_power_on():
-        label += " (Kein Strom)"
+        label += " ⚡"  # Kein Strom  ⚡⌁
 
     if client.train is not None and not client.train.is_parked:
         blocked_trains = [True] * len(trains.TRAINS)
@@ -248,84 +282,104 @@ def main_update(user_id, _n_intervals, *n_clicks):
         blocked_trains = [any([client.train == train for client in CLIENTS.values()]) for train in trains.TRAINS]
         release_disabled = False
 
-    if n_clicks is not None:
-        for train, prev_clicks, bt_n_clicks in zip(trains.TRAINS, client.train_clicks, n_clicks):
-            if bt_n_clicks is not None and bt_n_clicks > prev_clicks:
-                if all([c.train != train for c in CLIENTS.values()]):  # train not in use
-                    if client.train is not None:
-                        client.train.set_target_speed(0)
-                    client.train = train
-        client.train_clicks = [new if new is not None else old for new, old in zip(n_clicks, client.train_clicks)]
-        return [({} if client.train is not None else {'display': 'none'}), label, *blocked_trains, release_disabled]
+    power_on_disabled = time.perf_counter() - trains.POWER_OFF_TIME < 5 or trains.is_power_on()
+
+    max_speed = int(round(client.train.max_speed)) if client.train else 1
+    color = {'gradient': True, 'ranges': {'green': [0, .6 * max_speed], 'yellow': [.6 * max_speed, .8 * max_speed], 'red': [.8 * max_speed, max_speed]}} if trains.is_power_on() else 'blue'
+    if client.train:
+        marks = {speed: '' for speed in client.train.speeds}
+        marks[0] = '0'
+        marks[client.train.speeds[-1]] = str(int(client.train.speeds[-1]))
     else:
-        raise PreventUpdate()
+        marks = {}
+
+    return [
+        ({} if client.train is not None else {'display': 'none'}),
+        label,
+        *blocked_trains,
+        release_disabled,
+        power_on_disabled,
+        max_speed,
+        color,
+        max_speed,
+        marks,
+        trains.is_power_on(),
+        client.train.acceleration if client.train else -1.,
+    ]
 
 
-@app.callback(Output('release-train', 'style'), [Input('user-id', 'children'), Input('release-train', 'n_clicks')])
-def release_train(user_id, n_clicks):
-    if n_clicks is not None and n_clicks > 0:
-        client = get_client(user_id)
-        if client.train is not None:
-            client.train.set_target_speed(0)
-            client.train = None
-    raise PreventUpdate()
+app.clientside_callback(
+    """
+    function(n, speed, last_acceleration, target, target_acceleration, dt) {
+        if(Number(target) === target) {  // Real update
+            if(target < 0) {
+                return [Math.max(0, speed * Math.pow(0.2, dt/1000) - 2 * target_acceleration * dt / 1000), 2 * target_acceleration];
+            }
+            var eff_acceleration = last_acceleration;
+            if(Math.abs(speed - target) > 2) {
+                eff_acceleration += (target_acceleration - last_acceleration) * dt / 1000 * 0.8;
+            }
+            if(target_acceleration > last_acceleration) {
+                eff_acceleration = Math.min(eff_acceleration, target_acceleration);
+            } else {
+                eff_acceleration = Math.max(eff_acceleration, target_acceleration);
+            }
+            if(Math.abs(speed - target) < 20) {
+                eff_acceleration *= Math.pow(Math.abs(speed - target) / 20 * 20 / target_acceleration, dt / 1000)
+            }
+            
+            if(target > speed) {
+                return [speed + eff_acceleration * dt / 1000, eff_acceleration];
+            }
+            else {
+                return [speed - 2 * eff_acceleration * dt / 1000, eff_acceleration];
+            }
+        }
+        else {  // Initialization
+            return [0, 0];
+        }
+    }
+    """,
+    [Output('speed', 'value'), Output('needle-velocity', 'data')],
+    [Input('client-interval', 'n_intervals')],  # Input('target-speed-store', 'modified_timestamp')
+    [State('speed', 'value'), State('needle-velocity', 'data'), State('target-speed-store', 'data'), State('acceleration-store', 'data'), State('client-interval', 'interval')]
+)
+app.clientside_callback(
+    """
+    function(target_speed, power_on, n_intervals, speed) {
+        return !(target_speed == 0 && speed <= 1) && power_on;
+    }
+    """,  # (target_speed == 0 && speed <= 1) || !power_on
+    Output('reverse', 'disabled'),
+    [Input('target-speed-store', 'data'), Input('power-status-store', 'data'), Input('main-update', 'n_intervals')],  # Input('target-speed-store', 'modified_timestamp')
+    [State('speed', 'value')]
+)
 
 
-@app.callback([Output('speed', 'value'), Output('speed', 'max'), Output('speed', 'color')],
-              [Input('user-id', 'children'), Input('accelerate', 'n_clicks'), Input('decelerate', 'n_clicks'), Input('reverse', 'n_clicks'), Input('stop-train', 'n_clicks'), Input('speed-update', 'n_intervals')])
-def train_control_and_speedometer_update(user_id, accelerations, decelerations, reverses, stops, _n):
+@app.callback(Output('target-speed-store', 'data'),
+              [Input('speed-control', 'value'), Input('stop-train', 'n_clicks'), Input('power-status-store', 'data')],  # power-status-store is updated regularly
+              [State('user-id', 'children')])
+def speed_update(target_speed, _n_stop, _power, user_id):
     client = get_client(user_id)
-    if client.train is None:
-        raise PreventUpdate()
-
-    accelerations, decelerations, reverses, stops = [x or 0 for x in [accelerations, decelerations, reverses, stops]]
-
-    if reverses > client.reverses and client.train.is_parked:
-        if -1 ** (reverses - client.reverses):
-            client.train.reverse()
-    effective_acceleration = accelerations - client.accelerations - (decelerations - client.decelerations)
-    if effective_acceleration != 0:
-        client.train.accelerate(effective_acceleration)
-    if stops > client.stops:
-        client.train.emergency_stop()
-
-    client.accelerations, client.decelerations, client.reverses, client.stops = accelerations, decelerations, reverses, stops
-    speed = int(round(abs(client.train.signed_actual_speed)))
-    max_speed = int(round(client.train.max_speed))
-    if speed > 10:
-        speed += int(round(0.4 * math.sin(time.time()) + 0.7 * math.sin(time.time() * 1.3) + 0.3 * math.sin(time.time() * 0.7) + random.random() * 0.2))
-    color = {'gradient': True, 'ranges': {'green': [0, .6 * max_speed], 'yellow': [.6 * max_speed, .8 * max_speed], 'red': [.8 * max_speed, max_speed]}}
-    if not trains.is_power_on():
-        speed = 0
-        color = 'blue'
-    return speed, max_speed, color
+    trigger = callback_context.triggered[0]
+    trigger_id, trigger_prop = trigger["prop_id"].split(".")
+    if trigger_id == 'stop-train':
+        if client.train:
+            client.train.emergency_stop()
+        return -1
+    elif trigger_id == 'speed-control':
+        if client.train:
+            client.train.set_target_speed(target_speed)
+    return client.train.target_speed if client.train and trains.is_power_on() else -1
 
 
-@app.callback(Output('power-off', 'style'), [Input('power-off', 'n_clicks')])
-def power_off(n_clicks):
-    if n_clicks is not None:
-        trains.power_off()
-    raise PreventUpdate()
-
+# Admin Controls
 
 @app.callback(Output('power-off-admin', 'style'), [Input('power-off-admin', 'n_clicks')])
 def power_off_admin(n_clicks):
     if n_clicks is not None:
         trains.power_off()
     raise PreventUpdate()
-
-
-@app.callback(Output('power-on', 'style'), [Input('power-on', 'n_clicks')])
-def power_on(n_clicks):
-    if time.perf_counter() - trains.POWER_OFF_TIME > 5:
-        if n_clicks is not None:
-            trains.power_on()
-    raise PreventUpdate()
-
-
-@app.callback(Output('power-on', 'disabled'), [Input('main-update', 'n_intervals')])
-def enable_power_on(_n):
-    return time.perf_counter() - trains.POWER_OFF_TIME < 5 or trains.is_power_on()
 
 
 @app.callback(Output('power-on-admin', 'style'), [Input('power-on-admin', 'n_clicks')])
@@ -340,11 +394,16 @@ def show_admin_controls(path):
     return admin_controls if path == '/admin' else []
 
 
-for train in trains.TRAINS:
-    @app.callback(Output(f'admin-speedometer-{train.name}', 'style'), [Input(f'admin-slider-{train.name}', 'value')])
-    def set_speed_admin(value, train=train):
+@app.callback(Output(f'admin-speedometer-ICE', 'style'), [Input(f'admin-slider-{train.name}', 'value') for train in trains.TRAINS])
+def set_speed_admin(*values):
+    trigger = callback_context.triggered[0]
+    trigger_id, trigger_prop = trigger['prop_id'].split(".")
+    value = trigger['value']
+    if trigger_id.startswith('admin-slider-'):
+        train = trains.get_by_name(trigger_id[len('admin-slider-'):])
+        print(f"Admin setting speed of {train} to {value}")
         train.set_target_speed(value / 14 * train.max_speed)
-        raise PreventUpdate()
+    raise PreventUpdate()
 
 
 @app.callback([Output(f'admin-speedometer-{train.name}', 'value') for train in trains.TRAINS], [Input('main-update', 'n_intervals')])
@@ -359,39 +418,41 @@ def admin_checklist_update(selection):
     raise PreventUpdate
 
 
-@app.callback([Output('switch-tracks-status', 'children'), Output('switch-tracks-button', 'disabled')],
-              [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
-               Input('switch-track', 'value'), Input('switch-platform', 'value'), Input('switch-is_arrival', 'value'), Input('switch-tracks-button', 'n_clicks')])
-def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: bool, n_clicks: int):
-    client = get_client(user_id)
-
-    locked: float = switches.check_lock(is_arrival, platform, track)
-
-    if n_clicks is not None and n_clicks > client.switches:  # Set switches
-        client.switches = n_clicks
-        if not locked:
-            switches.set_switches(arrival=is_arrival, platform=platform, track=track)
-
-    if is_arrival:
-        possible = switches.get_possible_arrival_platforms(track)
-        setting_possible = platform in possible
-    else:
-        possible = switches.get_possible_departure_tracks(platform)
-        setting_possible = track in possible
-    if setting_possible:
-        correct = switches.are_switches_correct_for(is_arrival, platform, track)
-        if correct or len(possible) == 1:
-            status = "Korrekt gestellt"
-        elif locked == float('inf'):
-            status = "Weichen momentan gesperrt."
-        elif locked:
-            status = f"Warte auf anderen Zug ({int(locked)+1} s)"
-        else:
-            status = ""
-    else:
-        correct = False
-        status = f"Nur {', '.join(str(p) for p in possible)} möglich." if len(possible) > 1 else f"Fährt immer auf {possible[0]}"
-    return status, not setting_possible or correct or locked
+# @app.callback([Output('switch-tracks-status', 'children'), Output('switch-tracks-button', 'disabled')],
+#               [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
+#                Input('switch-track', 'value'), Input('switch-platform', 'value'), Input('switch-is_arrival', 'value'), Input('switch-tracks-button', 'n_clicks')])
+# def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: bool, n_clicks: int):
+#     print(f"switch update for {user_id}")
+#
+#     client = get_client(user_id)
+#
+#     locked: float = switches.check_lock(is_arrival, platform, track)
+#
+#     if n_clicks is not None and n_clicks > client.n_switches:  # Set switches
+#         client.n_switches = n_clicks
+#         if not locked:
+#             switches.set_switches(arrival=is_arrival, platform=platform, track=track)
+#
+#     if is_arrival:
+#         possible = switches.get_possible_arrival_platforms(track)
+#         setting_possible = platform in possible
+#     else:
+#         possible = switches.get_possible_departure_tracks(platform)
+#         setting_possible = track in possible
+#     if setting_possible:
+#         correct = switches.are_switches_correct_for(is_arrival, platform, track)
+#         if correct or len(possible) == 1:
+#             status = "Korrekt gestellt"
+#         elif locked == float('inf'):
+#             status = "Weichen momentan gesperrt."
+#         elif locked:
+#             status = f"Warte auf anderen Zug ({int(locked)+1} s)"
+#         else:
+#             status = ""
+#     else:
+#         correct = False
+#         status = f"Nur {', '.join(str(p) for p in possible)} möglich." if len(possible) > 1 else f"Fährt immer auf {possible[0]}"
+#     return status, not setting_possible or correct or locked
 
 
 def get_ip():
@@ -404,18 +465,27 @@ def get_ip():
 
 
 def start_app(serial_port: str = None,
-              port: int = 80):
+              port: int = 8051):
     try:
         import relay8
         print("Relay initialized, track switches online.")
     except AssertionError as err:
         print(err)
     trains.setup(serial_port)
+    ip = get_ip()
+    try:
+        import bjoern
+        print(f"Starting Bjoern server on {ip}, port {port}: http://{ip}:{port}/")
+        bjoern.run(app.server, port=port, host='0.0.0.0')
+    except ImportError:
+        try:
+            import waitress
+            print(f"Starting Waitress server on {ip}, port {port}: http://{ip}:{port}/")
+            waitress.serve(app.server, port=port)
+        except ImportError:
+            print(f"Starting debug server on {ip}, port {port}: http://{ip}:{port}/")
+            app.run_server(debug=True, host='0.0.0.0', port=port)
     # trains.power_on()
-    import waitress
-    print(f"Starting server on {get_ip()}:{port}")
-    waitress.serve(app.server, port=port)
-    # app.run_server(debug=True, host='0.0.0.0', port=port)
 
 
 if __name__ == '__main__':
