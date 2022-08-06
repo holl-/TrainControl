@@ -131,11 +131,11 @@ class Train:
 
 
 TRAINS = [
-    Train('ICE', address=60, acceleration=40., speeds=(0, 0.1, 0.2, 11.8, 107.6, 145.3, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288)),
+    Train('ICE', address=60, acceleration=40., speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288)),
     Train('E-Lok (DB)', address=24, acceleration=30., protocol=signal_gen.Motorola1(), speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 182.8)),
     Train('E-Lok (BW)', address=1, acceleration=30., has_built_in_acceleration=True, speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226)),
     Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=True, speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136)),  # ToDo has_built_in_acceleration?
-    Train('Dampf-Lok', address=78, acceleration=30., speeds=(0, 0.1, 0.2, 0.3, 33.3, 52.2, 70.3, 78.5, 106.3, 95.3, 97.9, 100.2, 102.5, 103.2, 106.3)),
+    Train('Dampf-Lok', address=78, acceleration=30., speeds=(0, 0.1, 0.2, 0.3, 28, 52.2, 70.3, 78.5, 86.3, 95.3, 97.9, 100.2, 102.5, 103.2, 106.3)),
     Train('Diesel-Lok', address=72, acceleration=30., speeds=(0, 0.1, 1, 133, 151, 172, 176, 195, 202, 209, 210, 212, 214, 215, 217)),
 ]
 
