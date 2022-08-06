@@ -1,6 +1,6 @@
 import threading
 import time
-from collections import Callable
+from typing import Callable
 
 
 def schedule_at_fixed_rate(task_function: Callable, period: float):

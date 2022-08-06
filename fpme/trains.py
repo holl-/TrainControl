@@ -26,13 +26,16 @@ class Train:
         self.speeds: tuple = speeds  # 14 entries
         self.has_built_in_acceleration: bool = has_built_in_acceleration
         self.acceleration: float = acceleration
-        self.break_acc: float = 2 * acceleration
         # State
         self._limit = None
         self._target_speed: float = 0.  # signed speed in kmh, -0 means parked in reverse
         self._speed: float = 0.  # signed speed in kmh
         self._func_active = False
         self._broadcasting_state = (None, None, None)  # (speed_level: int, in_reverse: bool, func_active: bool)
+
+    @property
+    def target_speed(self):
+        return self._target_speed  # affected by speed limit
 
     @property
     def signed_target_speed(self):
@@ -62,21 +65,28 @@ class Train:
             return
         if self._target_speed == self._speed:
             return
-        acceleration = self.acceleration if abs(self._target_speed) > abs(self._speed) else self.break_acc
+        acceleration = self.acceleration if abs(self._target_speed) > abs(self._speed) else self.acceleration * 2
         if self._target_speed > self._speed:
             self._speed = min(self._speed + acceleration * dt, self._target_speed)
         else:
             self._speed = max(self._speed - acceleration * dt, self._target_speed)
-        self.update_signal()
+        self._update_signal()
 
-    def update_signal(self):
-        send_speed = self._target_speed if self.has_built_in_acceleration else self._speed
-        speed_level = int(numpy.argmin([abs(s - abs(send_speed)) for s in self.speeds]))
+    def _update_signal(self):
+        target_level = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
+        if self.has_built_in_acceleration:
+            speed_level = target_level
+        else:
+            if self._target_speed > self._speed:  # ceil level
+                speed_level = next(iter([i for i, s in enumerate(self.speeds) if s >= self._speed]))
+            elif self._target_speed < self._speed:  # floor level
+                speed_level = next(iter([i for i, s in enumerate(reversed(self.speeds)) if s <= self._speed]))
+            else:  # Equal
+                speed_level = target_level
         new_state = (speed_level, self.in_reverse, self._func_active)
         if new_state != self._broadcasting_state:
             self._broadcasting_state = new_state
             GENERATOR.set(self.address, speed_level, self.in_reverse, self._func_active, protocol=self.protocol)
-            # print(f"Updating signal to speed {-speed_level if self.in_reverse else speed_level}")
 
     def emergency_stop(self):
         self._target_speed = 0.
@@ -89,8 +99,11 @@ class Train:
         self._target_speed = - math.copysign(0, self._target_speed)
 
     def set_target_speed(self, signed_speed: float):
-        max_speed = self.max_speed if self._limit is None else min(self.max_speed, self._limit)
-        self._target_speed = max(-max_speed, min(signed_speed, max_speed))
+        if signed_speed == 0:
+            self._target_speed = -0. if self.in_reverse else 0.
+        else:
+            max_speed = self.max_speed if self._limit is None else min(self.max_speed, self._limit)
+            self._target_speed = max(-max_speed, min(signed_speed, max_speed))
 
     def accelerate(self, signed_times: int, resolution=6):
         if signed_times < 0 and self.is_parked:
@@ -101,7 +114,7 @@ class Train:
 
     @property
     def is_parked(self):
-        return self._speed == 0
+        return self._speed == 0 and self._target_speed == 0
 
     def __repr__(self):
         return self.name
@@ -109,12 +122,19 @@ class Train:
 
 TRAINS = [
     Train('ICE', address=60, acceleration=40., speeds=(0, 21, 43, 64, 86, 107, 129, 150, 171, 193, 214, 236, 257, 279, 300)),
-    Train('E-Lok (DB)', address=24, protocol=signal_gen.Motorola1(), speeds=(0, 18, 36, 54, 71, 89, 107, 125, 143, 161, 179, 196, 214, 232, 250)),
+    Train('E-Lok (DB)', address=24, acceleration=30., protocol=signal_gen.Motorola1(), speeds=(0, 18, 36, 54, 71, 89, 107, 125, 143, 161, 179, 196, 214, 232, 250)),
     Train('E-Lok (BW)', address=1, acceleration=30., has_built_in_acceleration=True, speeds=(0, 18, 36, 54, 71, 89, 107, 125, 143, 161, 179, 196, 214, 232, 250)),
-    Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=False, speeds=(0, 16, 31, 47, 63, 79, 94, 110, 126, 141, 157, 173, 189, 204, 220)),
-    Train('Dampf-Lok', address=78, speeds=(0, 14, 29, 43, 57, 71, 86, 100, 114, 129, 143, 157, 171, 186, 200)),
-    Train('Diesel-Lok', address=72, speeds=(0, 0.1, 1, 133, 151, 172, 176, 195, 202, 209, 210, 212, 214, 215, 217)),
+    Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=True, speeds=(0, 16, 31, 47, 63, 79, 94, 110, 126, 141, 157, 173, 189, 204, 220)),  # ToDo has_built_in_acceleration?
+    Train('Dampf-Lok', address=78, acceleration=30., speeds=(0, 14, 29, 43, 57, 71, 86, 100, 114, 129, 143, 157, 171, 186, 200)),
+    Train('Diesel-Lok', address=72, acceleration=30., speeds=(0, 0.1, 1, 133, 151, 172, 176, 195, 202, 209, 210, 212, 214, 215, 217)),
 ]
+
+
+def get_by_name(train_name):
+    for train in TRAINS:
+        if train.name == train_name:
+            return train
+    raise KeyError(f'No train named {train_name}')
 
 
 POWER_OFF_TIME = 0
@@ -150,6 +170,8 @@ TRAIN_UPDATE_PERIOD = 0.1
 def setup(serial_port: str or None):
     global GENERATOR
     GENERATOR = signal_gen.ProcessSpawningGenerator(serial_port)
+    for train in TRAINS:
+        train._update_signal()  # Broadcast initial states, otherwise trains will keep going with previous speed
     schedule_at_fixed_rate(update_trains, TRAIN_UPDATE_PERIOD)
 
 
