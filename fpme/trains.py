@@ -77,10 +77,12 @@ class Train:
         if self.has_built_in_acceleration:
             speed_level = target_level
         else:
-            if self._target_speed > self._speed:  # ceil level
-                speed_level = next(iter([i for i, s in enumerate(self.speeds) if s >= self._speed]))
-            elif self._target_speed < self._speed:  # floor level
-                speed_level = next(iter([i for i, s in enumerate(reversed(self.speeds)) if s <= self._speed]))
+            if abs(self._target_speed) > abs(self._speed):  # ceil level
+                speed_level = [i for i, s in enumerate(self.speeds) if s >= abs(self._speed)][0] + 1
+                speed_level = min(speed_level, target_level)
+            elif abs(self._target_speed) < abs(self._speed):  # floor level
+                speed_level = [i for i, s in enumerate(self.speeds) if s <= abs(self._speed)][-1] - 1
+                speed_level = max(speed_level, target_level)
             else:  # Equal
                 speed_level = target_level
         new_state = (speed_level, self.in_reverse, self._func_active)
