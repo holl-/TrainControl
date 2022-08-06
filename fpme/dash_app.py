@@ -334,11 +334,17 @@ app.clientside_callback(
                 eff_acceleration *= Math.pow(Math.abs(speed - target) / 20 * 20 / target_acceleration, dt / 1000)
             }
             
+            var new_speed = speed + eff_acceleration * dt / 1000 * (1.5 - 0.5 * direction)
+            if(new_speed < 0) {
+                new_speed = 0
+                eff_acceleration = 0
+            }
+            
             if(target > speed) {
-                return [speed + eff_acceleration * dt / 1000, eff_acceleration];
+                return [new_speed, eff_acceleration];
             }
             else {
-                return [speed + 2 * eff_acceleration * dt / 1000, eff_acceleration];
+                return [new_speed, eff_acceleration];
             }
         }
         else {  // Initialization
