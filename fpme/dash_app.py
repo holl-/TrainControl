@@ -91,8 +91,14 @@ def build_control():
             dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}, updatemode='drag', vertical=True, verticalHeight=320),
         ]),
         html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300}, children=[
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 60}, children=[
+                html.Button('+', id='accelerate1', style={'width': '100%', 'height': '100%', 'background-color': '#499936', 'color': 'white'}),
+            ]),
             html.Div(style={'display': 'inline-block', 'width': 120, 'height': 40}, children=[
-                html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%'}), # , 'background-color': '#A0A0FF', 'color': 'white'
+                html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%'}),  # , 'background-color': '#A0A0FF', 'color': 'white'
+            ]),
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 60}, children=[
+                html.Button('-', id='decelerate1', style={'width': '100%', 'height': '100%', 'background-color': '#499936', 'color': 'white'}),
             ]),
             html.Div(style={'display': 'inline-block', 'width': 120, 'height': 40}, children=[]),
             html.Div(style={'display': 'inline-block', 'width': 120, 'height': 80}, children=[
@@ -239,8 +245,11 @@ def hide_welcome(*n_clicks):
                Output('speed-control', 'max'), Output('speed-control', 'marks'),  # Speedometer settings
                Output('power-status-store', 'data'),
                Output('acceleration-store', 'data')],
-              [Input('user-id', 'children'), Input('main-update', 'n_intervals'), Input('power-off', 'n_clicks'), Input('power-on', 'n_clicks'), Input('reverse', 'n_clicks'), Input('release-train', 'n_clicks'), *TRAIN_BUTTONS])
-def main_update(user_id, _n_intervals, _n_power_off, _n_power_on, _n_reverse, _n_release, *_n_clicks):
+              [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
+               Input('power-off', 'n_clicks'), Input('power-on', 'n_clicks'),
+               Input('reverse', 'n_clicks'),
+               Input('release-train', 'n_clicks'), *TRAIN_BUTTONS])
+def main_update(user_id, *args):
     trigger = callback_context.triggered[0]
     trigger_id, trigger_prop = trigger["prop_id"].split(".")
     client = get_client(user_id)
@@ -248,10 +257,8 @@ def main_update(user_id, _n_intervals, _n_power_off, _n_power_on, _n_reverse, _n
 
     # Button actions
     if trigger_id == 'power-off':
-        assert _n_power_off is not None
         trains.power_off()
     elif trigger_id == 'power-on':
-        assert _n_power_on is not None
         trains.power_on()
         time.sleep(0.2)
     elif trigger_id.startswith('switch-to-'):
@@ -266,7 +273,7 @@ def main_update(user_id, _n_intervals, _n_power_off, _n_power_on, _n_reverse, _n
         if client.train:
             client.train.set_target_speed(0)
             client.train = None
-    elif trigger_id == 'reverse':
+    if trigger_id == 'reverse':
         if client.train:
             client.train.reverse()
 
@@ -289,7 +296,7 @@ def main_update(user_id, _n_intervals, _n_power_off, _n_power_on, _n_reverse, _n
     power_on_disabled = time.perf_counter() - trains.POWER_OFF_TIME < 5 or trains.is_power_on()
 
     max_speed = int(round(client.train.max_speed)) if client.train else 1
-    color = {'gradient': True, 'ranges': {'green': [0, .6 * max_speed], 'yellow': [.6 * max_speed, .8 * max_speed], 'red': [.8 * max_speed, max_speed]}} if trains.is_power_on() else 'blue'
+    # color = {'gradient': True, 'ranges': {'green': [0, .6 * max_speed], 'yellow': [.6 * max_speed, .8 * max_speed], 'red': [.8 * max_speed, max_speed]}} if trains.is_power_on() else 'blue'
     color = 'green' if trains.is_power_on() else 'blue'
     if client.train:
         marks = {speed: '' for speed in client.train.speeds}
@@ -322,7 +329,7 @@ app.clientside_callback(
             }
             direction = target > speed ? 1 : -1
             var eff_acceleration = last_acceleration;
-            if(Math.abs(speed - target) > 2) {
+            if(Math.abs(speed - target) > 0.1) {
                 eff_acceleration += (target_acceleration * direction - last_acceleration) * dt / 1000 * 2;
             }
             if(target_acceleration > last_acceleration) {
@@ -330,8 +337,8 @@ app.clientside_callback(
             } else {
                 eff_acceleration = Math.max(eff_acceleration, target_acceleration);
             }
-            if(Math.abs(speed - target) < 20) {
-                eff_acceleration *= Math.pow(Math.abs(speed - target) / 20 * 20 / target_acceleration, dt / 1000)
+            if(Math.abs(speed - target) < 30) {
+                eff_acceleration *= Math.pow(Math.abs(speed - target) / 30 * 20 / target_acceleration, dt / 1000)
             }
             
             var new_speed = speed + eff_acceleration * dt / 1000 * (1.5 - 0.5 * direction)
@@ -356,33 +363,43 @@ app.clientside_callback(
     [Input('client-interval', 'n_intervals')],  # Input('target-speed-store', 'modified_timestamp')
     [State('speed', 'value'), State('needle-velocity', 'data'), State('target-speed-store', 'data'), State('acceleration-store', 'data'), State('client-interval', 'interval')]
 )
-app.clientside_callback(
-    """
-    function(target_speed, power_on, n_intervals, speed) {
-        return !(target_speed == 0 && speed <= 1) && power_on;
-    }
-    """,  # (target_speed == 0 && speed <= 1) || !power_on
-    Output('reverse', 'disabled'),
-    [Input('target-speed-store', 'data'), Input('power-status-store', 'data'), Input('main-update', 'n_intervals')],  # Input('target-speed-store', 'modified_timestamp')
-    [State('speed', 'value')]
-)
 
 
-@app.callback(Output('target-speed-store', 'data'),
-              [Input('speed-control', 'value'), Input('stop-train', 'n_clicks'), Input('power-status-store', 'data')],  # power-status-store is updated regularly
+@app.callback([Output('target-speed-store', 'data'), Output('reverse', 'disabled')],
+              [Input('speed-control', 'value'), Input('power-status-store', 'data')],  # power-status-store is updated regularly
               [State('user-id', 'children')])
-def speed_update(target_speed, _n_stop, _power, user_id):
+def speed_update(target_speed, _power, user_id):
     client = get_client(user_id)
     trigger = callback_context.triggered[0]
     trigger_id, trigger_prop = trigger["prop_id"].split(".")
-    if trigger_id == 'stop-train':
-        if client.train:
-            client.train.emergency_stop()
-        return -1
-    elif trigger_id == 'speed-control':
+    if trigger_id == 'speed-control':
         if client.train:
             client.train.set_target_speed(-target_speed if client.train.in_reverse else target_speed)
-    return abs(client.train.target_speed) if client.train and trains.is_power_on() else -1
+    if client.train and client.train.is_emergency_stopping:
+        return -1, False
+    if client.train:
+        return abs(client.train.target_speed) if trains.is_power_on() else -1, client.train.target_speed != 0
+    else:
+        return -1, True
+
+
+@app.callback(Output('speed-control', 'value'),
+              [Input('accelerate1', 'n_clicks'), Input('decelerate1', 'n_clicks'), Input('stop-train', 'n_clicks')],
+              [State('user-id', 'children')])
+def speed_update(*args):
+    client = get_client(args[-1])
+    trigger = callback_context.triggered[0]
+    trigger_id, trigger_prop = trigger["prop_id"].split(".")
+    if trigger_id == 'accelerate1':
+        if client.train:
+            client.train.accelerate(1)
+    elif trigger_id == 'decelerate1':
+        if client.train:
+            client.train.accelerate(-1)
+    elif trigger_id == 'stop-train':
+        if client.train:
+            client.train.emergency_stop()
+    return abs(client.train.target_speed) if client.train else 0
 
 
 # Admin Controls

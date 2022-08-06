@@ -31,6 +31,7 @@ class Train:
         self._target_speed: float = 0.  # signed speed in kmh, -0 means parked in reverse
         self._speed: float = 0.  # signed speed in kmh
         self._func_active = False
+        self._emergency_stopping = False  # will be set to False when a new speed is set
         self._broadcasting_state = (None, None, None)  # (speed_level: int, in_reverse: bool, func_active: bool)
 
     @property
@@ -96,23 +97,30 @@ class Train:
         in_reverse = not self._broadcasting_state[1]
         GENERATOR.set(self.address, 0, in_reverse, self._func_active, protocol=self.protocol)
         self._broadcasting_state = (0., in_reverse, self._func_active)
+        self._emergency_stopping = True
+
+    @property
+    def is_emergency_stopping(self):
+        return self._emergency_stopping
 
     def reverse(self):
         self._target_speed = - math.copysign(0, self._target_speed)
 
     def set_target_speed(self, signed_speed: float):
+        if signed_speed != 0:
+            self._emergency_stopping = False
         if signed_speed == 0:
             self._target_speed = -0. if self.in_reverse else 0.
         else:
             max_speed = self.max_speed if self._limit is None else min(self.max_speed, self._limit)
             self._target_speed = max(-max_speed, min(signed_speed, max_speed))
 
-    def accelerate(self, signed_times: int, resolution=6):
-        if signed_times < 0 and self.is_parked:
-            return
+    def accelerate(self, signed_times: int):
         in_reverse = self.in_reverse
-        abs_speed = max(0, abs(self._target_speed) + self.max_speed / resolution * signed_times)
-        self.set_target_speed(-abs_speed if in_reverse else abs_speed)
+        target_level = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
+        new_target_level = int(numpy.clip(target_level + signed_times, 0, 14))
+        new_target_speed = self.speeds[new_target_level]
+        self.set_target_speed(-new_target_speed if in_reverse else new_target_speed)
 
     @property
     def is_parked(self):
