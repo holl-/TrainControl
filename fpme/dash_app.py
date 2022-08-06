@@ -87,14 +87,18 @@ def build_control():
         html.Div(style={'display': 'inline-block', 'vertical-align': 'top'}, children=[
             daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=False, size=300),
         ]),
-        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'center'}, children=[
+        html.Div(style={'display': 'inline-block', 'width': 60, 'height': 300, 'vertical-align': 'center'}, children=[
+            dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}, updatemode='drag', vertical=True, verticalHeight=320),
+        ]),
+        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300}, children=[
             html.Div(style={'display': 'inline-block', 'width': 120, 'height': 40}, children=[
                 html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%'}), # , 'background-color': '#A0A0FF', 'color': 'white'
             ]),
-            dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}, updatemode='drag', vertical=True, verticalHeight=240),
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 40}, children=[]),
             html.Div(style={'display': 'inline-block', 'width': 120, 'height': 80}, children=[
                 html.Button('🛑', id='stop-train', style={'width': '100%', 'height': '100%', 'font-size': '48px', 'background-color': '#FF8000', 'color': 'white'}),  # ⛔
             ]),
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 10}, children=[]),
         ]),
         dcc.Store('target-speed-store'),
         dcc.Store('acceleration-store'),
@@ -111,6 +115,7 @@ TRAIN_LABELS = {  # 🚄 🚅 🚂 🛲 🚉 🚆 🚋 🚇
     'Diesel-Lok': "🛲 Diesel",
 }
 switch_trains = html.Div([
+    html.Div([], style={'display': 'inline-block', 'width': 70, 'height': 10}),
     *[html.Button(TRAIN_LABELS[train.name], id=f'switch-to-{train.name}', disabled=True) for train in trains.TRAINS],
     html.Div([], style={'display': 'inline-block', 'width': 10, 'height': 10}),
     html.Button("🚪⬏", id='release-train', disabled=True)  # Aussteigen
