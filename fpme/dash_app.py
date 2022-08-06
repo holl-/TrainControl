@@ -75,7 +75,7 @@ welcome_layout = html.Div(id='welcome', children=[
 
 def build_control():
     return html.Div(style={}, children=[
-        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'center'}, children=[
+        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'top'}, children=[
             html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '40%'}, children=[
                 html.Button('⌁', id='power-on', style={'width': '100%', 'height': '100%', 'font-size': '66px'}, disabled=True),  # ⌁⚡
             ]),
@@ -87,20 +87,18 @@ def build_control():
         html.Div(style={'display': 'inline-block', 'vertical-align': 'top'}, children=[
             daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=False, size=300),
         ]),
-        dcc.Store('target-speed-store'),
-        dcc.Store('acceleration-store'),
-        dcc.Store('needle-velocity'),
-        html.Div(children=[
+        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'center'}, children=[
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 40}, children=[
+                html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%'}), # , 'background-color': '#A0A0FF', 'color': 'white'
+            ]),
+            dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}, updatemode='drag', vertical=True, verticalHeight=240),
             html.Div(style={'display': 'inline-block', 'width': 120, 'height': 80}, children=[
                 html.Button('🛑', id='stop-train', style={'width': '100%', 'height': '100%', 'font-size': '48px', 'background-color': '#FF8000', 'color': 'white'}),  # ⛔
             ]),
-            html.Div(style={'display': 'inline-block', 'vertical-align': 'bottom', 'width': 400}, children=[
-                dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}),
-            ]),
-            html.Div(style={'display': 'inline-block', 'width': 80, 'height': 30}, children=[
-                html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%'}),  # , 'background-color': '#A0A0FF', 'color': 'white'
-            ]),
-        ])
+        ]),
+        dcc.Store('target-speed-store'),
+        dcc.Store('acceleration-store'),
+        dcc.Store('needle-velocity'),
     ])
 
 
@@ -115,7 +113,7 @@ TRAIN_LABELS = {  # 🚄 🚅 🚂 🛲 🚉 🚆 🚋 🚇
 switch_trains = html.Div([
     *[html.Button(TRAIN_LABELS[train.name], id=f'switch-to-{train.name}', disabled=True) for train in trains.TRAINS],
     html.Div([], style={'display': 'inline-block', 'width': 10, 'height': 10}),
-    html.Button("🚪⬏", id='release-train')  # Aussteigen
+    html.Button("🚪⬏", id='release-train', disabled=True)  # Aussteigen
 ])
 # disable button when train in use
 TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in trains.TRAINS]
@@ -287,6 +285,7 @@ def main_update(user_id, _n_intervals, _n_power_off, _n_power_on, _n_reverse, _n
 
     max_speed = int(round(client.train.max_speed)) if client.train else 1
     color = {'gradient': True, 'ranges': {'green': [0, .6 * max_speed], 'yellow': [.6 * max_speed, .8 * max_speed], 'red': [.8 * max_speed, max_speed]}} if trains.is_power_on() else 'blue'
+    color = 'green' if trains.is_power_on() else 'blue'
     if client.train:
         marks = {speed: '' for speed in client.train.speeds}
         marks[0] = '0'
@@ -314,11 +313,12 @@ app.clientside_callback(
     function(n, speed, last_acceleration, target, target_acceleration, dt) {
         if(Number(target) === target) {  // Real update
             if(target < 0) {
-                return [Math.max(0, speed * Math.pow(0.2, dt/1000) - 2 * target_acceleration * dt / 1000), 2 * target_acceleration];
+                return [Math.max(0, speed * Math.pow(0.2, dt/1000) - 2 * target_acceleration * dt / 1000), - 2 * target_acceleration];
             }
+            direction = target > speed ? 1 : -1
             var eff_acceleration = last_acceleration;
             if(Math.abs(speed - target) > 2) {
-                eff_acceleration += (target_acceleration - last_acceleration) * dt / 1000 * 0.8;
+                eff_acceleration += (target_acceleration * direction - last_acceleration) * dt / 1000 * 2;
             }
             if(target_acceleration > last_acceleration) {
                 eff_acceleration = Math.min(eff_acceleration, target_acceleration);
@@ -333,7 +333,7 @@ app.clientside_callback(
                 return [speed + eff_acceleration * dt / 1000, eff_acceleration];
             }
             else {
-                return [speed - 2 * eff_acceleration * dt / 1000, eff_acceleration];
+                return [speed + 2 * eff_acceleration * dt / 1000, eff_acceleration];
             }
         }
         else {  // Initialization
@@ -370,8 +370,8 @@ def speed_update(target_speed, _n_stop, _power, user_id):
         return -1
     elif trigger_id == 'speed-control':
         if client.train:
-            client.train.set_target_speed(target_speed)
-    return client.train.target_speed if client.train and trains.is_power_on() else -1
+            client.train.set_target_speed(-target_speed if client.train.in_reverse else target_speed)
+    return abs(client.train.target_speed) if client.train and trains.is_power_on() else -1
 
 
 # Admin Controls
