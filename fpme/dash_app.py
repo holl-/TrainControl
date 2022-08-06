@@ -124,9 +124,10 @@ TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in train
 admin_controls = []
 for train in trains.TRAINS:
     admin_controls.append(html.Div(style={'width': '80%'}, children=[
+        html.Div(style={'display': 'inline-block', 'width': 200}, children=[
+            dbc.Progress(id=f'admin-speedometer-{train.name}', value=0.5, max=1),
+        ]),
         train.name,
-        dcc.Slider(id=f'admin-slider-{train.name}', min=-14, max=14, value=0, marks={0: '0', 14: 'Vorwärts', -14: 'Rückwärts'}),
-        dbc.Progress(id=f'admin-speedometer-{train.name}', value=0.5, max=1),
     ]))
 admin_controls.append(html.Div(style={'height': 60}, children=[
     html.Div(style={'display': 'inline-block', 'width': '50%', 'height': '100%'}, children=[
@@ -394,21 +395,9 @@ def show_admin_controls(path):
     return admin_controls if path == '/admin' else []
 
 
-@app.callback(Output(f'admin-speedometer-ICE', 'style'), [Input(f'admin-slider-{train.name}', 'value') for train in trains.TRAINS])
-def set_speed_admin(*values):
-    trigger = callback_context.triggered[0]
-    trigger_id, trigger_prop = trigger['prop_id'].split(".")
-    value = trigger['value']
-    if trigger_id.startswith('admin-slider-'):
-        train = trains.get_by_name(trigger_id[len('admin-slider-'):])
-        print(f"Admin setting speed of {train} to {value}")
-        train.set_target_speed(value / 14 * train.max_speed)
-    raise PreventUpdate()
-
-
 @app.callback([Output(f'admin-speedometer-{train.name}', 'value') for train in trains.TRAINS], [Input('main-update', 'n_intervals')])
 def display_admin_speeds(_n):
-    return [0.5 * (1 + train.signed_actual_speed / train.max_speed) for train in trains.TRAINS]
+    return [abs(train.target_speed) / train.max_speed for train in trains.TRAINS]
 
 
 @app.callback([Output('admin-checklist', 'style')], [Input('admin-checklist', 'value')])
