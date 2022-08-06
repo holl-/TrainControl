@@ -35,6 +35,10 @@ class Train:
         self._broadcasting_state = (None, None, None)  # (speed_level: int, in_reverse: bool, func_active: bool)
 
     @property
+    def target_speed(self):
+        return self._target_speed  # affected by speed limit
+
+    @property
     def signed_target_speed(self):
         return self._target_speed
 
@@ -70,8 +74,16 @@ class Train:
         self.update_signal()
 
     def update_signal(self):
-        send_speed = self._target_speed if self.has_built_in_acceleration else self._speed
-        speed_level = int(numpy.argmin([abs(s - abs(send_speed)) for s in self.speeds]))
+        target_level = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
+        if self.has_built_in_acceleration:
+            speed_level = target_level
+        else:
+            if self._target_speed > self._speed:  # ceil level
+                speed_level = next(iter([i for i, s in enumerate(self.speeds) if s >= self._speed]))
+            elif self._target_speed < self._speed:  # floor level
+                speed_level = next(iter([i for i, s in enumerate(reversed(self.speeds)) if s <= self._speed]))
+            else:  # Equal
+                speed_level = target_level
         new_state = (speed_level, self.in_reverse, self._func_active)
         if new_state != self._broadcasting_state:
             self._broadcasting_state = new_state
@@ -101,7 +113,7 @@ class Train:
 
     @property
     def is_parked(self):
-        return self._speed == 0
+        return self._speed == 0 and self._target_speed == 0
 
     def __repr__(self):
         return self.name
@@ -109,12 +121,19 @@ class Train:
 
 TRAINS = [
     Train('ICE', address=60, acceleration=40., speeds=(0, 21, 43, 64, 86, 107, 129, 150, 171, 193, 214, 236, 257, 279, 300)),
-    Train('E-Lok (DB)', address=24, protocol=signal_gen.Motorola1(), speeds=(0, 18, 36, 54, 71, 89, 107, 125, 143, 161, 179, 196, 214, 232, 250)),
+    Train('E-Lok (DB)', address=24, acceleration=30., protocol=signal_gen.Motorola1(), speeds=(0, 18, 36, 54, 71, 89, 107, 125, 143, 161, 179, 196, 214, 232, 250)),
     Train('E-Lok (BW)', address=1, acceleration=30., has_built_in_acceleration=True, speeds=(0, 18, 36, 54, 71, 89, 107, 125, 143, 161, 179, 196, 214, 232, 250)),
-    Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=False, speeds=(0, 16, 31, 47, 63, 79, 94, 110, 126, 141, 157, 173, 189, 204, 220)),
-    Train('Dampf-Lok', address=78, speeds=(0, 14, 29, 43, 57, 71, 86, 100, 114, 129, 143, 157, 171, 186, 200)),
-    Train('Diesel-Lok', address=72, speeds=(0, 0.1, 1, 133, 151, 172, 176, 195, 202, 209, 210, 212, 214, 215, 217)),
+    Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=True, speeds=(0, 16, 31, 47, 63, 79, 94, 110, 126, 141, 157, 173, 189, 204, 220)),  # ToDo has_built_in_acceleration?
+    Train('Dampf-Lok', address=78, acceleration=30., speeds=(0, 14, 29, 43, 57, 71, 86, 100, 114, 129, 143, 157, 171, 186, 200)),
+    Train('Diesel-Lok', address=72, acceleration=30., speeds=(0, 0.1, 1, 133, 151, 172, 176, 195, 202, 209, 210, 212, 214, 215, 217)),
 ]
+
+
+def get_by_name(train_name):
+    for train in TRAINS:
+        if train.name == train_name:
+            return train
+    raise KeyError(f'No train named {train_name}')
 
 
 POWER_OFF_TIME = 0
