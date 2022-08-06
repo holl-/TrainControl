@@ -167,7 +167,7 @@ class SignalGenerator:
         self._time_started_sending = time.perf_counter()
         while self._active.value:
             if self._ser is None:
-                print(f"Here be signal: {self._packets}")
+                # print(f"Here be signal: {self._packets}")
                 time.sleep(0.5)
                 continue
             short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
