@@ -87,7 +87,6 @@ class Train:
         if new_state != self._broadcasting_state:
             self._broadcasting_state = new_state
             GENERATOR.set(self.address, speed_level, self.in_reverse, self._func_active, protocol=self.protocol)
-            # print(f"Updating signal to speed {-speed_level if self.in_reverse else speed_level}")
 
     def emergency_stop(self):
         self._target_speed = 0.
@@ -100,8 +99,11 @@ class Train:
         self._target_speed = - math.copysign(0, self._target_speed)
 
     def set_target_speed(self, signed_speed: float):
-        max_speed = self.max_speed if self._limit is None else min(self.max_speed, self._limit)
-        self._target_speed = max(-max_speed, min(signed_speed, max_speed))
+        if signed_speed == 0:
+            self._target_speed = -0. if self.in_reverse else 0.
+        else:
+            max_speed = self.max_speed if self._limit is None else min(self.max_speed, self._limit)
+            self._target_speed = max(-max_speed, min(signed_speed, max_speed))
 
     def accelerate(self, signed_times: int, resolution=6):
         if signed_times < 0 and self.is_parked:
