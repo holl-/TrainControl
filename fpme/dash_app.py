@@ -281,7 +281,7 @@ def main_update(user_id, _n_intervals, _n_power_off, _n_power_on, _n_reverse, _n
         release_disabled = True
     else:
         blocked_trains = [any([client.train == train for client in CLIENTS.values()]) for train in trains.TRAINS]
-        release_disabled = False
+        release_disabled = client.train is None
 
     power_on_disabled = time.perf_counter() - trains.POWER_OFF_TIME < 5 or trains.is_power_on()
 
