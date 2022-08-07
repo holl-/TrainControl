@@ -92,8 +92,8 @@ class Train:
             GENERATOR.set(self.address, speed_level, self.in_reverse, self._func_active, protocol=self.protocol)
 
     def emergency_stop(self):
-        self._target_speed = 0.
-        self._speed = 0.
+        self._target_speed *= 0.
+        self._speed *= 0.
         in_reverse = not self._broadcasting_state[1]
         GENERATOR.set(self.address, 0, in_reverse, self._func_active, protocol=self.protocol)
         self._broadcasting_state = (0., in_reverse, self._func_active)
