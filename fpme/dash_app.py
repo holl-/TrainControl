@@ -87,24 +87,31 @@ def build_control():
         html.Div(style={'display': 'inline-block', 'vertical-align': 'top'}, children=[
             daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=False, size=300),
         ]),
-        html.Div(style={'display': 'inline-block', 'width': 60, 'height': 300, 'vertical-align': 'center'}, children=[
+        html.Div(style={'display': 'inline-block', 'width': 60, 'height': 320, 'vertical-align': 'center'}, children=[
             dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}, updatemode='drag', vertical=True, verticalHeight=320),
         ]),
-        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300}, children=[
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 60}, children=[
+        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'top'}, children=[
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '16%'}, children=[
                 html.Button('+', id='accelerate1', style={'width': '100%', 'height': '100%', 'background-color': '#499936', 'color': 'white'}),
             ]),
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 40}, children=[
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '12%'}, children=[
                 html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%'}),  # , 'background-color': '#A0A0FF', 'color': 'white'
             ]),
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 60}, children=[
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '16%'}, children=[
                 html.Button('-', id='decelerate1', style={'width': '100%', 'height': '100%', 'background-color': '#499936', 'color': 'white'}),
             ]),
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 40}, children=[]),
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 80}, children=[
+            html.Div(style={'display': 'inline-block', 'width': 1, 'height': '1%'}, children=[]),
+            "Weichen: ",
+            html.Div("➞", style={'display': 'inline-block'}),
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '10%'}, children=[  # setting width/height adds spacing above
+                html.Button('⮭', id='set-switches-1', style={'width': '33%', 'height': '100%'}),
+                html.Button('⬈', id='set-switches-2', style={'width': '33%', 'height': '100%'}),
+                html.Button('➞', id='set-switches-3', style={'width': '33%', 'height': '100%'}),
+            ]),
+            html.Div(style={'display': 'inline-block', 'width': 1, 'height': '1%'}, children=[]),
+            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '30%'}, children=[
                 html.Button('🛑', id='stop-train', style={'width': '100%', 'height': '100%', 'font-size': '48px', 'background-color': '#FF8000', 'color': 'white'}),  # ⛔
             ]),
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': 10}, children=[]),
         ]),
         dcc.Store('target-speed-store'),
         dcc.Store('acceleration-store'),
@@ -153,58 +160,9 @@ admin_controls.append(html.Div(children=[
     ], value=[])
 ]))
 
-
-track_switch_controls = html.Div(className="radio-group", children=[
-    "Weichen: ",
-    dbc.RadioItems(
-        id="switch-track",
-        className="btn-group",
-        labelClassName="btn btn-secondary",
-        labelCheckedClassName="active",
-        options=[
-            {"label": "A", "value": 'A'},
-            {"label": "B", "value": 'B'},
-            {"label": "C", "value": 'C'},
-            {"label": "D", "value": 'D'},
-        ],
-        value='A',
-        labelStyle={'display': 'block'}),
-    " ",
-    dbc.RadioItems(
-        id="switch-is_arrival",
-        className="btn-group",
-        labelClassName="btn btn-secondary",
-        labelCheckedClassName="active",
-        options=[
-            {"label": "🡸", "value": False},
-            {"label": "🡺", "value": True},
-        ],
-        value=True,
-        labelStyle={'display': 'block'}),
-    " ",
-    dbc.RadioItems(
-        id="switch-platform",
-        className="btn-group",
-        labelClassName="btn btn-secondary",
-        labelCheckedClassName="active",
-        options=[
-            {"label": "1", "value": 1},
-            {"label": "2", "value": 2},
-            {"label": "3", "value": 3},
-        ],
-        value=1,
-        labelStyle={'display': 'block'}),
-    " ",
-    html.Div(id='switch-tracks-status', style={'display': 'inline-block'}),
-    " ",
-    html.Button('Stellen', id='switch-tracks-button')
-])
-
-
 control_layout = html.Div(id='control', style={'display': 'none'}, children=[
     build_control(),
     html.Div(id='stop-train-placeholder', style={'display': 'none'}),
-    # track_switch_controls,
 ])
 
 
