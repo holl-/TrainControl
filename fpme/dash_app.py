@@ -322,8 +322,9 @@ def main_update(user_id, *args):
 
 app.clientside_callback(
     """
-    function(n, speed, last_acceleration, target, target_acceleration, dt) {
-        if(Number(target) === target) {  // Real update
+    function(n, speed, last_acceleration, target_with_power, target_acceleration, dt, has_power) {
+        if(Number(target_with_power) === target_with_power) {  // Real update
+            let target = has_power ? target_with_power : -1;
             if(target < 0) {
                 return [Math.max(0, speed * Math.pow(0.2, dt/1000) - 2 * target_acceleration * dt / 1000), - 2 * target_acceleration];
             }
@@ -338,7 +339,7 @@ app.clientside_callback(
                 eff_acceleration = Math.max(eff_acceleration, target_acceleration);
             }
             if(Math.abs(speed - target) < 30) {
-                eff_acceleration *= Math.pow(Math.abs(speed - target) / 30 * 20 / target_acceleration, dt / 1000)
+                eff_acceleration *= Math.pow(Math.abs(speed - target) / 30 * 10 / target_acceleration, dt / 1000)
             }
             
             var new_speed = speed + eff_acceleration * dt / 1000 * (1.5 - 0.5 * direction)
@@ -361,14 +362,14 @@ app.clientside_callback(
     """,
     [Output('speed', 'value'), Output('needle-velocity', 'data')],
     [Input('client-interval', 'n_intervals')],  # Input('target-speed-store', 'modified_timestamp')
-    [State('speed', 'value'), State('needle-velocity', 'data'), State('target-speed-store', 'data'), State('acceleration-store', 'data'), State('client-interval', 'interval')]
+    [State('speed', 'value'), State('needle-velocity', 'data'), State('target-speed-store', 'data'), State('acceleration-store', 'data'), State('client-interval', 'interval'), State('power-status-store', 'data')]
 )
 
 
 @app.callback([Output('target-speed-store', 'data'), Output('reverse', 'disabled')],
-              [Input('speed-control', 'value'), Input('power-status-store', 'data')],  # power-status-store is updated regularly
+              [Input('speed-control', 'value')],
               [State('user-id', 'children')])
-def speed_update(target_speed, _power, user_id):
+def speed_update(target_speed, user_id):
     client = get_client(user_id)
     trigger = callback_context.triggered[0]
     trigger_id, trigger_prop = trigger["prop_id"].split(".")
@@ -378,7 +379,7 @@ def speed_update(target_speed, _power, user_id):
     if client.train and client.train.is_emergency_stopping:
         return -1, False
     if client.train:
-        return abs(client.train.target_speed) if trains.is_power_on() else -1, client.train.target_speed != 0
+        return abs(client.train.target_speed), client.train.target_speed != 0
     else:
         return -1, True
 
@@ -386,7 +387,7 @@ def speed_update(target_speed, _power, user_id):
 @app.callback(Output('speed-control', 'value'),
               [Input('accelerate1', 'n_clicks'), Input('decelerate1', 'n_clicks'), Input('stop-train', 'n_clicks')],
               [State('user-id', 'children')])
-def speed_update(*args):
+def on_speed_button_pressed(*args):
     client = get_client(args[-1])
     trigger = callback_context.triggered[0]
     trigger_id, trigger_prop = trigger["prop_id"].split(".")

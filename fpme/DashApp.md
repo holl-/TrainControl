@@ -34,7 +34,9 @@ Outputs
 * Top button Disabled
 * Power on Disabled
 
-`speed_update` (coupled to `main_update`)
+`on_speed_button_pressed`
+
+`speed_update` (coupled to `on_speed_button_pressed` via `speed-control`)
 
 `is_switch_impossible`
 
