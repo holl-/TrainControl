@@ -137,20 +137,28 @@ switch_trains = html.Div([
 TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in trains.TRAINS]
 
 
-admin_controls = []
+admin_controls = [
+    html.Div("Status", id='admin-status'),
+    dcc.Checklist(options=[{'label': "Fahrplan-Modus (Nur benötigte Weichen schalten)", 'value': f'schedule-mode'}])
+]
 for train in trains.TRAINS:
     admin_controls.append(html.Div(style={'width': '80%'}, children=[
+        html.Button('🛑', id=f'admin-stop-{train}', style={'width': 100}),
         html.Div(style={'display': 'inline-block', 'width': 200}, children=[
             dbc.Progress(id=f'admin-speedometer-{train.name}', value=0.5, max=1),
         ]),
+        html.Button('🚪⬏', id=f'admin-kick-{train}', style={'width': 100}),
+        html.Div(style={'display': 'inline-block', 'width': 100}, children=[
+            dcc.Checklist(options=[{'label': "Sperren", 'value': f'admin-disable-{train}'}])
+        ]),
         train.name,
     ]))
-admin_controls.append(html.Div(style={'height': 60}, children=[
+admin_controls.append(html.Div(style={'height': 60, 'width': 300}, children=[
     html.Div(style={'display': 'inline-block', 'width': '50%', 'height': '100%'}, children=[
-        html.Button('Strom an', id='power-on-admin', style={'width': '100%', 'height': '100%'}),
+        html.Button('⌁', id='power-on-admin', style={'width': '100%', 'height': '100%'}),
     ]),
     html.Div(style={'display': 'inline-block', 'width': '50%', 'height': '100%'}, children=[
-        html.Button('Strom aus', id='power-off-admin', style={'width': '100%', 'height': '100%', 'background-color': '#cc0000', 'color': 'white'}),
+        html.Button('⚠', id='power-off-admin', style={'width': '100%', 'height': '100%', 'background-color': '#cc0000', 'color': 'white'}),
     ]),
 ]))
 admin_controls.append(html.Div(children=[
@@ -203,15 +211,16 @@ def hide_welcome(*n_clicks):
                Output('speed-control', 'max'), Output('speed-control', 'marks'),  # Speedometer settings
                Output('power-status-store', 'data'),
                Output('acceleration-store', 'data')],
-              [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
+              [Input('user-id', 'children'), Input('url', 'pathname'), Input('main-update', 'n_intervals'),
                Input('power-off', 'n_clicks'), Input('power-on', 'n_clicks'),
                Input('reverse', 'n_clicks'),
-               Input('release-train', 'n_clicks'), *TRAIN_BUTTONS])
-def main_update(user_id, *args):
+               Input('release-train', 'n_clicks'), *TRAIN_BUTTONS],)
+def main_update(user_id, path, *args):
     trigger = callback_context.triggered[0]
     trigger_id, trigger_prop = trigger["prop_id"].split(".")
     client = get_client(user_id)
     clear_inactive_clients()
+    is_admin = path == '/admin'
 
     # Button actions
     if trigger_id == 'power-off':
@@ -244,12 +253,12 @@ def main_update(user_id, *args):
     if not trains.is_power_on():
         label += " ⚡"  # Kein Strom  ⚡⌁
 
-    if client.train is not None and not client.train.is_parked:
+    if client.train is not None and not client.train.is_parked and not is_admin:
         blocked_trains = [True] * len(trains.TRAINS)
         release_disabled = True
     else:
         blocked_trains = [any([client.train == train for client in CLIENTS.values()]) for train in trains.TRAINS]
-        release_disabled = client.train is None
+        release_disabled = client.train is None and not is_admin
 
     power_on_disabled = time.perf_counter() - trains.POWER_OFF_TIME < 5 or trains.is_power_on()
 
