@@ -27,6 +27,7 @@ class Train:
         self.has_built_in_acceleration: bool = has_built_in_acceleration
         self.acceleration: float = acceleration
         # State
+        self.admin_only = False
         self._limit = None
         self._target_speed: float = 0.  # signed speed in kmh, -0 means parked in reverse
         self._speed: float = 0.  # signed speed in kmh

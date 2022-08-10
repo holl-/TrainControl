@@ -64,7 +64,7 @@ def clear_inactive_clients():
                 client.train.set_target_speed(0)
 
 
-app = dash.Dash('Modelleisenbahn', external_stylesheets=[dbc.themes.BOOTSTRAP, 'radio-buttons.css'])
+app = dash.Dash('Modelleisenbahn', external_stylesheets=[dbc.themes.BOOTSTRAP, 'radio-buttons.css'], title='Modelleisenbahn', update_title=None)
 
 with open('../welcome_text.md') as file:
     welcome_text = file.read()
@@ -102,7 +102,7 @@ def build_control():
             ]),
             html.Div(style={'display': 'inline-block', 'width': 1, 'height': '1%'}, children=[]),
             "Weichen: ",
-            html.Div("➞", style={'display': 'inline-block'}),
+            # html.Div("➞", style={'display': 'inline-block'}),
             html.Div(style={'display': 'inline-block', 'width': 120, 'height': '10%'}, children=[  # setting width/height adds spacing above
                 html.Button('⮭', id='set-switches-C', style={'width': '33%', 'height': '100%'}),
                 html.Button('⬈', id='set-switches-B', style={'width': '33%', 'height': '100%'}),
@@ -139,19 +139,24 @@ TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in train
 
 admin_controls = [
     html.Div("Status", id='admin-status'),
-    dcc.Checklist(options=[{'label': "Fahrplan-Modus (Nur benötigte Weichen schalten)", 'value': f'schedule-mode'}])
+    dcc.Checklist(options=[{'label': "Geschwindigkeitsbeschränkung auf 150 km/h", 'value': f'global-speed-limit'}]),
+    dcc.Checklist(options=[{'label': "Züge haben Wagen", 'value': f'train-cars'}]),
+    dcc.Checklist(options=[{'label': "Fahrplan-Modus (Nur benötigte Weichen schalten)", 'value': f'schedule-mode'}]),
+    dcc.Checklist(options=[{'label': "Weichen sperren", 'value': f'lock-all-switches'}]),
 ]
 for train in trains.TRAINS:
     admin_controls.append(html.Div(style={'width': '80%'}, children=[
-        html.Button('🛑', id=f'admin-stop-{train}', style={'width': 100}),
-        html.Div(style={'display': 'inline-block', 'width': 200}, children=[
+        html.Div(train.name, style={'display': 'inline-block', 'width': 90}),
+        html.Button('🛑', id=f'admin-stop-{train}', style={'width': 50}),
+        html.Div(style={'display': 'inline-block', 'width': 100}, children=[
             dbc.Progress(id=f'admin-speedometer-{train.name}', value=0.5, max=1),
         ]),
-        html.Button('🚪⬏', id=f'admin-kick-{train}', style={'width': 100}),
-        html.Div(style={'display': 'inline-block', 'width': 100}, children=[
-            dcc.Checklist(options=[{'label': "Sperren", 'value': f'admin-disable-{train}'}])
+        html.Div(style={'display': 'inline-block', 'width': 80}, children=[
+            dcc.Checklist(id=f'admin-lock-{train}', options=[{'label': "Sperren", 'value': f'admin-disable-{train}'}])
         ]),
-        train.name,
+        html.Button('🚪⬏', id=f'admin-kick-{train}', style={'width': 50}),
+        " ",
+        html.Div("...", id=f'admin-train-status-{train.name}', style={'display': 'inline-block', 'width': 150}),
     ]))
 admin_controls.append(html.Div(style={'height': 60, 'width': 300}, children=[
     html.Div(style={'display': 'inline-block', 'width': '50%', 'height': '100%'}, children=[
@@ -160,12 +165,6 @@ admin_controls.append(html.Div(style={'height': 60, 'width': 300}, children=[
     html.Div(style={'display': 'inline-block', 'width': '50%', 'height': '100%'}, children=[
         html.Button('⚠', id='power-off-admin', style={'width': '100%', 'height': '100%', 'background-color': '#cc0000', 'color': 'white'}),
     ]),
-]))
-admin_controls.append(html.Div(children=[
-    dcc.Checklist(id='admin-checklist', options=[
-        {'label': "Weichen Sperren", 'value': 'lock-all-switches'},
-        {'label': "Geschwindigkeitsbeschränkung auf 150 km/h", 'value': 'global-speed-limit'},
-    ], value=[])
 ]))
 
 control_layout = html.Div(id='control', style={'display': 'none'}, children=[
@@ -224,6 +223,9 @@ def main_update(user_id, path, *args):
     clear_inactive_clients()
     is_admin = path == '/admin'
 
+    if client.train is not None and client.train.admin_only and not is_admin:
+        client.train = None
+
     # Button actions
     if trigger_id == 'power-off':
         trains.power_off()
@@ -247,14 +249,15 @@ def main_update(user_id, path, *args):
             client.train.reverse()
     elif trigger_id.startswith('set-switches-'):
         track = trigger_id[len('set-switches-'):]
-        switches.set_switches(incoming='Any', track=track)
+        if switches.can_set(incoming='Any', track=track):
+            switches.set_switches(incoming='Any', track=track)
 
     # Gather info to display
     if client.train is None:
         label = " "
     else:
         train_name = TRAIN_LABELS[client.train.name]
-        label = "◀ " + train_name if client.train.in_reverse else train_name + " ▶"  # ⬅➡
+        label = "◀ " + train_name if client.train.in_reverse else train_name + " ▶"
     if not trains.is_power_on():
         label += " ⚡"  # Kein Strom  ⚡⌁
 
@@ -262,7 +265,7 @@ def main_update(user_id, path, *args):
         blocked_trains = [True] * len(trains.TRAINS)
         release_disabled = True
     else:
-        blocked_trains = [any([client.train == train for client in CLIENTS.values()]) for train in trains.TRAINS]
+        blocked_trains = [(train.admin_only and not is_admin) or any([client.train == train for client in CLIENTS.values()]) for train in trains.TRAINS]
         release_disabled = client.train is None and not is_admin
 
     power_on_disabled = time.perf_counter() - trains.POWER_OFF_TIME < 5 or trains.is_power_on()
@@ -289,7 +292,7 @@ def main_update(user_id, path, *args):
         marks,
         trains.is_power_on(),
         client.train.acceleration if client.train else -1.,
-        False, False, False
+        not switches.can_set('Any', 'C'), not switches.can_set('Any', 'B'), not switches.can_set('Any', 'A')
     ]
 
 
@@ -378,28 +381,60 @@ def on_speed_button_pressed(*args):
 
 # Admin Controls
 
-@app.callback(Output('power-off-admin', 'style'), [Input('power-off-admin', 'n_clicks')])
-def power_off_admin(n_clicks):
-    if n_clicks is not None:
-        trains.power_off()
-    raise PreventUpdate()
-
-
-@app.callback(Output('power-on-admin', 'style'), [Input('power-on-admin', 'n_clicks')])
-def power_on_admin(n_clicks):
-    if n_clicks is not None:
-        trains.power_on()
-    raise PreventUpdate()
-
 
 @app.callback(Output('admin-controls', 'children'), [Input('url', 'pathname')])
 def show_admin_controls(path):
     return admin_controls if path == '/admin' else []
 
 
-@app.callback([Output(f'admin-speedometer-{train.name}', 'value') for train in trains.TRAINS], [Input('main-update', 'n_intervals')])
-def display_admin_speeds(_n):
-    return [abs(train.target_speed) / train.max_speed for train in trains.TRAINS]
+@app.callback([*[Output(f'admin-speedometer-{train.name}', 'value') for train in trains.TRAINS],
+               *[Output(f'admin-train-status-{train.name}', 'children') for train in trains.TRAINS]],
+              [Input('main-update', 'n_intervals'),
+               Input('power-off-admin', 'n_clicks'),
+               Input('power-on-admin', 'n_clicks'),
+               [Input(f'admin-stop-{train}', 'n_clicks') for train in trains.TRAINS],
+               [Input(f'admin-kick-{train}', 'n_clicks') for train in trains.TRAINS],
+               ])
+def admin_update(_n, *args):
+    trigger = callback_context.triggered[0]
+    trigger_id, trigger_prop = trigger["prop_id"].split(".")
+    if trigger_id == 'power-off-admin':
+        trains.power_off()
+    elif trigger_id == 'power-on-admin':
+        trains.power_on()
+    elif trigger_id.startswith('admin-stop-'):
+        train = trains.get_by_name(trigger_id[len('admin-stop-'):])
+        train.emergency_stop()
+    elif trigger_id.startswith('admin-kick-'):
+        train = trains.get_by_name(trigger_id[len('admin-kick-'):])
+        for client in CLIENTS.values():
+            if client.train == train:
+                train.set_target_speed(0)
+                print("Breaking")
+                client.train = None
+                break
+    return [*[abs(train.target_speed) / train.max_speed for train in trains.TRAINS],
+            *[status_str(train) for train in trains.TRAINS]]
+
+
+def status_str(train: trains.Train):
+    label = "◀" if train.in_reverse else "▶"
+    if train.admin_only:
+        label += " gesperrt"
+    for client in CLIENTS.values():
+        if client.train == train:
+            return f"{label} ({client.addr})"
+    return label
+
+
+for train in trains.TRAINS:
+    @app.callback([Output(f'admin-lock-{train}', 'style')], [Input(f'admin-lock-{train}', 'value')])
+    def admin_lock_train(locked, train=train):
+        locked = bool(locked)
+        train.admin_only = locked
+        if locked:
+            train.set_target_speed(0)
+        raise PreventUpdate()
 
 
 @app.callback([Output('admin-checklist', 'style')], [Input('admin-checklist', 'value')])
@@ -407,43 +442,6 @@ def admin_checklist_update(selection):
     switches.set_all_locked('lock-all-switches' in selection)
     trains.set_global_speed_limit(150 if 'global-speed-limit' in selection else None)
     raise PreventUpdate
-
-
-# @app.callback([Output('switch-tracks-status', 'children'), Output('switch-tracks-button', 'disabled')],
-#               [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
-#                Input('switch-track', 'value'), Input('switch-platform', 'value'), Input('switch-is_arrival', 'value'), Input('switch-tracks-button', 'n_clicks')])
-# def is_switch_impossible(user_id, _n, track: str, platform: int, is_arrival: bool, n_clicks: int):
-#     print(f"switch update for {user_id}")
-#
-#     client = get_client(user_id)
-#
-#     locked: float = switches.check_lock(is_arrival, platform, track)
-#
-#     if n_clicks is not None and n_clicks > client.n_switches:  # Set switches
-#         client.n_switches = n_clicks
-#         if not locked:
-#             switches.set_switches(arrival=is_arrival, platform=platform, track=track)
-#
-#     if is_arrival:
-#         possible = switches.get_possible_arrival_platforms(track)
-#         setting_possible = platform in possible
-#     else:
-#         possible = switches.get_possible_departure_tracks(platform)
-#         setting_possible = track in possible
-#     if setting_possible:
-#         correct = switches.are_switches_correct_for(is_arrival, platform, track)
-#         if correct or len(possible) == 1:
-#             status = "Korrekt gestellt"
-#         elif locked == float('inf'):
-#             status = "Weichen momentan gesperrt."
-#         elif locked:
-#             status = f"Warte auf anderen Zug ({int(locked)+1} s)"
-#         else:
-#             status = ""
-#     else:
-#         correct = False
-#         status = f"Nur {', '.join(str(p) for p in possible)} möglich." if len(possible) > 1 else f"Fährt immer auf {possible[0]}"
-#     return status, not setting_possible or correct or locked
 
 
 def get_ip():

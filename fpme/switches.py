@@ -11,8 +11,6 @@ C //
 """
 import time
 
-LOCK_TIME_SEC = 10.  # switches are locked in position for this long after being operated
-
 
 CONFIGURATIONS = {  # Driving leftwards
     'Yellow': {
@@ -32,10 +30,10 @@ CONFIGURATIONS = {  # Driving leftwards
     }
 }
 
-SWITCHES = range(1, 4)
-STATES = {switch: None for switch in SWITCHES}  # key = platform number,  False=straight, True=curved, None=unknown
-LOCK_RELEASE_TIME = {switch: 0. for switch in SWITCHES}
+STATES = {switch: None for switch in [1, 2, 3]}  # key = platform number,  False=straight, True=curved, None=unknown
+LOCK_RELEASE_TIME = {switch: 0. for switch in STATES.keys()}
 ALL_LOCKED = False
+LOCK_TIME_SEC = 8.5  # switches are locked in position for this long after being operated
 
 
 RELAY_CHANNEL_BY_SWITCH_STATE = {
@@ -45,14 +43,17 @@ RELAY_CHANNEL_BY_SWITCH_STATE = {
 }
 
 
-def check_lock(incoming: str, track: str) -> float:
+def can_set(incoming: str, track: str) -> float:
     if ALL_LOCKED:
-        return float('inf')
+        return False
     config = CONFIGURATIONS[incoming][track]
+    if all(STATES[switch] == target_state for switch, target_state in config.items()):
+        return True  # already correct
     for switch, target_state in config.items():
         if time.time() < LOCK_RELEASE_TIME[switch]:
-            return LOCK_RELEASE_TIME[switch] - time.time()
-    return 0
+            return False
+    return True
+
 
 
 def set_switches(incoming: str, track: str):
@@ -78,12 +79,7 @@ def set_all_locked(locked: bool):
 def _operate_switch(switch: int, curved: bool):
     """ Sends a signal to the specified track switch. """
     print(f"Setting switch {switch} to state curved={curved}")
-    from .relay8 import pulse
-    channel = RELAY_CHANNEL_BY_SWITCH_STATE[switch][curved]
-    if pulse(channel):
-        STATES[switch] = curved
-
-
-def are_switches_correct_for(incoming: str, track: str):
-    config = CONFIGURATIONS[incoming][track]
-    return all(STATES[switch] == target_state for switch, target_state in config.items())
+    # from .relay8 import pulse
+    # channel = RELAY_CHANNEL_BY_SWITCH_STATE[switch][curved]
+    # if pulse(channel):
+    STATES[switch] = curved
