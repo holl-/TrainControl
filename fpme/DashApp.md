@@ -21,6 +21,10 @@
 
 `admin_checklist_update`
 
+`on_speed_button_pressed`
+
+`speed_update` (coupled to `on_speed_button_pressed` via `speed-control`)
+
 
 ### Periodic server-side (`main-update`)
 
@@ -33,12 +37,6 @@ Outputs
 * Train label
 * Top button Disabled
 * Power on Disabled
-
-`on_speed_button_pressed`
-
-`speed_update` (coupled to `on_speed_button_pressed` via `speed-control`)
-
-`is_switch_impossible`
 
 `display_admin_speeds`
 
