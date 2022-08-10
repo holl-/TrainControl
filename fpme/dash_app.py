@@ -104,9 +104,9 @@ def build_control():
             "Weichen: ",
             html.Div("➞", style={'display': 'inline-block'}),
             html.Div(style={'display': 'inline-block', 'width': 120, 'height': '10%'}, children=[  # setting width/height adds spacing above
-                html.Button('⮭', id='set-switches-1', style={'width': '33%', 'height': '100%'}),
-                html.Button('⬈', id='set-switches-2', style={'width': '33%', 'height': '100%'}),
-                html.Button('➞', id='set-switches-3', style={'width': '33%', 'height': '100%'}),
+                html.Button('⮭', id='set-switches-C', style={'width': '33%', 'height': '100%'}),
+                html.Button('⬈', id='set-switches-B', style={'width': '33%', 'height': '100%'}),
+                html.Button('➞', id='set-switches-A', style={'width': '33%', 'height': '100%'}),
             ]),
             html.Div(style={'display': 'inline-block', 'width': 1, 'height': '1%'}, children=[]),
             html.Div(style={'display': 'inline-block', 'width': 120, 'height': '30%'}, children=[
@@ -210,10 +210,12 @@ def hide_welcome(*n_clicks):
                Output('speed', 'max'), Output('speed', 'color'),
                Output('speed-control', 'max'), Output('speed-control', 'marks'),  # Speedometer settings
                Output('power-status-store', 'data'),
-               Output('acceleration-store', 'data')],
+               Output('acceleration-store', 'data'),
+               Output('set-switches-C', 'disabled'), Output('set-switches-B', 'disabled'), Output('set-switches-A', 'disabled'), ],
               [Input('user-id', 'children'), Input('url', 'pathname'), Input('main-update', 'n_intervals'),
                Input('power-off', 'n_clicks'), Input('power-on', 'n_clicks'),
                Input('reverse', 'n_clicks'),
+               Input('set-switches-C', 'n_clicks'), Input('set-switches-B', 'n_clicks'), Input('set-switches-A', 'n_clicks'),
                Input('release-train', 'n_clicks'), *TRAIN_BUTTONS],)
 def main_update(user_id, path, *args):
     trigger = callback_context.triggered[0]
@@ -240,9 +242,12 @@ def main_update(user_id, path, *args):
         if client.train:
             client.train.set_target_speed(0)
             client.train = None
-    if trigger_id == 'reverse':
+    elif trigger_id == 'reverse':
         if client.train:
             client.train.reverse()
+    elif trigger_id.startswith('set-switches-'):
+        track = trigger_id[len('set-switches-'):]
+        switches.set_switches(incoming='Any', track=track)
 
     # Gather info to display
     if client.train is None:
@@ -284,6 +289,7 @@ def main_update(user_id, path, *args):
         marks,
         trains.is_power_on(),
         client.train.acceleration if client.train else -1.,
+        False, False, False
     ]
 
 

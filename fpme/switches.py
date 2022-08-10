@@ -1,50 +1,34 @@
 """
                    3
-D =================================== 3
-   \\             //           ######
-    \\   2       //            ######
-C =================================== 2
+A ============================= Blue
+   \\             //
+    \\   2       //
+     ========================== Yellow
        //
-B =================================== 1
-    // 1                           ##
-A //                               ##
+B ==================|
+    // 1
+C //
 """
 import time
-from typing import Dict
 
 LOCK_TIME_SEC = 10.  # switches are locked in position for this long after being operated
 
-ARRIVAL_CONFIGURATIONS = {  # Driving rightwards
-    'A': {
-        1: {1: True},
-        2: {1: False}
-    },
-    'B': {
-        1: {1: False},
-        2: {1: True}
-    },
-    'C': {
-        2: {}
-    },
-    'D': {
-        2: {}
-    },
-}
-DEPARTURE_CONFIGURATIONS = {  # Driving leftwards
-    1: {
-        'A': {1: True},
-        'B': {1: False},
-    },
-    2: {
-        'A': {2: True, 1: False},
+
+CONFIGURATIONS = {  # Driving leftwards
+    'Yellow': {
+        'A': {2: False},
         'B': {2: True, 1: True},
-        'C': {2: False},
+        'C': {2: True, 1: False},
     },
-    3: {
-        'A': {3: True, 2: True, 1: False},
+    'Blue': {
+        'A': {3: False},
         'B': {3: True, 2: True, 1: True},
-        'C': {3: True, 2: False},
-        'D': {3: False},
+        'C': {3: True, 2: True, 1: False},
+    },
+    'Any': {
+        'A': {3: False, 2: False},
+        'B': {3: True, 2: True, 1: True},
+        'C': {3: True, 2: True, 1: False},
     }
 }
 
@@ -61,38 +45,19 @@ RELAY_CHANNEL_BY_SWITCH_STATE = {
 }
 
 
-def _get_target_configuration(arrival: bool, platform: int, track: str) -> Dict[int, bool]:
-    """ Returns the required track switches and their corresponding state. Raises KeyError for invalid configurations """
-    if arrival:
-        return ARRIVAL_CONFIGURATIONS[track][platform]
-    else:
-        return DEPARTURE_CONFIGURATIONS[platform][track]
-
-
-def get_possible_arrival_platforms(from_track: str) -> tuple:
-    return tuple(ARRIVAL_CONFIGURATIONS[from_track].keys())
-
-
-def get_possible_departure_tracks(from_platform: int) -> tuple:
-    return tuple(DEPARTURE_CONFIGURATIONS[from_platform].keys())
-
-
-def check_lock(arrival: bool, platform: int, track: str) -> float:
+def check_lock(incoming: str, track: str) -> float:
     if ALL_LOCKED:
         return float('inf')
-    try:
-        target = _get_target_configuration(arrival, platform, track)
-    except KeyError:
-        return -1
-    for switch, target_state in target.items():
+    config = CONFIGURATIONS[incoming][track]
+    for switch, target_state in config.items():
         if time.time() < LOCK_RELEASE_TIME[switch]:
             return LOCK_RELEASE_TIME[switch] - time.time()
     return 0
 
 
-def set_switches(arrival: bool, platform: int, track: str):
-    target = _get_target_configuration(arrival, platform, track)
-    for switch, target_state in target.items():
+def set_switches(incoming: str, track: str):
+    config = CONFIGURATIONS[incoming][track]
+    for switch, target_state in config.items():
         LOCK_RELEASE_TIME[switch] = time.time() + LOCK_TIME_SEC
         current_state = STATES[switch]
         if current_state != target_state:
@@ -119,10 +84,6 @@ def _operate_switch(switch: int, curved: bool):
         STATES[switch] = curved
 
 
-def are_switches_correct_for(arrival: bool, platform: int, track: str):
-    target = _get_target_configuration(arrival, platform, track)
-    for switch, target_state in target.items():
-        if STATES[switch] != target_state:
-            return False
-    return True
-
+def are_switches_correct_for(incoming: str, track: str):
+    config = CONFIGURATIONS[incoming][track]
+    return all(STATES[switch] == target_state for switch, target_state in config.items())
