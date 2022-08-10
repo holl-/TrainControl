@@ -13,4 +13,6 @@
 
 `sudo apt install libev-dev libevdev2`
 
+`sudo apt-get install libusb-0.1-4`
+
 `pip install bjoern`
