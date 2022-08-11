@@ -140,7 +140,7 @@ TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in train
 admin_controls = [
     dcc.Markdown("# Status", id='admin-status'),
     dcc.Checklist(id='admin-checklist', labelStyle=dict(display='block'), options=[
-        {'label': "Geschwindigkeitsbeschränkung auf 150 km/h", 'value': 'global-speed-limit'},
+        {'label': "Geschwindigkeitsbeschränkung auf 120 km/h", 'value': 'global-speed-limit'},
         {'label': "Züge haben Wagen", 'value': 'train-cars'},
         {'label': "Fahrplan-Modus (Nur benötigte Weichen schalten)", 'value': 'schedule-mode'},
         {'label': "Weichen sperren", 'value': 'lock-all-switches'},
@@ -411,7 +411,7 @@ def admin_update(_n, checklist, *args):
         train.emergency_stop()
     elif trigger_id == 'admin-checklist':
         switches.set_all_locked('lock-all-switches' in checklist)
-        trains.set_global_speed_limit(150 if 'global-speed-limit' in checklist else None)
+        trains.set_global_speed_limit(120 if 'global-speed-limit' in checklist else None)
         train_cars = 'train-cars' in checklist
         schedule_mode = 'schedule-mode' in checklist
         print(train_cars, schedule_mode)
