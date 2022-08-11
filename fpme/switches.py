@@ -54,7 +54,6 @@ def can_set(incoming: str, track: str) -> float:
     return True
 
 
-
 def set_switches(incoming: str, track: str):
     config = CONFIGURATIONS[incoming][track]
     for switch, target_state in config.items():
@@ -68,7 +67,7 @@ def set_all_locked(locked: bool):
     global ALL_LOCKED
     ALL_LOCKED = locked
     if locked:
-        target = {1: False, 2: True, 3: True}
+        target = {1: True, 2: True, 3: False}
         for switch, target_state in target.items():
             current_state = STATES[switch]
             if current_state != target_state:
