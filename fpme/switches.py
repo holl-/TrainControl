@@ -43,7 +43,9 @@ RELAY_CHANNEL_BY_SWITCH_STATE = {
 }
 
 
-def can_set(incoming: str, track: str) -> float:
+def can_set(incoming: str, track: str, ignore_lock=False) -> float:
+    if ignore_lock:
+        return True
     if ALL_LOCKED:
         return False
     config = CONFIGURATIONS[incoming][track]

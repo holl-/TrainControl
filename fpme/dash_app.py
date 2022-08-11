@@ -222,17 +222,17 @@ def hide_welcome(*n_clicks):
                Output('power-status-store', 'data'),
                Output('acceleration-store', 'data'),
                Output('set-switches-C', 'disabled'), Output('set-switches-B', 'disabled'), Output('set-switches-A', 'disabled'), ],
-              [Input('user-id', 'children'), Input('url', 'pathname'), Input('main-update', 'n_intervals'),
+              [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
                Input('power-off', 'n_clicks'), Input('power-on', 'n_clicks'),
                Input('reverse', 'n_clicks'),
                Input('set-switches-C', 'n_clicks'), Input('set-switches-B', 'n_clicks'), Input('set-switches-A', 'n_clicks'),
                Input('release-train', 'n_clicks'), *TRAIN_BUTTONS],)
-def main_update(user_id, path, *args):
+def main_update(user_id, *args):
     trigger = callback_context.triggered[0]
     trigger_id, trigger_prop = trigger["prop_id"].split(".")
     client = get_client(user_id)
     clear_inactive_clients()
-    is_admin = path == '/admin'
+    is_admin = client.is_admin
 
     if client.train is not None and client.train.admin_only and not is_admin:
         client.train = None
@@ -261,7 +261,7 @@ def main_update(user_id, path, *args):
     elif trigger_id.startswith('set-switches-'):
         track = trigger_id[len('set-switches-'):]
         if client.train:
-            if switches.can_set(incoming=get_incoming(client.train), track=track):
+            if switches.can_set(incoming=get_incoming(client.train), track=track, ignore_lock=is_admin):
                 switches.set_switches(incoming=get_incoming(client.train), track=track)
 
     # Gather info to display
@@ -306,7 +306,7 @@ def main_update(user_id, path, *args):
         marks,
         trains.is_power_on(),
         client.train.acceleration if client.train else -1.,
-        not switches.can_set(incoming, 'C'), not switches.can_set(incoming, 'B'), not switches.can_set(incoming, 'A')
+        not (switches.can_set(incoming, 'C') or is_admin), not (switches.can_set(incoming, 'B') or is_admin), not (switches.can_set(incoming, 'A') or is_admin)
     ]
 
 
