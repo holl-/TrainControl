@@ -1,9 +1,10 @@
 import threading
 import time
-from multiprocessing import Value, Process, Queue
+from multiprocessing import Value, Process, Queue, Manager
+from ctypes import c_char_p
 
 import serial
-
+from serial import SerialException
 
 TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
 T = TERNARY_BITS
@@ -86,10 +87,12 @@ class Motorola2(MaerklinProtocol):
 class ProcessSpawningGenerator:
 
     def __init__(self, serial_port: str):
+        manager = Manager()
         self._active = Value('b', False)
         self._short_circuited = Value('b', False)
+        self._error_message = manager.Value(c_char_p, "")
         self._queue = Queue()
-        self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited))
+        self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited, self._error_message))
         self._process.start()
 
     def set(self, address: int, speed: int, reverse: bool, func: bool, protocol: MaerklinProtocol = None):
@@ -108,9 +111,21 @@ class ProcessSpawningGenerator:
     def terminate(self):
         self._process.terminate()
 
+    @property
+    def is_short_circuited(self):
+        return bool(self._short_circuited.value)
 
-def setup_generator(serial_port: str, queue: Queue, active: Value, short_circuited: Value):
-    gen = SignalGenerator(serial_port, active, short_circuited)
+    @property
+    def error_message(self):
+        return self._error_message.value
+
+    @property
+    def has_error(self):
+        return bool(self._error_message.value)
+
+
+def setup_generator(serial_port: str, queue: Queue, active: Value, short_circuited: Value, error_message: Value):
+    gen = SignalGenerator(serial_port, active, short_circuited, error_message)
     while True:
         cmd = queue.get(block=True)
         getattr(gen, cmd[0])(*cmd[1:])
@@ -118,7 +133,7 @@ def setup_generator(serial_port: str, queue: Queue, active: Value, short_circuit
 
 class SignalGenerator:
 
-    def __init__(self, serial_port: str, active: Value, short_circuited: Value):
+    def __init__(self, serial_port: str, active: Value, short_circuited: Value, error_message: Value):
         self.protocol = Motorola2()
         self._active = active
         self._data = {}  # address -> (speed, reverse, func)
@@ -129,23 +144,33 @@ class SignalGenerator:
         self._idle_packet = self.protocol.velocity_packet(80, 0, False, False)
         self._override_protocols = {}
         self._short_circuited = short_circuited
+        self._error_message = error_message
         self.stop_on_short_circuit = True
         self.on_short_circuit = lambda: print("Short circuit detected")  # function without parameters
         self._time_started_sending = None  # wait a bit before detecting short circuits
+        self._ser = None
         if serial_port:
-            ser = serial.Serial(port=serial_port, baudrate=38400, parity=serial.PARITY_NONE,
-                                stopbits=serial.STOPBITS_ONE, bytesize=serial.SIXBITS,
-                                write_timeout=None,  # non-blocking write
-                                rtscts=False,  # no flow control
-                                dsrdtr=False,  # no flow control
-                                )
-            ser.is_open or ser.open()
-            assert ser.is_open, f"Failed to open serial port {serial_port}"
-            ser.setRTS(False)
-            ser.setDTR(True)
-            self._ser = ser
-        else:
-            self._ser = None
+            try:
+                ser = serial.Serial(port=serial_port, baudrate=38400, parity=serial.PARITY_NONE,
+                                    stopbits=serial.STOPBITS_ONE, bytesize=serial.SIXBITS,
+                                    write_timeout=None,  # non-blocking write
+                                    rtscts=False,  # no flow control
+                                    dsrdtr=False,  # no flow control
+                                    )
+                self._ser = ser
+            except SerialException as exc:
+                print(exc)
+                self._error_message.value = str(exc)
+                return
+            try:
+                ser.is_open or ser.open()
+                assert ser.is_open, f"Failed to open serial port {serial_port}"
+                ser.setRTS(False)
+                ser.setDTR(True)
+            except SerialException as exc:
+                print(exc)
+                self._error_message.value = str(exc)
+
 
     def set(self, address: int, speed: int, reverse: bool, func: bool, protocol: MaerklinProtocol = None):
         assert 0 < address < 80

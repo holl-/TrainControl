@@ -4,15 +4,14 @@ from typing import Dict, Optional
 
 from flask import request
 import dash
-import dash_core_components as dcc
-import dash_html_components as html
+from dash import html, dcc
 import dash_bootstrap_components as dbc
 import dash_daq as daq
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 from dash import callback_context
 
-from fpme import trains, switches
+from fpme import trains, switches, signal_gen
 
 
 class Client:
@@ -436,9 +435,21 @@ def admin_update(_n, checklist, *args):
                 print("Breaking")
                 client.train = None
                 break
-    power_sym = "⌁" if trains.is_power_on() else "⚠"
-    relay_text = "Switches: ✅ online." if RELAY_ERR is None else f"Switches: ⛔ {RELAY_ERR}"  # ⚠
-    status = f"* Server: {LOCAL_IP}:{PORT}\n* {relay_text}\n* Signal: {power_sym} on {SERIAL_PORT if SERIAL_PORT is not None else '⛔'}"
+    if SERIAL_PORT is None:
+        signal_status = "⛔ Port not configured"
+    elif trains.GENERATOR.has_error:
+        signal_status = f"⛔ {trains.GENERATOR.error_message}"
+    elif trains.GENERATOR.is_short_circuited:
+        signal_status = '⚠ short-circuited'
+    elif trains.is_power_on():
+        signal_status = '✅'
+    else:
+        signal_status = '⚠'
+    status = f"""
+* Server: {LOCAL_IP}:{PORT}
+* {"Switches: ✅ online." if RELAY_ERR is None else f"Switches: ⛔ {RELAY_ERR}"}
+* Signal: {signal_status}
+"""
     return [status, *[abs(train.target_speed) / train.max_speed for train in trains.TRAINS],
             *[status_str(train) for train in trains.TRAINS]]
 
@@ -488,7 +499,7 @@ def get_incoming(train: trains.Train):
 
 LOCAL_IP = get_ip()
 PORT = 8051
-SERIAL_PORT: Optional[str] = None
+SERIAL_PORT: Optional[str] = 'COM5'
 RELAY_ERR = None
 _SCHEDULE_MODE = False
 
