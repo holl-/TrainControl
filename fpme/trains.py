@@ -14,7 +14,6 @@ class Train:
                  name: str,
                  address: int,
                  speeds=tuple([i * 20 for i in range(15)]),
-                 speeds_max=None,
                  acceleration=20.,
                  has_built_in_acceleration=False,
                  protocol=None):
@@ -24,9 +23,11 @@ class Train:
         self.address: int = address
         self.protocol = protocol  # special protocol for this train
         self.speeds: tuple = speeds  # 14 entries
+        self.locomotive_speeds = speeds  # unencumbered by cars
         self.has_built_in_acceleration: bool = has_built_in_acceleration
         self.acceleration: float = acceleration
         # State
+        self._speed_factor = 1.  # 1 = unencumbered, 0 = cannot move
         self.admin_only = False
         self._limit = None
         self._target_speed: float = 0.  # signed speed in kmh, -0 means parked in reverse
@@ -55,6 +56,15 @@ class Train:
     def in_reverse(self):
         direction = math.copysign(1, self._speed if self._speed != 0 else self._target_speed)
         return direction < 0
+
+    def set_speed_factor(self, factor, adjust_limit=False):
+        old_factor = self._speed_factor
+        self._speed_factor = factor
+        self.speeds = tuple(s * factor for s in self.locomotive_speeds)
+        self._target_speed *= factor / old_factor
+        self._speed *= factor / old_factor
+        if adjust_limit and self._limit is not None:
+            self._limit *= factor / old_factor
 
     def set_speed_limit(self, limit: float or None):
         self._limit = limit
@@ -132,7 +142,7 @@ class Train:
 
 
 TRAINS = [
-    Train('ICE', address=60, acceleration=40., speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288)),
+    Train('ICE', address=60, acceleration=40., speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288), ),
     Train('E-Lok (DB)', address=24, acceleration=30., protocol=signal_gen.Motorola1(), speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 182.8)),
     Train('E-Lok (BW)', address=1, acceleration=30., has_built_in_acceleration=True, speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226)),
     Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=True, speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136)),  # ToDo has_built_in_acceleration?
@@ -192,4 +202,10 @@ def set_global_speed_limit(limit: float or None):
 
 
 def set_train_cars_connected(train_cars):
-    pass  # ToDo
+    if train_cars:
+        # get_by_name('ICE').set_speed_factor(288 / 300)
+        get_by_name('Dampf-Lok').set_speed_factor(106 / 210)
+        get_by_name('Diesel-Lok').set_speed_factor(166 / 210)
+    else:
+        for train in TRAINS:
+            train.set_speed_factor(1)
