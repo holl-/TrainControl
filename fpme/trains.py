@@ -177,6 +177,10 @@ def is_power_on():
     return GENERATOR.is_sending
 
 
+def destroy():
+    GENERATOR.terminate()
+
+
 def update_trains(dt):  # repeatedly called from setup()
     try:
         for train in TRAINS:

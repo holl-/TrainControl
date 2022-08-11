@@ -105,6 +105,9 @@ class ProcessSpawningGenerator:
     def is_sending(self):
         return bool(self._active.value) and not bool(self._short_circuited.value)
 
+    def terminate(self):
+        self._process.terminate()
+
 
 def setup_generator(serial_port: str, queue: Queue, active: Value, short_circuited: Value):
     gen = SignalGenerator(serial_port, active, short_circuited)
