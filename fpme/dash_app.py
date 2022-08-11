@@ -113,9 +113,9 @@ def build_control():
                 html.Button('🛑', id='stop-train', style={'width': '100%', 'height': '100%', 'font-size': '48px', 'background-color': '#FF8000', 'color': 'white'}),  # ⛔
             ]),
         ]),
-        dcc.Store('target-speed-store'),
-        dcc.Store('acceleration-store'),
-        dcc.Store('needle-velocity'),
+        dcc.Store('target-speed-store', data=0),
+        dcc.Store('acceleration-store', data=0),
+        dcc.Store('needle-velocity', data=0),
     ])
 
 
@@ -303,8 +303,9 @@ def main_update(user_id, path, *args):
 
 app.clientside_callback(
     """
-    function(n, speed, last_acceleration, target_with_power, target_acceleration, dt, has_power) {
+    function(n, speed_, last_acceleration, target_with_power, target_acceleration, dt, has_power) {
         if(Number(target_with_power) === target_with_power) {  // Real update
+            let speed = isNaN(speed_) ? 0 : speed_;
             let target = has_power ? target_with_power : -1;
             if(target < 0) {
                 return [Math.max(0, speed * Math.pow(0.2, dt/1000) - 2 * target_acceleration * dt / 1000), - 2 * target_acceleration];
