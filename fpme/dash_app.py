@@ -20,7 +20,7 @@ class Client:
     GLOBAL_ID_COUNTER = 0
     APP_INSTANCE_ID = int(time.time())
 
-    def __init__(self, addr, user_id=None):
+    def __init__(self, addr, user_id=None, admin=False, local=False):
         self.addr = addr  # IP
         if user_id is None:
             self.user_id = f'{Client.APP_INSTANCE_ID}-{Client.GLOBAL_ID_COUNTER}'  # generated after website loaded, stored in 'user-id' div component
@@ -29,9 +29,11 @@ class Client:
             self.user_id = user_id
         self.train = None
         self.last_input_perf_counter = time.perf_counter()
+        self.is_admin = admin
+        self.is_local = local
 
     def __repr__(self):
-        return f"{self.user_id} @ {self.addr} controlling {self.train}"
+        return f"{self.user_id} @ {self.addr if not self.is_local else 'localhost'}{' (Admin)' if self.is_admin else ''} controlling {self.train}"
 
     def is_inactive(self):
         return time.perf_counter() - self.last_input_perf_counter > Client.PING_TIME * 2.5
@@ -40,18 +42,20 @@ class Client:
 CLIENTS: Dict[str, Client] = {}  # id -> Client
 
 
-def get_client(user_id: str or None, register_heartbeat=True) -> Client:
+def get_client(user_id: str or None, admin=None, local=None, register_heartbeat=True) -> Client:
     """
     Args:
         user_id: if `str`, looks up or creates a client with the given ID, if `None`, generates a new ID.
     """
+    if user_id == 'id':  # not initialized
+        raise PreventUpdate
     if user_id in CLIENTS:
         client = CLIENTS[user_id]
         if register_heartbeat:
             client.last_input_perf_counter = time.perf_counter()
         return client
     else:
-        client = Client(request.remote_addr, user_id)
+        client = Client(request.remote_addr, user_id, False if admin is None else admin, False if local is None else local)
         print(f"Registered client {client}")
         CLIENTS[client.user_id] = client
         return client
@@ -160,7 +164,7 @@ for train in trains.TRAINS:
         ]),
         html.Button('🚪⬏', id=f'admin-kick-{train}', style={'width': 50}),
         " ",
-        html.Div("...", id=f'admin-train-status-{train.name}', style={'display': 'inline-block', 'width': 150}),
+        html.Div("...", id=f'admin-train-status-{train.name}', style={'display': 'inline-block', 'width': 200}),
     ]))
 admin_controls.append(html.Div(style={'height': 60, 'width': 300}, children=[
     html.Div(style={'display': 'inline-block', 'width': '50%', 'height': '100%'}, children=[
@@ -191,10 +195,13 @@ app.layout = html.Div(children=[
 app.config.suppress_callback_exceptions = True
 
 
-@app.callback(Output('user-id', 'children'), [Input('url', 'pathname')])
-def generate_id(url):
-    if url:
-        return get_client(None).user_id
+@app.callback([Output('user-id', 'children'),
+               Output('admin-controls', 'children')],
+              [Input('url', 'pathname')], [State('url', 'href')])
+def on_page_load(path, href):
+    if path:
+        new_client = get_client(None, admin=path == '/admin', local=href.startswith('http://localhost') or request.remote_addr in [LOCAL_IP, '127.0.0.1'])
+        return new_client.user_id, admin_controls if new_client.is_admin else []
     else:
         raise PreventUpdate()
 
@@ -390,11 +397,6 @@ def on_speed_button_pressed(*args):
 # Admin Controls
 
 
-@app.callback(Output('admin-controls', 'children'), [Input('url', 'pathname')])
-def show_admin_controls(path):
-    return admin_controls if path == '/admin' else []
-
-
 @app.callback([Output('admin-status', 'children'),
                *[Output(f'admin-speedometer-{train.name}', 'value') for train in trains.TRAINS],
                *[Output(f'admin-train-status-{train.name}', 'children') for train in trains.TRAINS]],
@@ -447,7 +449,7 @@ def status_str(train: trains.Train):
         label += " gesperrt"
     for client in CLIENTS.values():
         if client.train == train:
-            return f"{label} ({client.addr})"
+            return f"{label} ({'Admin' if client.is_admin else client.addr})"
     return label
 
 
