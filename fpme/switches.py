@@ -68,7 +68,7 @@ def set_all_locked(locked: bool):
     global ALL_LOCKED
     ALL_LOCKED = locked
     if locked:
-        target = {1: True, 2: False, 3: False}
+        target = {1: False, 2: True, 3: True}
         for switch, target_state in target.items():
             current_state = STATES[switch]
             if current_state != target_state:
