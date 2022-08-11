@@ -47,11 +47,10 @@ def can_set(incoming: str, track: str) -> float:
     if ALL_LOCKED:
         return False
     config = CONFIGURATIONS[incoming][track]
-    if all(STATES[switch] == target_state for switch, target_state in config.items()):
-        return True  # already correct
     for switch, target_state in config.items():
-        if time.time() < LOCK_RELEASE_TIME[switch]:
-            return False
+        if STATES[switch] != target_state:
+            if time.time() < LOCK_RELEASE_TIME[switch]:
+                return False
     return True
 
 

@@ -251,8 +251,9 @@ def main_update(user_id, path, *args):
             client.train.reverse()
     elif trigger_id.startswith('set-switches-'):
         track = trigger_id[len('set-switches-'):]
-        if switches.can_set(incoming='Any', track=track):
-            switches.set_switches(incoming='Any', track=track)
+        if client.train:
+            if switches.can_set(incoming=get_incoming(client.train), track=track):
+                switches.set_switches(incoming=get_incoming(client.train), track=track)
 
     # Gather info to display
     if client.train is None:
@@ -282,6 +283,8 @@ def main_update(user_id, path, *args):
     else:
         marks = {}
 
+    incoming = get_incoming(client.train) if client.train else 'Any'
+
     return [
         ({} if client.train is not None else {'display': 'none'}),
         label,
@@ -294,7 +297,7 @@ def main_update(user_id, path, *args):
         marks,
         trains.is_power_on(),
         client.train.acceleration if client.train else -1.,
-        not switches.can_set('Any', 'C'), not switches.can_set('Any', 'B'), not switches.can_set('Any', 'A')
+        not switches.can_set(incoming, 'C'), not switches.can_set(incoming, 'B'), not switches.can_set(incoming, 'A')
     ]
 
 
@@ -412,9 +415,10 @@ def admin_update(_n, checklist, *args):
     elif trigger_id == 'admin-checklist':
         switches.set_all_locked('lock-all-switches' in checklist)
         trains.set_global_speed_limit(120 if 'global-speed-limit' in checklist else None)
-        train_cars = 'train-cars' in checklist
-        schedule_mode = 'schedule-mode' in checklist
-        print(train_cars, schedule_mode)
+        trains.set_train_cars_connected('train-cars' in checklist)
+        global _SCHEDULE_MODE
+        _SCHEDULE_MODE = 'schedule-mode' in checklist
+
     elif trigger_id.startswith('admin-kick-'):
         train = trains.get_by_name(trigger_id[len('admin-kick-'):])
         for client in CLIENTS.values():
@@ -425,7 +429,7 @@ def admin_update(_n, checklist, *args):
                 break
     power_sym = "⌁" if trains.is_power_on() else "⚠"
     relay_text = "Switches: ✅ online." if RELAY_ERR is None else f"Switches: ⛔ {RELAY_ERR}"  # ⚠
-    status = f"* Server: {LOCAL_IP}:{PORT}\n* {relay_text}\n* Signal: {power_sym} on {SERIAL_PORT}"
+    status = f"* Server: {LOCAL_IP}:{PORT}\n* {relay_text}\n* Signal: {power_sym} on {SERIAL_PORT if SERIAL_PORT is not None else '⛔'}"
     return [status, *[abs(train.target_speed) / train.max_speed for train in trains.TRAINS],
             *[status_str(train) for train in trains.TRAINS]]
 
@@ -459,10 +463,25 @@ def get_ip():
     return ip
 
 
+def get_incoming(train: trains.Train):
+    if _SCHEDULE_MODE:
+        return {
+            'ICE': 'Blue',
+            'E-Lok (DB)': 'Any',
+            'E-Lok (BW)': 'Any',
+            'S-Bahn': 'Yellow',
+            'Dampf-Lok': 'Yellow',
+            'Diesel-Lok': 'Yellow',
+        }[train.name]
+    else:
+        return 'Any'
+
+
 LOCAL_IP = get_ip()
 PORT = 8051
 SERIAL_PORT: Optional[str] = None
 RELAY_ERR = None
+_SCHEDULE_MODE = False
 
 
 if __name__ == '__main__':
