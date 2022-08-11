@@ -1,5 +1,5 @@
 import time
-from typing import Dict
+from typing import Dict, Optional
 
 from flask import request
 import dash
@@ -138,11 +138,13 @@ TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in train
 
 
 admin_controls = [
-    html.Div("Status", id='admin-status'),
-    dcc.Checklist(options=[{'label': "Geschwindigkeitsbeschränkung auf 150 km/h", 'value': f'global-speed-limit'}]),
-    dcc.Checklist(options=[{'label': "Züge haben Wagen", 'value': f'train-cars'}]),
-    dcc.Checklist(options=[{'label': "Fahrplan-Modus (Nur benötigte Weichen schalten)", 'value': f'schedule-mode'}]),
-    dcc.Checklist(options=[{'label': "Weichen sperren", 'value': f'lock-all-switches'}]),
+    dcc.Markdown("# Status", id='admin-status'),
+    dcc.Checklist(id='admin-checklist', labelStyle=dict(display='block'), options=[
+        {'label': "Geschwindigkeitsbeschränkung auf 150 km/h", 'value': 'global-speed-limit'},
+        {'label': "Züge haben Wagen", 'value': 'train-cars'},
+        {'label': "Fahrplan-Modus (Nur benötigte Weichen schalten)", 'value': 'schedule-mode'},
+        {'label': "Weichen sperren", 'value': 'lock-all-switches'},
+    ]),
 ]
 for train in trains.TRAINS:
     admin_controls.append(html.Div(style={'width': '80%'}, children=[
@@ -387,15 +389,17 @@ def show_admin_controls(path):
     return admin_controls if path == '/admin' else []
 
 
-@app.callback([*[Output(f'admin-speedometer-{train.name}', 'value') for train in trains.TRAINS],
+@app.callback([Output('admin-status', 'children'),
+               *[Output(f'admin-speedometer-{train.name}', 'value') for train in trains.TRAINS],
                *[Output(f'admin-train-status-{train.name}', 'children') for train in trains.TRAINS]],
               [Input('main-update', 'n_intervals'),
+               Input('admin-checklist', 'value'),
                Input('power-off-admin', 'n_clicks'),
                Input('power-on-admin', 'n_clicks'),
                [Input(f'admin-stop-{train}', 'n_clicks') for train in trains.TRAINS],
                [Input(f'admin-kick-{train}', 'n_clicks') for train in trains.TRAINS],
                ])
-def admin_update(_n, *args):
+def admin_update(_n, checklist, *args):
     trigger = callback_context.triggered[0]
     trigger_id, trigger_prop = trigger["prop_id"].split(".")
     if trigger_id == 'power-off-admin':
@@ -405,6 +409,12 @@ def admin_update(_n, *args):
     elif trigger_id.startswith('admin-stop-'):
         train = trains.get_by_name(trigger_id[len('admin-stop-'):])
         train.emergency_stop()
+    elif trigger_id == 'admin-checklist':
+        switches.set_all_locked('lock-all-switches' in checklist)
+        trains.set_global_speed_limit(150 if 'global-speed-limit' in checklist else None)
+        train_cars = 'train-cars' in checklist
+        schedule_mode = 'schedule-mode' in checklist
+        print(train_cars, schedule_mode)
     elif trigger_id.startswith('admin-kick-'):
         train = trains.get_by_name(trigger_id[len('admin-kick-'):])
         for client in CLIENTS.values():
@@ -413,7 +423,10 @@ def admin_update(_n, *args):
                 print("Breaking")
                 client.train = None
                 break
-    return [*[abs(train.target_speed) / train.max_speed for train in trains.TRAINS],
+    power_sym = "⌁" if trains.is_power_on() else "⚠"
+    relay_text = "Switches: ✅ online." if RELAY_ERR is None else f"Switches: ⛔ {RELAY_ERR}"  # ⚠
+    status = f"* Server: {LOCAL_IP}:{PORT}\n* {relay_text}\n* Signal: {power_sym} on {SERIAL_PORT}"
+    return [status, *[abs(train.target_speed) / train.max_speed for train in trains.TRAINS],
             *[status_str(train) for train in trains.TRAINS]]
 
 
@@ -437,13 +450,6 @@ for train in trains.TRAINS:
         raise PreventUpdate()
 
 
-@app.callback([Output('admin-checklist', 'style')], [Input('admin-checklist', 'value')])
-def admin_checklist_update(selection):
-    switches.set_all_locked('lock-all-switches' in selection)
-    trains.set_global_speed_limit(150 if 'global-speed-limit' in selection else None)
-    raise PreventUpdate
-
-
 def get_ip():
     import socket
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -453,29 +459,30 @@ def get_ip():
     return ip
 
 
-def start_app(serial_port: str = None,
-              port: int = 8051):
+LOCAL_IP = get_ip()
+PORT = 8051
+SERIAL_PORT: Optional[str] = None
+RELAY_ERR = None
+
+
+if __name__ == '__main__':
     try:
         import relay8
         print("Relay initialized, track switches online.")
     except AssertionError as err:
         print(err)
-    trains.setup(serial_port)
-    ip = get_ip()
+        RELAY_ERR = err
+    trains.setup(SERIAL_PORT)
     try:
         import bjoern
-        print(f"Starting Bjoern server on {ip}, port {port}: http://{ip}:{port}/")
-        bjoern.run(app.server, port=port, host='0.0.0.0')
+        print(f"Starting Bjoern server on {LOCAL_IP}, port {PORT}: http://{LOCAL_IP}:{PORT}/")
+        bjoern.run(app.server, port=PORT, host='0.0.0.0')
     except ImportError:
         try:
             import waitress
-            print(f"Starting Waitress server on {ip}, port {port}: http://{ip}:{port}/")
-            waitress.serve(app.server, port=port)
+            print(f"Starting Waitress server on {LOCAL_IP}, port {PORT}: http://{LOCAL_IP}:{PORT}/")
+            waitress.serve(app.server, port=PORT)
         except ImportError:
-            print(f"Starting debug server on {ip}, port {port}: http://{ip}:{port}/")
-            app.run_server(debug=True, host='0.0.0.0', port=port)
+            print(f"Starting debug server on {LOCAL_IP}, port {PORT}: http://{LOCAL_IP}:{PORT}/")
+            app.run_server(debug=True, host='0.0.0.0', port=PORT)
     # trains.power_on()
-
-
-if __name__ == '__main__':
-    start_app()

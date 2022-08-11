@@ -79,7 +79,7 @@ def set_all_locked(locked: bool):
 def _operate_switch(switch: int, curved: bool):
     """ Sends a signal to the specified track switch. """
     print(f"Setting switch {switch} to state curved={curved}")
-    # from .relay8 import pulse
-    # channel = RELAY_CHANNEL_BY_SWITCH_STATE[switch][curved]
-    # if pulse(channel):
-    STATES[switch] = curved
+    from .relay8 import pulse
+    channel = RELAY_CHANNEL_BY_SWITCH_STATE[switch][curved]
+    if pulse(channel):
+        STATES[switch] = curved
