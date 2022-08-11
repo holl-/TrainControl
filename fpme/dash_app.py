@@ -1,3 +1,4 @@
+import os
 import time
 from typing import Dict, Optional
 
@@ -138,6 +139,7 @@ TRAIN_BUTTONS = [Input(f'switch-to-{train.name}', 'n_clicks') for train in train
 
 
 admin_controls = [
+    html.Button('Exit', id='admin-kill'),
     dcc.Markdown("# Status", id='admin-status'),
     dcc.Checklist(id='admin-checklist', labelStyle=dict(display='block'), options=[
         {'label': "Geschwindigkeitsbeschränkung auf 120 km/h", 'value': 'global-speed-limit'},
@@ -400,13 +402,16 @@ def show_admin_controls(path):
                Input('admin-checklist', 'value'),
                Input('power-off-admin', 'n_clicks'),
                Input('power-on-admin', 'n_clicks'),
+               Input('admin-kill', 'n_clicks'),
                [Input(f'admin-stop-{train}', 'n_clicks') for train in trains.TRAINS],
                [Input(f'admin-kick-{train}', 'n_clicks') for train in trains.TRAINS],
                ])
 def admin_update(_n, checklist, *args):
     trigger = callback_context.triggered[0]
     trigger_id, trigger_prop = trigger["prop_id"].split(".")
-    if trigger_id == 'power-off-admin':
+    if trigger_id == 'admin-kill':
+        os._exit(0)
+    elif trigger_id == 'power-off-admin':
         trains.power_off()
     elif trigger_id == 'power-on-admin':
         trains.power_on()
