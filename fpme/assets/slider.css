@@ -1,0 +1,12 @@
+
+.rc-slider-vertical .rc-slider-handle {
+    width: 32px;
+    height: 32px;
+    margin-top: -14px;
+    margin-left: -14px;
+}
+
+/* Thicker Gauge */
+circle {
+    stroke-width: 20px;
+}

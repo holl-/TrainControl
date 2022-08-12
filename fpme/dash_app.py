@@ -68,7 +68,7 @@ def clear_inactive_clients():
                 client.train.set_target_speed(0)
 
 
-app = dash.Dash('Modelleisenbahn', external_stylesheets=[dbc.themes.BOOTSTRAP, 'radio-buttons.css'], title='Modelleisenbahn', update_title=None)
+app = dash.Dash('Modelleisenbahn', external_stylesheets=[dbc.themes.BOOTSTRAP, 'slider.css'], title='Modelleisenbahn', update_title=None)
 
 with open('../welcome_text.md') as file:
     welcome_text = file.read()
@@ -94,26 +94,26 @@ def build_control():
         html.Div(style={'display': 'inline-block', 'width': 60, 'height': 320, 'vertical-align': 'center'}, children=[
             dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}, updatemode='drag', vertical=True, verticalHeight=320),
         ]),
-        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'top'}, children=[
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '16%'}, children=[
+        html.Div(style={'display': 'inline-block', 'width': 140, 'height': 300, 'vertical-align': 'top'}, children=[
+            html.Div(style={'display': 'inline-block', 'width': '50%', 'height': '16%'}, children=[
+                html.Button('-', id='decelerate1', style={'width': '100%', 'height': '100%', 'background-color': '#499936', 'color': 'white'}),
+            ]),
+            html.Div(style={'display': 'inline-block', 'width': '50%', 'height': '16%'}, children=[
                 html.Button('+', id='accelerate1', style={'width': '100%', 'height': '100%', 'background-color': '#499936', 'color': 'white'}),
             ]),
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '12%'}, children=[
+            html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '20%'}, children=[
                 html.Button('◄ ►', id='reverse', style={'width': '100%', 'height': '100%'}),  # , 'background-color': '#A0A0FF', 'color': 'white'
-            ]),
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '16%'}, children=[
-                html.Button('-', id='decelerate1', style={'width': '100%', 'height': '100%', 'background-color': '#499936', 'color': 'white'}),
             ]),
             html.Div(style={'display': 'inline-block', 'width': 1, 'height': '1%'}, children=[]),
             "Weichen: ",
             # html.Div("➞", style={'display': 'inline-block'}),
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '10%'}, children=[  # setting width/height adds spacing above
+            html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '15%'}, children=[  # setting width/height adds spacing above
                 html.Button('⮭', id='set-switches-C', style={'width': '33%', 'height': '100%'}),
                 html.Button('⬈', id='set-switches-B', style={'width': '33%', 'height': '100%'}),
                 html.Button('➞', id='set-switches-A', style={'width': '33%', 'height': '100%'}),
             ]),
             html.Div(style={'display': 'inline-block', 'width': 1, 'height': '1%'}, children=[]),
-            html.Div(style={'display': 'inline-block', 'width': 120, 'height': '30%'}, children=[
+            html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '30%'}, children=[
                 html.Button('🛑', id='stop-train', style={'width': '100%', 'height': '100%', 'font-size': '48px', 'background-color': '#FF8000', 'color': 'white'}),  # ⛔
             ]),
         ]),
