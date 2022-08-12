@@ -54,6 +54,11 @@ class Train:
 
     @property
     def in_reverse(self):
+        direction = math.copysign(1, self._target_speed)
+        return direction < 0
+
+    @property
+    def currently_in_reverse(self):
         direction = math.copysign(1, self._speed if self._speed != 0 else self._target_speed)
         return direction < 0
 
@@ -97,10 +102,10 @@ class Train:
                 speed_level = max(speed_level, target_level)
             else:  # Equal
                 speed_level = target_level
-        new_state = (speed_level, self.in_reverse, self._func_active)
+        new_state = (speed_level, self.currently_in_reverse, self._func_active)
         if new_state != self._broadcasting_state:
             self._broadcasting_state = new_state
-            GENERATOR.set(self.address, speed_level, self.in_reverse, self._func_active, protocol=self.protocol)
+            GENERATOR.set(self.address, speed_level, self.currently_in_reverse, self._func_active, protocol=self.protocol)
 
     def emergency_stop(self):
         self._target_speed *= 0.
