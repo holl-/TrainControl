@@ -108,7 +108,7 @@ def build_control():
             "Weichen: ",
             # html.Div("➞", style={'display': 'inline-block'}),
             html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '15%'}, children=[  # setting width/height adds spacing above
-                html.Button('⮭', id='set-switches-C', style={'width': '33%', 'height': '100%'}),
+                html.Button('↑', id='set-switches-C', style={'width': '33%', 'height': '100%'}),
                 html.Button('⬈', id='set-switches-B', style={'width': '33%', 'height': '100%'}),
                 html.Button('➞', id='set-switches-A', style={'width': '33%', 'height': '100%'}),
             ]),
@@ -125,8 +125,8 @@ def build_control():
 
 TRAIN_LABELS = {  # 🚄 🚅 🚂 🛲 🚉 🚆 🚋 🚇
     'ICE': "🚅 ICE",
-    'E-Lok (DB)': "🚉 DB",
-    'E-Lok (BW)': "🚉 BW",
+    'E-Lok (DB)': "🚉 RB (DB)",
+    'E-Lok (BW)': "🚉 RE (BW)",
     'S-Bahn': "Ⓢ Bahn",
     'Dampf-Lok': "🚂 Dampf",
     'Diesel-Lok': "🛲 Diesel",
