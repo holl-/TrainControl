@@ -87,12 +87,12 @@ def build_control():
                 html.Button('⚠', id='power-off', style={'width': '100%', 'height': '100%', 'font-size': '66px', 'background-color': '#cc0000', 'color': 'white'}),
             ]),
         ]),
-        html.Div([], style={'display': 'inline-block', 'width': 40, 'height': 300, 'vertical-align': 'bottom'}),
-        html.Div(style={'display': 'inline-block', 'vertical-align': 'top'}, children=[
-            daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=False, size=300),
+        html.Div([], style={'display': 'inline-block', 'width': 40, 'height': 1, 'vertical-align': 'top'}),
+        html.Div(style={'display': 'inline-block', 'vertical-align': 'top', 'height': 290}, children=[
+            daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=False, size=290),
         ]),
-        html.Div(style={'display': 'inline-block', 'width': 60, 'height': 320, 'vertical-align': 'center'}, children=[
-            dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}, updatemode='drag', vertical=True, verticalHeight=320),
+        html.Div(style={'display': 'inline-block', 'width': 60, 'height': 310, 'vertical-align': 'top'}, children=[
+            dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}, updatemode='drag', vertical=True, verticalHeight=310),
         ]),
         html.Div(style={'display': 'inline-block', 'width': 140, 'height': 300, 'vertical-align': 'top'}, children=[
             html.Div(style={'display': 'inline-block', 'width': '50%', 'height': '16%'}, children=[
