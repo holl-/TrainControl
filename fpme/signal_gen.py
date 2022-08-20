@@ -6,8 +6,10 @@ from ctypes import c_char_p
 import serial
 from serial import SerialException
 
-TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
-T = TERNARY_BITS
+
+T = TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
+# 1 trit = 2 bits
+# Every bit starts with a rising flank, 1 stays up, 0 goes down
 
 
 def _all_addresses():
@@ -77,6 +79,40 @@ class Motorola2(MaerklinProtocol):
             b2, b4, b6, b8 = [0, 1, 0, 0]
         else:
             raise ValueError()
+        bits = [speed & 1, b2, (speed >> 1) & 1, b4, (speed >> 2) & 1, b6, speed >> 3, b8]
+        return tuple(0 if b else 63 for b in bits)
+
+    def function_bytes(self, speed: int, function: int, status: bool):
+        if function == 1:
+            if speed == 3 and not status:
+                b2, b4, b6, b8 = 1, 0, 1, 0
+            elif speed == 11 and status:
+                b2, b4, b6, b8 = 0, 1, 0, 1
+            else:
+                b2, b4, b6, b8 = 1, 1, 0, status
+        elif function == 2:
+            if speed == 4 and not status:
+                b2, b4, b6, b8 = 1, 0, 1, 0
+            elif speed == 12 and status:
+                b2, b4, b6, b8 = 0, 1, 0, 1
+            else:
+                b2, b4, b6, b8 = 0, 0, 1, status
+        elif function == 3:
+            if speed == 6 and not status:
+                b2, b4, b6, b8 = 1, 0, 1, 0
+            elif speed == 14 and status:
+                b2, b4, b6, b8 = 0, 1, 0, 1
+            else:
+                b2, b4, b6, b8 = 0, 1, 1, status
+        elif function == 4:
+            if speed == 7 and not status:
+                b2, b4, b6, b8 = 1, 0, 1, 0
+            elif speed == 15 and status:
+                b2, b4, b6, b8 = 0, 1, 0, 1
+            else:
+                b2, b4, b6, b8 = 1, 1, 1, status
+        else:
+            raise ValueError(function)
         bits = [speed & 1, b2, (speed >> 1) & 1, b4, (speed >> 2) & 1, b6, speed >> 3, b8]
         return tuple(0 if b else 63 for b in bits)
 
