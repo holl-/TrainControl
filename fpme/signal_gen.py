@@ -73,7 +73,8 @@ class Motorola2(RS232Protocol):
         packets = [velocity_packet]
         for function, status in functions.items():
             if function > 0:
-                packets.append(self.function_bytes(speed, function, status))
+                function_packet = ALL_ADDRESSES[address] + (T[1] if f0 else T[0]) + self.function_bytes(speed, function, status)
+                packets.append(function_packet)
         return [bytes(p) for p in packets]
 
     def velocity_bytes(self, speed: int, reverse: bool):
@@ -187,7 +188,7 @@ class SignalGenerator:
         self._packets = {}
         self._turn_packets = {}
         self._turn_addresses = []
-        self._idle_packet = self.protocol.status_packets(80, 0, False, {})
+        self._idle_packet = self.protocol.status_packets(80, 0, False, {0: False})[0]
         self._override_protocols = {}
         self._short_circuited = short_circuited
         self._error_message = error_message
@@ -216,7 +217,6 @@ class SignalGenerator:
             except SerialException as exc:
                 print(exc)
                 self._error_message.value = str(exc)
-
 
     def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
         assert 0 < address < 80
@@ -262,6 +262,7 @@ class SignalGenerator:
                         for _rep in range(2):
                             self._send(self._turn_packets[address])
                 for packet in status_packets:
+                    # print(' '.join('{:02x}'.format(x) for x in packet))
                     for _rep in range(2):  # Send each packet twice, else trains will ignore it
                         self._send(packet)
 
@@ -276,11 +277,19 @@ class SignalGenerator:
 if __name__ == '__main__':
     gen = ProcessSpawningGenerator('COM5')
     gen.start()
-    for i in range(10):
-        for f in range(5):
-            gen.set(1, 5, False, {i: i == f for i in range(5)})
-            print(f"Function {f}")
-            time.sleep(5)
+    # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
+    # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
+
+    gen.set(1, 0, False, {4: True})
+    time.sleep(1)
+    gen.set(1, 11, False, {4: True})
+    time.sleep(3)
+    gen.set(1, 0, False, {4: True})
+    # for i in range(10):
+    #     for f in [0, 1, 2, 3, 4]:
+    #         gen.set(1, 5, False, {i: i == f for i in range(5)})
+    #         print(f"Function {f}")
+    #         time.sleep(10)
     # time.sleep(10)
     # gen.set(1, 0, True, {})
 
