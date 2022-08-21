@@ -16,7 +16,8 @@ class Train:
                  speeds=tuple([i * 20 for i in range(15)]),
                  acceleration=20.,
                  has_built_in_acceleration=False,
-                 protocol=None):
+                 protocol=None,
+                 stop_by_mm1_reverse=False):
         assert len(speeds) == 15, len(speeds)
         # Properties
         self.name: str = name
@@ -26,6 +27,7 @@ class Train:
         self.locomotive_speeds = speeds  # unencumbered by cars
         self.has_built_in_acceleration: bool = has_built_in_acceleration
         self.acceleration: float = acceleration
+        self.stop_by_mm1_reverse = stop_by_mm1_reverse
         # State
         self._speed_factor = 1.  # 1 = unencumbered, 0 = cannot move
         self.admin_only = False
@@ -110,9 +112,13 @@ class Train:
     def emergency_stop(self):
         self._target_speed *= 0.
         self._speed *= 0.
-        in_reverse = not self._broadcasting_state[1]
-        GENERATOR.set(self.address, 0, in_reverse, self._func_active, protocol=self.protocol)
-        self._broadcasting_state = (0., in_reverse, self._func_active)
+        currently_in_reverse = self._broadcasting_state[1]
+        if self.stop_by_mm1_reverse:
+            GENERATOR.set(self.address, None, False, self._func_active, protocol=self.protocol)
+            self._broadcasting_state = (0., False, self._func_active)
+        else:
+            GENERATOR.set(self.address, 0, not currently_in_reverse, self._func_active, protocol=self.protocol)
+            self._broadcasting_state = (0., not currently_in_reverse, self._func_active)
         self._emergency_stopping = True
 
     @property
@@ -149,8 +155,8 @@ class Train:
 TRAINS = [
     Train('ICE', address=60, acceleration=40., speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288)),
     Train('E-Lok (DB)', address=24, acceleration=30., protocol=signal_gen.Motorola1(), speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 183)),
-    Train('E-Lok (BW)', address=1, acceleration=30., has_built_in_acceleration=True, speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226)),
-    Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=True, speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136)),  # ToDo has_built_in_acceleration?
+    Train('E-Lok (BW)', address=1, acceleration=30., has_built_in_acceleration=False, speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226)),
+    Train('S-Bahn', address=48, acceleration=20., has_built_in_acceleration=False, stop_by_mm1_reverse=True, speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136)),
     Train('Dampf-Lok', address=78, acceleration=30., speeds=(0, 0.1, 0.2, 0.3, 48, 80, 100, 110, 120, 140, 165, 180, 192, 202, 210)),
     Train('Diesel-Lok', address=72, acceleration=30., speeds=(0, 0.1, 1, 60, 100, 130, 150, 180, 187, 192, 197, 202, 207, 212, 217)),
 ]
