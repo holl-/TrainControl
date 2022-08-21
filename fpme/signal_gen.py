@@ -2,6 +2,7 @@ import threading
 import time
 from multiprocessing import Value, Process, Queue, Manager
 from ctypes import c_char_p
+from typing import List, Dict
 
 import serial
 from serial import SerialException
@@ -25,51 +26,57 @@ def _all_addresses():
 ALL_ADDRESSES = _all_addresses()
 
 
-class MaerklinProtocol:
+class RS232Protocol:
 
-    def velocity_packet(self, address: int, speed: int, reverse: bool, func: bool):
+    def status_packets(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool]) -> List[bytes]:
+        raise NotImplementedError
+
+    def turn_packet(self, address: int, functions: Dict[int, bool]) -> bytes or None:
+        raise NotImplementedError
+
+
+class Motorola1(RS232Protocol):
+
+    def status_packets(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool]) -> List[bytes]:
         """
-        Generate the bytes for RS-232 to send a Märklin-Motorola message to a locomotive.
+        MM1 only sends a velocity packet consisting of
 
-        :param reverse: whether train is in reverse mode
-        :param address: locomotive address between 1 and 80
-        :param func: whether the locomotive's primary function is active
-        :param speed: speed value: -14 to 14, 1 for direction change
-        :return: package bytes for RS-232
+        * Address (4 trits)
+        * Function 0 (1 trit)
+        * Speed between 0 and 14, (4 trits)
         """
         assert speed is None or 0 <= speed <= 14
+        f0 = functions.get(0, True)
         speed = speed + 1 if speed else speed  # keep 0 and None
-        packet = ALL_ADDRESSES[address] + (T[1] if func else T[0]) + self.velocity_bytes(speed, reverse)
-        return bytes(packet)
+        velocity_trits = T[speed & 1] + T[(speed >> 1) & 1] + T[(speed >> 2) & 1] + T[speed >> 3]
+        packet = ALL_ADDRESSES[address] + (T[1] if f0 else T[0]) + velocity_trits
+        return [bytes(packet)]
 
-    def velocity_bytes(self, speed: int, reverse: bool):
-        raise NotImplementedError()
-
-    def turn_packet(self, address: int, func: bool):
-        raise NotImplementedError()
-
-
-class Motorola1(MaerklinProtocol):
-
-    def velocity_bytes(self, speed: int, reverse: bool):
-        return T[speed & 1] + T[(speed >> 1) & 1] + T[(speed >> 2) & 1] + T[speed >> 3]
-
-    def turn_packet(self, address: int, func: bool):
+    def turn_packet(self, address: int, functions: Dict[int, bool]) -> bytes:
         """
         This packet indicates that a train should change direction.
 
-        :param address: locomotive address
-        :param func: whether the locomotive's primary function is active
         :return: package bytes for RS-232
         """
-        packet = ALL_ADDRESSES[address] + (T[1] if func else T[0]) + self.velocity_bytes(1, False)
+        f0 = functions.get(0, True)
+        packet = ALL_ADDRESSES[address] + (T[1] if f0 else T[0]) + T[1] + T[0] + T[0] + T[0]
         return bytes(packet)
 
 
-class Motorola2(MaerklinProtocol):
+class Motorola2(RS232Protocol):
+
+    def status_packets(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool]) -> List[bytes]:
+        assert speed is None or 0 <= speed <= 14
+        f0 = functions.get(0, True)
+        speed = speed + 1 if speed else speed  # keep 0 and None
+        velocity_packet = ALL_ADDRESSES[address] + (T[1] if f0 else T[0]) + self.velocity_bytes(speed, reverse)
+        packets = [velocity_packet]
+        for function, status in functions.items():
+            if function > 0:
+                packets.append(self.function_bytes(speed, function, status))
+        return [bytes(p) for p in packets]
 
     def velocity_bytes(self, speed: int, reverse: bool):
-        print(speed, reverse)
         if speed is None:
             bits = 1, 1, 0, 0, 0, 0, 0, 0
             return tuple(0 if b else 63 for b in bits)
@@ -120,7 +127,7 @@ class Motorola2(MaerklinProtocol):
         bits = [speed & 1, b2, (speed >> 1) & 1, b4, (speed >> 2) & 1, b6, speed >> 3, b8]
         return tuple(0 if b else 63 for b in bits)
 
-    def turn_packet(self, address: int, func: bool):
+    def turn_packet(self, address: int, functions: Dict[int, bool]) -> None:
         return None
 
 
@@ -135,8 +142,8 @@ class ProcessSpawningGenerator:
         self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited, self._error_message))
         self._process.start()
 
-    def set(self, address: int, speed: int or None, reverse: bool, func: bool, protocol: MaerklinProtocol = None):
-        self._queue.put(('set', address, speed, reverse, func, protocol))
+    def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
+        self._queue.put(('set', address, speed, reverse, functions, protocol))
 
     def start(self):
         self._queue.put(('start',))
@@ -180,8 +187,7 @@ class SignalGenerator:
         self._packets = {}
         self._turn_packets = {}
         self._turn_addresses = []
-        self.immediate_repetitions = 2
-        self._idle_packet = self.protocol.velocity_packet(80, 0, False, False)
+        self._idle_packet = self.protocol.status_packets(80, 0, False, {})
         self._override_protocols = {}
         self._short_circuited = short_circuited
         self._error_message = error_message
@@ -212,7 +218,7 @@ class SignalGenerator:
                 self._error_message.value = str(exc)
 
 
-    def set(self, address: int, speed: int or None, reverse: bool, func: bool, protocol: MaerklinProtocol = None):
+    def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
         assert 0 < address < 80
         assert speed is None or 0 <= speed <= 14
         if protocol is None and address in self._override_protocols:
@@ -221,9 +227,9 @@ class SignalGenerator:
             self._override_protocols[address] = protocol
         if address in self._data and self._data[address][1] != reverse:
             self._turn_addresses.append(address)
-        self._data[address] = (speed, reverse, func)
-        self._packets[address] = (protocol or self.protocol).velocity_packet(address, speed, reverse, func)
-        self._turn_packets[address] = (protocol or self.protocol).turn_packet(address, func)
+        self._data[address] = (speed, reverse, functions)
+        self._packets[address] = (protocol or self.protocol).status_packets(address, speed, reverse, functions)
+        self._turn_packets[address] = (protocol or self.protocol).turn_packet(address, functions)
 
     def start(self):
         # assert not self._active.value  # ToDo this breaks the app sometimes
@@ -249,14 +255,15 @@ class SignalGenerator:
             # Send data on serial port
             if not self._data:
                 self._send(self._idle_packet)
-            for address, vel_packet in dict(self._packets).items():
+            for address, status_packets in dict(self._packets).items():
                 if address in self._turn_addresses:
                     self._turn_addresses.remove(address)
                     if self._turn_packets[address] is not None:
                         for _rep in range(2):
                             self._send(self._turn_packets[address])
-                for _rep in range(self.immediate_repetitions):
-                    self._send(vel_packet)
+                for packet in status_packets:
+                    for _rep in range(2):  # Send each packet twice, else trains will ignore it
+                        self._send(packet)
 
     def _send(self, packet):
         self._ser.write(packet)
@@ -269,11 +276,12 @@ class SignalGenerator:
 if __name__ == '__main__':
     gen = ProcessSpawningGenerator('COM5')
     gen.start()
+    for i in range(10):
+        for f in range(5):
+            gen.set(1, 5, False, {i: i == f for i in range(5)})
+            print(f"Function {f}")
+            time.sleep(5)
+    # time.sleep(10)
+    # gen.set(1, 0, True, {})
+
     # gen.set(24, 7, False, False, protocol=Motorola1())  # E-Lok (DB)
-    gen.set(1, 14, False, False)
-    time.sleep(10)
-    gen.set(1, 0, True, False)
-    # for i in range(1000):
-    #     # time.sleep(1)
-    #     gen.set(78, int(input()), False, False)
-    #     print(f"Short-circuited (CTS): {gen._short_circuited.value}")
