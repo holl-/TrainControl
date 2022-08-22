@@ -90,7 +90,12 @@ def build_control():
         ]),
         html.Div([], style={'display': 'inline-block', 'width': 40, 'height': 1, 'vertical-align': 'top'}),
         html.Div(style={'display': 'inline-block', 'vertical-align': 'top', 'height': 290}, children=[
-            daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=False, size=290),
+            html.Div(style={'width': '100%', 'height': '100%', 'position': 'relative'}, children=[
+                html.Div(style={'width': '100%', 'height': '100%', 'overflow': 'hidden'}, children=[
+                    daq.Gauge(id='speed', value=0, label='Zug - Richtung', max=250, min=0, units='km/h', showCurrentValue=False, size=280),
+                ]),
+                html.Img(src=f'assets/?.png', id='train-image', style={}),
+            ]),
         ]),
         html.Div(style={'display': 'inline-block', 'width': 60, 'height': 310, 'vertical-align': 'top'}, children=[
             dcc.Slider(id='speed-control', min=0, max=10, step=None, value=0, marks={0: '', 100: '', 200: ''}, updatemode='drag', vertical=True, verticalHeight=310),
@@ -213,6 +218,7 @@ def hide_welcome(*n_clicks):
                Output('speed-control', 'max'), Output('speed-control', 'marks'),  # Speedometer settings
                Output('power-status-store', 'data'),
                Output('acceleration-store', 'data'),
+               Output('train-image', 'src'), Output('train-image', 'style'),
                Output('set-switches-C', 'disabled'), Output('set-switches-B', 'disabled'), Output('set-switches-A', 'disabled'), ],
               [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
                Input('power-off', 'n_clicks'), Input('power-on', 'n_clicks'),
@@ -286,6 +292,14 @@ def main_update(user_id, *args):
 
     incoming = get_incoming(client.train) if client.train else 'Any'
 
+    if client.train:
+        image = f"assets/{client.train.image_path}"
+        w, h = client.train.fit_image_size(120, 40)
+        image_style = {'width': w, 'height': h, 'position': 'absolute', 'top': '90%', 'left': 290/2 - w/2 + 10}
+    else:
+        image = '?'
+        image_style = {}
+
     return [
         ({} if client.train is not None else {'display': 'none'}),
         label,
@@ -298,6 +312,7 @@ def main_update(user_id, *args):
         marks,
         trains.is_power_on(),
         client.train.acceleration if client.train else -1.,
+        image, image_style,
         not (switches.can_set(incoming, 'C') or is_admin), not (switches.can_set(incoming, 'B') or is_admin), not (switches.can_set(incoming, 'A') or is_admin)
     ]
 
