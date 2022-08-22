@@ -79,12 +79,13 @@ welcome_layout = html.Div(id='welcome', children=[
 
 def build_control():
     return html.Div(style={}, children=[
-        html.Div(style={'display': 'inline-block', 'width': 120, 'height': 300, 'vertical-align': 'top'}, children=[
+        html.Div(style={'display': 'inline-block', 'width': 100, 'height': 280, 'vertical-align': 'top'}, children=[
             html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '40%'}, children=[
                 html.Button('⌁', id='power-on', style={'width': '100%', 'height': '100%', 'font-size': '66px'}, disabled=True),  # ⌁⚡
             ]),
+            html.Div([], style={'width': 1, 'height': 10}),
             html.Div(style={'display': 'inline-block', 'width': '100%', 'height': '60%'}, children=[
-                html.Button('⚠', id='power-off', style={'width': '100%', 'height': '100%', 'font-size': '66px', 'background-color': '#cc0000', 'color': 'white'}),
+                html.Button('⚠', id='power-off', style={'width': '100%', 'height': '100%', 'font-size': '58px', 'background-color': '#cc0000', 'color': 'white'}),
             ]),
         ]),
         html.Div([], style={'display': 'inline-block', 'width': 40, 'height': 1, 'vertical-align': 'top'}),
@@ -122,18 +123,9 @@ def build_control():
         dcc.Store('needle-velocity', data=0),
     ])
 
-
-TRAIN_LABELS = {  # 🚄 🚅 🚂 🛲 🚉 🚆 🚋 🚇
-    'ICE': "🚅 ICE",
-    'E-Lok (DB)': "🚉 RB (DB)",
-    'E-Lok (BW)': "🚉 RE (BW)",
-    'S-Bahn': "Ⓢ Bahn",
-    'Dampf-Lok': "🚂 Dampf",
-    'Diesel-Lok': "🛲 Diesel",
-}
 switch_trains = html.Div([
-    html.Div([], style={'display': 'inline-block', 'width': 70, 'height': 10}),
-    *[html.Button(TRAIN_LABELS[train.name], id=f'switch-to-{train.name}', disabled=True) for train in trains.TRAINS],
+    html.Div([], style={'display': 'inline-block', 'width': 20, 'height': 10}),
+    *[html.Button([html.Img(src=f'assets/{train.image_path}', style={d: s for d, s in zip(['width', 'height'], train.fit_image_size(60, 20))}), train.name], id=f'switch-to-{train.name}', disabled=True) for train in trains.TRAINS],
     html.Div([], style={'display': 'inline-block', 'width': 10, 'height': 10}),
     html.Button("🚪⬏", id='release-train', disabled=True)  # Aussteigen
 ])
@@ -145,10 +137,11 @@ admin_controls = [
     html.Button("Beenden", id='admin-kill'),
     dcc.Markdown("# Status", id='admin-status'),
     dcc.Checklist(id='admin-checklist', labelStyle=dict(display='block'), options=[
-        {'label': "Geschwindigkeitsbeschränkung auf 120 km/h", 'value': 'global-speed-limit'},
+        {'label': "Max 120 km/h", 'value': 'global-speed-limit'},
         {'label': "Züge haben Wagen", 'value': 'train-cars'},
-        {'label': "Fahrplan-Modus (Nur benötigte Weichen schalten)", 'value': 'schedule-mode'},
+        # {'label': "Fahrplan-Modus (Nur benötigte Weichen schalten)", 'value': 'schedule-mode'},
         {'label': "Weichen sperren", 'value': 'lock-all-switches'},
+        {'label': "Lichter an", 'value': 'lights-on'},
     ]),
 ]
 for train in trains.TRAINS:
@@ -267,7 +260,7 @@ def main_update(user_id, *args):
     if client.train is None:
         label = " "
     else:
-        train_name = TRAIN_LABELS[client.train.name]
+        train_name = f"{client.train.name}"  # {client.train.icon}
         label = "◀ " + train_name if client.train.in_reverse else train_name + " ▶"
     if not trains.is_power_on():
         label += " ⚡"  # Kein Strom  ⚡⌁
@@ -484,17 +477,17 @@ def get_ip():
 
 
 def get_incoming(train: trains.Train):
-    if _SCHEDULE_MODE:
-        return {
-            'ICE': 'Blue',
-            'E-Lok (DB)': 'Any',
-            'E-Lok (BW)': 'Any',
-            'S-Bahn': 'Yellow',
-            'Dampf-Lok': 'Yellow',
-            'Diesel-Lok': 'Yellow',
-        }[train.name]
-    else:
-        return 'Any'
+    # if _SCHEDULE_MODE:
+    #     return {
+    #         'ICE': 'Blue',
+    #         'E-Lok (DB)': 'Any',
+    #         'E-Lok (BW)': 'Any',
+    #         'S-Bahn': 'Yellow',
+    #         'Dampf-Lok': 'Yellow',
+    #         'Diesel-Lok': 'Yellow',
+    #     }[train.name]
+    # else:
+    return 'Any'
 
 
 LOCAL_IP = get_ip()
