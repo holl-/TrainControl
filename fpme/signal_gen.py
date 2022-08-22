@@ -144,6 +144,12 @@ class ProcessSpawningGenerator:
         self._process.start()
 
     def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
+        assert isinstance(address, int)
+        assert isinstance(speed, int) or speed is None
+        assert isinstance(reverse, bool)
+        assert isinstance(functions, dict), "functions must be a Dict[int, bool]"
+        assert all(isinstance(f, int) for f in functions.keys()), "functions must be a Dict[int, bool]"
+        assert all(isinstance(v, bool) for v in functions.values()), "functions must be a Dict[int, bool]"
         self._queue.put(('set', address, speed, reverse, functions, protocol))
 
     def start(self):
