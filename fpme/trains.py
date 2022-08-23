@@ -1,12 +1,26 @@
 import math
 import time
 import warnings
+from collections import namedtuple
+from dataclasses import dataclass
 from typing import Tuple
 
 import numpy
 
 from helper import schedule_at_fixed_rate
 from fpme import signal_gen
+
+
+@dataclass
+class TrainFunction:
+    name: str
+    id: int
+    default_status: bool
+    switch_on_at_night: bool
+
+
+LIGHT = TrainFunction('Licht', 0, False, True)
+INSTANT_ACCELERATION = TrainFunction("Instantane Beschleunigung", 4, True, False)
 
 
 class Train:
@@ -21,7 +35,8 @@ class Train:
                  protocol=None,
                  stop_by_mm1_reverse=False,
                  image: Tuple[str, int, int] = ("", -1, -1),
-                 directional_image: Tuple[str, int, int] = None):
+                 directional_image: Tuple[str, int, int] = None,
+                 functions: Tuple[TrainFunction, ...] = (LIGHT,)):
         assert len(speeds) == 15, len(speeds)
         # Properties
         self.name: str = name
@@ -35,6 +50,7 @@ class Train:
         self.stop_by_mm1_reverse = stop_by_mm1_reverse
         self.image: Tuple[str, int, int] = image
         self.directional_image = directional_image
+        self.functions = functions
         # State
         self._speed_factor = 1.  # 1 = unencumbered, 0 = cannot move
         self.admin_only = False
@@ -179,6 +195,7 @@ class Train:
             return self.image[1] * max_height / self.image[2], max_height
 
 
+
 TRAINS = [
     Train('ICE', "🚅",
           address=60,
@@ -198,6 +215,11 @@ TRAINS = [
           has_built_in_acceleration=False,
           image=("E-Lok BW.png", 284, 103),
           directional_image=("E-Lok BW right.png", 284, 103),
+          functions=(LIGHT,
+                     TrainFunction("Innenbeleuchtung", 1, False, True),
+                     TrainFunction("Motor", 2, False, False),
+                     TrainFunction("Horn", 3, False, False),
+                     TrainFunction("Direktsteuerung", 4, True, False)),
           speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226)),
     Train('S', "Ⓢ",
           address=48,
@@ -205,6 +227,10 @@ TRAINS = [
           has_built_in_acceleration=False,
           stop_by_mm1_reverse=True,
           image=("S-Bahn.png", 210, 71),
+          functions=(LIGHT,
+                     TrainFunction("Nebelscheinwerfer", 2, False, False),
+                     TrainFunction("Fahrtlicht hinten", 3, False, False),
+                     INSTANT_ACCELERATION),
           speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136)),
     Train('Dampf', "🚂",
           address=78,
@@ -217,7 +243,6 @@ TRAINS = [
           image=("Diesel.png", 287, 127),
           speeds=(0, 0.1, 1, 60, 100, 130, 150, 180, 187, 192, 197, 202, 207, 212, 217)),
 ]
-
 
 def get_by_name(train_name):
     for train in TRAINS:
