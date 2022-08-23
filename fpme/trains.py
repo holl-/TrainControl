@@ -20,7 +20,8 @@ class Train:
                  has_built_in_acceleration=False,
                  protocol=None,
                  stop_by_mm1_reverse=False,
-                 image: Tuple[str, int, int] = ("", -1, -1)):
+                 image: Tuple[str, int, int] = ("", -1, -1),
+                 directional_image: Tuple[str, int, int] = None):
         assert len(speeds) == 15, len(speeds)
         # Properties
         self.name: str = name
@@ -33,6 +34,7 @@ class Train:
         self.acceleration: float = acceleration
         self.stop_by_mm1_reverse = stop_by_mm1_reverse
         self.image: Tuple[str, int, int] = image
+        self.directional_image = directional_image
         # State
         self._speed_factor = 1.  # 1 = unencumbered, 0 = cannot move
         self.admin_only = False
@@ -161,6 +163,10 @@ class Train:
         return self.image[0]
 
     @property
+    def directional_image_path(self):
+        return self.directional_image[0] if self.directional_image is not None else self.image_path
+
+    @property
     def image_resolution(self):
         return self.image[1], self.image[2]
 
@@ -184,12 +190,14 @@ TRAINS = [
           acceleration=30.,
           protocol=signal_gen.Motorola1(),
           image=("E-Lok DB.png", 343, 113),
+          directional_image=("E-Lok DB right.png", 343, 113),
           speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 183)),
     Train('RE', "🚉",
           address=1,
           acceleration=30.,
           has_built_in_acceleration=False,
           image=("E-Lok BW.png", 284, 103),
+          directional_image=("E-Lok BW right.png", 284, 103),
           speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226)),
     Train('S', "Ⓢ",
           address=48,

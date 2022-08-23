@@ -266,8 +266,8 @@ def main_update(user_id, *args):
     if client.train is None:
         label = " "
     else:
-        train_name = f"{client.train.name}"  # {client.train.icon}
-        label = "◀ " + train_name if client.train.in_reverse else train_name + " ▶"
+        # train_name = f"{client.train.name}"  # {client.train.icon}
+        label = client.train.name  # "◀ " + train_name if client.train.in_reverse else train_name + " ▶"
     if not trains.is_power_on():
         label += " ⚡"  # Kein Strom  ⚡⌁
 
@@ -293,9 +293,11 @@ def main_update(user_id, *args):
     incoming = get_incoming(client.train) if client.train else 'Any'
 
     if client.train:
-        image = f"assets/{client.train.image_path}"
+        image = f"assets/{client.train.directional_image_path}"
         w, h = client.train.fit_image_size(120, 40)
         image_style = {'width': w, 'height': h, 'position': 'absolute', 'top': '90%', 'left': 290/2 - w/2 + 10}
+        if client.train.in_reverse:
+            image_style.update({'-webkit-transform': 'scaleX(-1)', 'transform': 'scaleX(-1)'})
     else:
         image = '?'
         image_style = {}
