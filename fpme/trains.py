@@ -1,26 +1,12 @@
 import math
 import time
 import warnings
-from collections import namedtuple
-from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Callable
 
 import numpy
 
 from helper import schedule_at_fixed_rate
-from fpme import signal_gen
-
-
-@dataclass
-class TrainFunction:
-    name: str
-    id: int
-    default_status: bool
-    switch_on_at_night: bool
-
-
-LIGHT = TrainFunction('Licht', 0, False, True)
-INSTANT_ACCELERATION = TrainFunction("Instantane Beschleunigung", 4, True, False)
+from . import signal_gen
 
 
 class Train:
@@ -35,8 +21,7 @@ class Train:
                  protocol=None,
                  stop_by_mm1_reverse=False,
                  image: Tuple[str, int, int] = ("", -1, -1),
-                 directional_image: Tuple[str, int, int] = None,
-                 functions: Tuple[TrainFunction, ...] = (LIGHT,)):
+                 directional_image: Tuple[str, int, int] = None):
         assert len(speeds) == 15, len(speeds)
         # Properties
         self.name: str = name
@@ -50,8 +35,11 @@ class Train:
         self.stop_by_mm1_reverse = stop_by_mm1_reverse
         self.image: Tuple[str, int, int] = image
         self.directional_image = directional_image
-        self.functions = functions
+        self.on_post_update: Callable = None
         # State
+        self._cumulative_signed_distance = 0.  # mm / s
+        self._cumulative_abs_distance = 0.
+        self._dst_measured_time = time.perf_counter()
         self._speed_factor = 1.  # 1 = unencumbered, 0 = cannot move
         self.admin_only = False
         self._limit = None
@@ -105,16 +93,29 @@ class Train:
         if not is_power_on():
             self._speed = 0
             return
-        if self._target_speed == self._speed:
-            return
-        acceleration = self.acceleration if abs(self._target_speed) > abs(self._speed) else self.acceleration * 2
-        if self._target_speed > self._speed:
-            self._speed = min(self._speed + acceleration * dt, self._target_speed)
-        else:
-            self._speed = max(self._speed - acceleration * dt, self._target_speed)
+        if self._target_speed != self._speed:
+            acceleration = self.acceleration if abs(self._target_speed) > abs(self._speed) else self.acceleration * 2
+            if self._target_speed > self._speed:
+                self._speed = min(self._speed + acceleration * dt, self._target_speed)
+            else:
+                self._speed = max(self._speed - acceleration * dt, self._target_speed)
         self._update_signal()
+        if self.on_post_update:
+            self.on_post_update()
+
+    def _accumualte_distance(self):
+        speed_level, in_reverse, _ = self._broadcasting_state
+        if speed_level is None:
+            return
+        t = time.perf_counter()
+        dt = t - self._dst_measured_time
+        distance_driven = self.speeds[speed_level] / 3.6 * 1000 * dt / 87  # mm/s
+        self._cumulative_abs_distance += distance_driven
+        self._cumulative_signed_distance += distance_driven * (-1 if self._broadcasting_state[1] else 1)
+        self._dst_measured_time = t
 
     def _update_signal(self):
+        self._accumualte_distance()
         target_level = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
         if self.has_built_in_acceleration:
             speed_level = target_level
@@ -195,54 +196,18 @@ class Train:
             return self.image[1] * max_height / self.image[2], max_height
 
 
-
 TRAINS = [
-    Train('ICE', "🚅",
-          address=60,
+    Train('GTO', "Ⓢ",
+          address=1,
           acceleration=40.,
-          image=("ICE.png", 237, 124),
           speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288)),
-    Train('RB', "🚉",
-          address=24,
+    Train('IGBT', "Ⓢ",
+          address=2,
           acceleration=30.,
           protocol=signal_gen.Motorola1(),
-          image=("E-Lok DB.png", 343, 113),
-          directional_image=("E-Lok DB right.png", 343, 113),
           speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 183)),
-    Train('RE', "🚉",
-          address=1,
-          acceleration=30.,
-          has_built_in_acceleration=False,
-          image=("E-Lok BW.png", 284, 103),
-          directional_image=("E-Lok BW right.png", 284, 103),
-          functions=(LIGHT,
-                     TrainFunction("Innenbeleuchtung", 1, False, True),
-                     TrainFunction("Motor", 2, False, False),
-                     TrainFunction("Horn", 3, False, False),
-                     TrainFunction("Direktsteuerung", 4, True, False)),
-          speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226)),
-    Train('S', "Ⓢ",
-          address=48,
-          acceleration=20.,
-          has_built_in_acceleration=False,
-          stop_by_mm1_reverse=True,
-          image=("S-Bahn.png", 210, 71),
-          functions=(LIGHT,
-                     TrainFunction("Nebelscheinwerfer", 2, False, False),
-                     TrainFunction("Fahrtlicht hinten", 3, False, False),
-                     INSTANT_ACCELERATION),
-          speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136)),
-    Train('Dampf', "🚂",
-          address=78,
-          acceleration=30.,
-          image=("Dampf.png", 402, 146),
-          speeds=(0, 0.1, 0.2, 0.3, 48, 80, 100, 110, 120, 140, 165, 180, 192, 202, 210)),
-    Train('Diesel', "🛲",
-          address=72,
-          acceleration=30.,
-          image=("Diesel.png", 287, 127),
-          speeds=(0, 0.1, 1, 60, 100, 130, 150, 180, 187, 192, 197, 202, 207, 212, 217)),
 ]
+
 
 def get_by_name(train_name):
     for train in TRAINS:
@@ -279,7 +244,7 @@ def update_trains(dt):  # repeatedly called from setup()
         for train in TRAINS:
             train._update(dt)
     except Exception as exc:
-        warnings.warn(f"Exception in update_trains(): {exc}")
+        warnings.warn(f"Exception in update_trains(): {exc}", RuntimeWarning)
 
 
 TRAIN_UPDATE_PERIOD = 0.1
@@ -297,12 +262,3 @@ def set_global_speed_limit(limit: float or None):
     for train in TRAINS:
         train.set_speed_limit(limit)
 
-
-def set_train_cars_connected(train_cars):
-    if train_cars:
-        # get_by_name('ICE').set_speed_factor(288 / 300)
-        get_by_name('Dampf-Lok').set_speed_factor(106 / 210)
-        get_by_name('Diesel-Lok').set_speed_factor(166 / 210)
-    else:
-        for train in TRAINS:
-            train.set_speed_factor(1)

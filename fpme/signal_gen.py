@@ -2,7 +2,7 @@ import threading
 import time
 from multiprocessing import Value, Process, Queue, Manager
 from ctypes import c_char_p
-from typing import List, Dict
+from typing import List, Dict, Callable
 
 import serial
 from serial import SerialException
@@ -11,6 +11,8 @@ from serial import SerialException
 T = TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
 # 1 trit = 2 bits
 # Every bit starts with a rising flank, 1 stays up, 0 goes down
+
+RS232_INPUT_PINS = ('CTS', 'CD', 'RI', 'DSR')
 
 
 def _all_addresses():
@@ -139,9 +141,14 @@ class ProcessSpawningGenerator:
         self._active = Value('b', False)
         self._short_circuited = Value('b', False)
         self._error_message = manager.Value(c_char_p, "")
-        self._queue = Queue()
-        self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited, self._error_message))
+        self._control_queue = Queue()
+        self._input_queue = Queue()
+        self._process = Process(target=setup_generator, args=(serial_port, self._control_queue, self._input_queue, self._active, self._short_circuited, self._error_message))
         self._process.start()
+        self._activated_callbacks = {pin: [] for pin in RS232_INPUT_PINS}
+        self._deactivated_callbacks = {pin: [] for pin in RS232_INPUT_PINS}
+        self._events = []
+        self._start_callback_dispatch_thread()
 
     def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
         assert isinstance(address, int)
@@ -150,10 +157,10 @@ class ProcessSpawningGenerator:
         assert isinstance(functions, dict), "functions must be a Dict[int, bool]"
         assert all(isinstance(f, int) for f in functions.keys()), "functions must be a Dict[int, bool]"
         assert all(isinstance(v, bool) for v in functions.values()), "functions must be a Dict[int, bool]"
-        self._queue.put(('set', address, speed, reverse, functions, protocol))
+        self._control_queue.put(('set', address, speed, reverse, functions, protocol))
 
     def start(self):
-        self._queue.put(('start',))
+        self._control_queue.put(('start',))
 
     def stop(self):
         self._active.value = False
@@ -161,6 +168,37 @@ class ProcessSpawningGenerator:
     @property
     def is_sending(self):
         return bool(self._active.value) and not bool(self._short_circuited.value)
+
+    def on_activated(self, pin: str, callback: Callable):
+        self._activated_callbacks[pin].append(callback)
+
+    def on_deactivated(self, pin: str, callback: Callable):
+        self._deactivated_callbacks[pin].append(callback)
+
+    # def _start_callback_dispatch_thread(self):
+    #     def call_f_on_change():
+    #         while True:
+    #             pin, value = self._input_queue.get(block=True)
+    #             if value:
+    #                 for listener in self._activated_callbacks.get(pin, []):
+    #                     listener()
+    #                 for pins, event in self._events:
+    #                     if pin in pins:
+    #                         event.set()
+    #             else:
+    #                 for listener in self._deactivated_callbacks.get(pin, []):
+    #                     listener()
+    #     threading.Thread(target=call_f_on_change).start()
+
+    def await_activated(self, pins: List[str], timeout: float):
+        timeout_time = time.perf_counter() + timeout
+        while True:
+            pin, value = self._input_queue.get(block=True, timeout=timeout_time - time.perf_counter())
+            if pin in pins and value:
+                return pin
+        # event = threading.Event()
+        # self._events.append((pins, event))
+        # event.wait()
 
     def terminate(self):
         self._process.terminate()
@@ -178,17 +216,18 @@ class ProcessSpawningGenerator:
         return bool(self._error_message.value)
 
 
-def setup_generator(serial_port: str, queue: Queue, active: Value, short_circuited: Value, error_message: Value):
-    gen = SignalGenerator(serial_port, active, short_circuited, error_message)
+def setup_generator(serial_port: str, command_queue: Queue, input_queue: Queue, active: Value, short_circuited: Value, error_message: Value):
+    gen = SignalGenerator(input_queue, serial_port, active, short_circuited, error_message)
     while True:
-        cmd = queue.get(block=True)
+        cmd = command_queue.get(block=True)
         getattr(gen, cmd[0])(*cmd[1:])
 
 
 class SignalGenerator:
 
-    def __init__(self, serial_port: str, active: Value, short_circuited: Value, error_message: Value):
+    def __init__(self, input_queue: Queue, serial_port: str, active: Value, short_circuited: Value, error_message: Value):
         self.protocol = Motorola2()
+        self._input_queue = input_queue
         self._active = active
         self._data = {}  # address -> (speed, reverse, func)
         self._packets = {}
@@ -199,7 +238,6 @@ class SignalGenerator:
         self._short_circuited = short_circuited
         self._error_message = error_message
         self.stop_on_short_circuit = True
-        self.on_short_circuit = lambda: print("Short circuit detected")  # function without parameters
         self._time_started_sending = None  # wait a bit before detecting short circuits
         self._ser = None
         if serial_port:
@@ -211,6 +249,10 @@ class SignalGenerator:
                                     dsrdtr=False,  # no flow control
                                     )
                 self._ser = ser
+                self._cts = ser.getCTS()
+                self._dsr = ser.getDSR()
+                self._cd = ser.getCD()
+                self._ri = ser.getRI()
             except SerialException as exc:
                 print(exc)
                 self._error_message.value = str(exc)
@@ -250,11 +292,19 @@ class SignalGenerator:
                 # print(f"Here be signal: {self._packets}")
                 time.sleep(0.5)
                 continue
-            short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
+            cts, cd, ri, dsr = self._ser.getCTS(), self._ser.getCD(), self._ser.getRI(), self._ser.getDSR()
+            if cts != self._cts:
+                self._input_queue.put(('CTS', cts))
+            if cd != self._cd:
+                self._input_queue.put(('CD', cd))
+            if ri != self._ri:
+                self._input_queue.put(('RI', ri))
+            if dsr != self._dsr:
+                self._input_queue.put(('DSR', dsr))
+            self._cts, self._cd, self._ri, self._dsr = cts, cd, ri, dsr
+            short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and cts  # 0.1 seconds to test for short circuits
             self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
             if self._short_circuited.value:
-                if newly_short_circuited and self.on_short_circuit is not None:
-                    self.on_short_circuit()
                 if self.stop_on_short_circuit:
                     self._active.value = False
                     return
