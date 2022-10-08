@@ -2,7 +2,7 @@ import threading
 import time
 from multiprocessing import Value, Process, Queue, Manager
 from ctypes import c_char_p
-from typing import List, Dict, Callable
+from typing import List, Dict, Callable, Any
 
 import serial
 from serial import SerialException
@@ -145,9 +145,7 @@ class ProcessSpawningGenerator:
         self._input_queue = Queue()
         self._process = Process(target=setup_generator, args=(serial_port, self._control_queue, self._input_queue, self._active, self._short_circuited, self._error_message))
         self._process.start()
-        self._activated_callbacks = {pin: [] for pin in RS232_INPUT_PINS}
-        self._deactivated_callbacks = {pin: [] for pin in RS232_INPUT_PINS}
-        self._events = []
+        self._listeners: Dict[Any, Queue] = {}
         self._start_callback_dispatch_thread()
 
     def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
@@ -169,36 +167,28 @@ class ProcessSpawningGenerator:
     def is_sending(self):
         return bool(self._active.value) and not bool(self._short_circuited.value)
 
-    def on_activated(self, pin: str, callback: Callable):
-        self._activated_callbacks[pin].append(callback)
+    def _start_callback_dispatch_thread(self):
+        def call_f_on_change():
+            while True:
+                pin, value = self._input_queue.get(block=True)
+                for queue in self._listeners.values():
+                    queue.put((pin, value), block=True)
+        threading.Thread(target=call_f_on_change).start()
 
-    def on_deactivated(self, pin: str, callback: Callable):
-        self._deactivated_callbacks[pin].append(callback)
-
-    # def _start_callback_dispatch_thread(self):
-    #     def call_f_on_change():
-    #         while True:
-    #             pin, value = self._input_queue.get(block=True)
-    #             if value:
-    #                 for listener in self._activated_callbacks.get(pin, []):
-    #                     listener()
-    #                 for pins, event in self._events:
-    #                     if pin in pins:
-    #                         event.set()
-    #             else:
-    #                 for listener in self._deactivated_callbacks.get(pin, []):
-    #                     listener()
-    #     threading.Thread(target=call_f_on_change).start()
-
-    def await_activated(self, pins: List[str], timeout: float):
+    def await_event(self, pins: List[str], states: List[bool], timeout: float, listener: Any):
+        queue = self._listeners[listener]
         timeout_time = time.perf_counter() + timeout
         while True:
-            pin, value = self._input_queue.get(block=True, timeout=timeout_time - time.perf_counter())
-            if pin in pins and value:
-                return pin
-        # event = threading.Event()
-        # self._events.append((pins, event))
-        # event.wait()
+            pin, value = queue.get(block=True, timeout=timeout_time - time.perf_counter())
+            if pin in pins and value in states:
+                return pin, value
+
+    def register(self, listener: Any):
+        queue = Queue()
+        self._listeners[listener] = queue
+
+    def unregister(self, listener: Any):
+        del self._listeners[listener]
 
     def terminate(self):
         self._process.terminate()

@@ -3,12 +3,13 @@ import os.path
 import time
 from dataclasses import dataclass
 from threading import Thread
-from typing import List
+from typing import List, Tuple
 
-from src import trains
-from src.helper import schedule_at_fixed_rate
+from fpme import trains
+from fpme.helper import schedule_at_fixed_rate
 
-HALF_TRAIN = 500.
+HALF_TRAIN = 366
+TRAIN_CONTACT = 195
 INNER = 4137.7
 OUTER = 5201.2
 INNER_CONNECTION = 565.5
@@ -118,8 +119,9 @@ class Controller:
         self._next_pause: float = None
         self._executing = False
         self._t_started_waiting = None
+        self._trip = None
 
-    def drive(self, target_position, pause: float or None, trip = ()):
+    def drive(self, target_position, pause: float or None, trip: List[Tuple[str, float]] = ()):
         """
         Blocks until previous operation finished.
 
@@ -135,7 +137,18 @@ class Controller:
         distance_mm = (target_position - self.position) * (1 if self.state.aligned else -1)  # distance from the train's orientation
         self._target_signed_distance = self.state.cumulative_signed_distance + distance_mm
         self._next_pause = pause
+        self._trip = list(trip)
+        trains.GENERATOR.register(self)
+        Thread(target=self._count_triggers).start()
         self.train.set_target_speed(math.copysign(1, distance_mm))
+
+    def _count_triggers(self):
+        assert isinstance(self._trip, list)
+        while self._trip:
+            pin = self._trip[0]
+            trains.GENERATOR.await_event([pin], [False], timeout=30, listener=self)
+            self._trip.pop(0)
+        trains.GENERATOR.unregister(self)
 
     @property
     def position(self):
@@ -209,7 +222,7 @@ def regular_round(pause=2.):
         IGBT.drive(O_AIRPORT, pause=pause)
         GTO.drive(I_ERDING, pause=pause)
         IGBT.drive(O_MUNICH, pause=pause, trip=[(OUTER_CONTACT, 4609)])
-        GTO.drive(I_MUNICH + INNER, pause=pause, trip=[(INNER_CONTACT, INNER + INNER_CONNECTION - HALF_TRAIN)])
+        GTO.drive(I_MUNICH + INNER, pause=pause, trip=[(INNER_CONTACT, INNER + INNER_CONNECTION - TRAIN_CONTACT)])
 
 
 def adjust_position_tripwire(pin: str, tripped: bool):
@@ -238,7 +251,13 @@ if __name__ == '__main__':
 
     trains.setup(None)
     trains.power_on()
+    #
+    # Thread(target=program).start()
+    # import plan_vis
+    # plan_vis.show([GTO, IGBT])
 
-    Thread(target=program).start()
-    import plan_vis
-    plan_vis.show([GTO, IGBT])
+    IGBT.train.set_target_speed(40)
+    trains.GENERATOR.register('0')
+    while True:
+        pin, state = trains.GENERATOR.await_event([OUTER_CONTACT], [False, True], timeout=30, listener='0')
+        print(f"{pin} -> {state}")
