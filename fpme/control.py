@@ -24,9 +24,9 @@ O_ERDING = 1595.6
 O_AIRPORT = 2565.4
 O_MUNICH = 4746.7
 
-INNER_CONTACT = 'CD'
-OUTER_CONTACT = 'RI'
-AIRPORT_CONTACT = 'DSR'
+OUTER_CONTACT = 'RI'  # contact 1 (red)
+INNER_CONTACT = 'DSR'  # contact 2 (yellow)
+AIRPORT_CONTACT = 'CD'  # contact 3 (green)
 
 
 @dataclass

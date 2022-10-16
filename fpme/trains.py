@@ -198,11 +198,11 @@ class Train:
 
 TRAINS = [
     Train('GTO', "Ⓢ",
-          address=1,
+          address=4,
           acceleration=40.,
           speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288)),
     Train('IGBT', "Ⓢ",
-          address=2,
+          address=4,
           acceleration=30.,
           protocol=signal_gen.Motorola1(),
           speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 183)),

@@ -22,8 +22,8 @@ LENGTHS = {
     # Switches
     # 611: ,  # 24188 and 24224
     # 612: ,  # 24188 and 24224
-    671: 188.5 + 77.5,  # Curved, use this only for the outer radius, inner = 24130, outer = 24130+24077
-    672: 188.5 + 77.5,
+    671: 266,  # Curved, use this only for the outer radius, inner = 24130, outer = 24130+24077
+    672: 266,  # 188.5 + 77.5
 }
 
 def compute_length(tracks: str or tuple or list):

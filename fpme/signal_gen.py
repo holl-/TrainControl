@@ -326,11 +326,12 @@ if __name__ == '__main__':
     # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
     # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
 
-    gen.set(1, 0, False, {4: True})
-    time.sleep(1)
-    gen.set(1, 11, False, {4: True})
-    time.sleep(3)
-    gen.set(1, 0, False, {4: True})
+    gen.set(78, 9, False, {})
+    # gen.set(4, 10, False, {})
+    # time.sleep(1)
+    # gen.set(1, 11, False, {4: True})
+    # time.sleep(3)
+    # gen.set(1, 0, False, {4: True})
     # for i in range(10):
     #     for f in [0, 1, 2, 3, 4]:
     #         gen.set(1, 5, False, {i: i == f for i in range(5)})
