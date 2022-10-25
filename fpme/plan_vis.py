@@ -1,14 +1,14 @@
 from typing import Iterable
 
-import control
-from control import State, update_state, OUTER_CONNECTION, OUTER, INTERIM, OUTER_UNTIL_SWITCH, HALF_TRAIN, INNER_CONNECTION, INNER
+import museum_control
+from museum_control import State, update_state, OUTER_CONNECTION, OUTER, INTERIM, OUTER_UNTIL_SWITCH, HALF_TRAIN, INNER_CONNECTION, INNER
 
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
 
-def show(trains: Iterable[control.Controller]):
+def show(trains: Iterable[museum_control.Controller]):
     img = mpimg.imread('Gleisplan v3.png')
     fig, ax = plt.subplots(1, 1)
     ax.imshow(img, extent=(-2.5, 194.5, -2, 195))
@@ -52,7 +52,3 @@ def get_position(state: State):
         ]
         P, X, Y = np.array(PXY).T
         return np.interp(p, P, X), np.interp(p, P, Y)
-
-
-if __name__ == '__main__':
-    show([control.GTO, control.IGBT])
