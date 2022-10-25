@@ -4,6 +4,7 @@ import warnings
 from typing import Tuple, Callable
 
 import numpy
+import numpy as np
 
 from helper import schedule_at_fixed_rate
 from . import signal_gen
@@ -32,6 +33,7 @@ class Train:
         self.locomotive_speeds = speeds  # unencumbered by cars
         self.has_built_in_acceleration: bool = has_built_in_acceleration
         self.acceleration: float = acceleration
+        self.deceleration: float = acceleration
         self.stop_by_mm1_reverse = stop_by_mm1_reverse
         self.image: Tuple[str, int, int] = image
         self.directional_image = directional_image
@@ -45,9 +47,14 @@ class Train:
         self._limit = None
         self._target_speed: float = 0.  # signed speed in kmh, -0 means parked in reverse
         self._speed: float = 0.  # signed speed in kmh
-        self._func_active = False
+        self.lights = True
+        self.sound = False
         self._emergency_stopping = False  # will be set to False when a new speed is set
-        self._broadcasting_state = (None, None, None)  # (speed_level: int, in_reverse: bool, func_active: bool)
+        self._broadcasting_state = (None, None, {})  # (speed_level: int, in_reverse: bool, func_active: bool)
+
+    def sound_on(self):
+        self.sound = True
+        self._update_signal()
 
     @property
     def target_speed(self):
@@ -94,7 +101,7 @@ class Train:
             self._speed = 0
             return
         if self._target_speed != self._speed:
-            acceleration = self.acceleration if abs(self._target_speed) > abs(self._speed) else self.acceleration * 2
+            acceleration = self.acceleration if abs(self._target_speed) > abs(self._speed) else self.deceleration
             if self._target_speed > self._speed:
                 self._speed = min(self._speed + acceleration * dt, self._target_speed)
             else:
@@ -128,21 +135,25 @@ class Train:
                 speed_level = max(speed_level, target_level)
             else:  # Equal
                 speed_level = target_level
-        new_state = (speed_level, self.currently_in_reverse, self._func_active)
+        new_state = (speed_level, self.currently_in_reverse, self._function_dict)
         if new_state != self._broadcasting_state:
             self._broadcasting_state = new_state
-            GENERATOR.set(self.address, speed_level, self.currently_in_reverse, {0: self._func_active}, protocol=self.protocol)
+            GENERATOR.set(self.address, speed_level, self.currently_in_reverse, self._function_dict, protocol=self.protocol)
+
+    @property
+    def _function_dict(self):
+        return {0: self.lights, 1: False, 2: self.sound, 3: False, 4: True}
 
     def emergency_stop(self):
         self._target_speed *= 0.
         self._speed *= 0.
         currently_in_reverse = self._broadcasting_state[1]
         if self.stop_by_mm1_reverse:
-            GENERATOR.set(self.address, None, False, {0: self._func_active}, protocol=self.protocol)
-            self._broadcasting_state = (0., False, self._func_active)
+            GENERATOR.set(self.address, None, False, self._function_dict, protocol=self.protocol)
+            self._broadcasting_state = (0, False, self._function_dict)
         else:
-            GENERATOR.set(self.address, 0, not currently_in_reverse, {0: self._func_active}, protocol=self.protocol)
-            self._broadcasting_state = (0., not currently_in_reverse, self._func_active)
+            GENERATOR.set(self.address, 0, not currently_in_reverse, self._function_dict, protocol=self.protocol)
+            self._broadcasting_state = (0, not currently_in_reverse, self._function_dict)
         self._emergency_stopping = True
 
     @property
@@ -198,14 +209,14 @@ class Train:
 
 TRAINS = [
     Train('GTO', "Ⓢ",
-          address=4,
-          acceleration=40.,
-          speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288)),
-    Train('IGBT', "Ⓢ",
-          address=4,
-          acceleration=30.,
-          protocol=signal_gen.Motorola1(),
-          speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 183)),
+          address=5,
+          acceleration=10.,
+          speeds=tuple(np.linspace(0, 100, 15))),
+# Functions: 2: sound, 3: horn, 4: instant acceleration
+    Train('IGBT', "Ⓢ",  # includes sound
+          address=6,
+          acceleration=4.,
+          speeds=(0, 5, 12, 18, 23, 30.8, 38.7, 46.2, 54.3, 62.0, 70.3, 78.1, 85.3, 93.4, 100.6)),
 ]
 
 
@@ -240,11 +251,11 @@ def destroy():
 
 
 def update_trains(dt):  # repeatedly called from setup()
-    try:
+    # try:
         for train in TRAINS:
             train._update(dt)
-    except Exception as exc:
-        warnings.warn(f"Exception in update_trains(): {exc}", RuntimeWarning)
+    # except Exception as exc:
+    #     warnings.warn(f"Exception in update_trains(): {exc}", RuntimeWarning)
 
 
 TRAIN_UPDATE_PERIOD = 0.1

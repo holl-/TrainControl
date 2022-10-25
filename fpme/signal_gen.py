@@ -1,5 +1,6 @@
 import threading
 import time
+import uuid
 from multiprocessing import Value, Process, Queue, Manager
 from ctypes import c_char_p
 from typing import List, Dict, Callable, Any
@@ -155,6 +156,7 @@ class ProcessSpawningGenerator:
         assert isinstance(functions, dict), "functions must be a Dict[int, bool]"
         assert all(isinstance(f, int) for f in functions.keys()), "functions must be a Dict[int, bool]"
         assert all(isinstance(v, bool) for v in functions.values()), "functions must be a Dict[int, bool]"
+        # print(f"Sending {address}: {speed}\t  {functions}")
         self._control_queue.put(('set', address, speed, reverse, functions, protocol))
 
     def start(self):
@@ -175,12 +177,18 @@ class ProcessSpawningGenerator:
                     queue.put((pin, value), block=True)
         threading.Thread(target=call_f_on_change).start()
 
-    def await_event(self, pins: List[str], states: List[bool], timeout: float, listener: Any):
+    def await_event(self, pins: List[str], states: List[bool], timeout: float = None, listener: Any = None):
+        single_use_listener = listener is None
+        if single_use_listener:
+            listener = uuid.uuid4()
+            self.register(listener)
         queue = self._listeners[listener]
-        timeout_time = time.perf_counter() + timeout
+        timeout_time = time.perf_counter() + timeout if timeout is not None else None
         while True:
-            pin, value = queue.get(block=True, timeout=timeout_time - time.perf_counter())
+            pin, value = queue.get(block=True, timeout=None if timeout_time is None else timeout_time - time.perf_counter())
             if pin in pins and value in states:
+                if single_use_listener:
+                    self.unregister(listener)
                 return pin, value
 
     def register(self, listener: Any):
@@ -322,11 +330,15 @@ class SignalGenerator:
 
 if __name__ == '__main__':
     gen = ProcessSpawningGenerator('COM5')
-    gen.start()
     # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
     # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
 
-    gen.set(78, 9, False, {})
+    # gen.set(4, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    # gen.set(5, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    # gen.set(6, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    gen.set(5, 8, False, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    gen.start()
+
     # gen.set(4, 10, False, {})
     # time.sleep(1)
     # gen.set(1, 11, False, {4: True})

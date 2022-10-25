@@ -1,5 +1,6 @@
 import math
 import os.path
+import queue
 import time
 from dataclasses import dataclass
 from threading import Thread
@@ -145,8 +146,10 @@ class Controller:
     def _count_triggers(self):
         assert isinstance(self._trip, list)
         while self._trip:
-            pin = self._trip[0]
-            trains.GENERATOR.await_event([pin], [False], timeout=30, listener=self)
+            pin, position = self._trip[0]
+            print(f"{self.train} waiting for {pin}")
+            trains.GENERATOR.await_event([pin], [False], timeout=60, listener=self)
+            print(f"{self.train} triggered {pin}")
             self._trip.pop(0)
         trains.GENERATOR.unregister(self)
 
@@ -155,11 +158,17 @@ class Controller:
         return self.state.position
 
     def _update(self):
+        if not self._executing:
+            return
         self.state = update_state(self.state, self.train._cumulative_signed_distance)
+        print(self.train._cumulative_signed_distance)
         # print(self.state)
         if self._target_signed_distance is None:
-            self.train.set_target_speed(0)
-            self._executing = False
+            if not self._trip:
+                self.train.set_target_speed(0)
+                self._executing = False
+            else:
+                self.train.set_target_speed(50)
         elif not self.train.in_reverse and self.train._cumulative_signed_distance > self._target_signed_distance:
             self._break_wait()
         elif self.train.in_reverse and self.train._cumulative_signed_distance < self._target_signed_distance:
@@ -188,24 +197,67 @@ class Controller:
 
 
 def program():
-    # Move trains to initial position
-    if GTO.position == float('nan'):  # no log file
-        # if INNER_CONTACT on, GTO must be on inner, around -?.
-        # if outer on, check which train it is.
-        # can only test this with actual hardware
-        raise NotImplementedError  # ToDo
-    else:  # log file present but move safely just in case
-        if GTO.state.outer_track:
-            GTO.train.set_target_speed(40)
-            IGBT.train.set_target_speed(40)
-            trigger = trains.GENERATOR.await_activated([INNER_CONTACT, OUTER_CONTACT, AIRPORT_CONTACT])
-        else:  # GTO on inner
-            IGBT.train.set_target_speed(40)
-            trains.GENERATOR.await_activated([OUTER_CONTACT], timeout=20.)
+    try:
+        trains.GENERATOR.await_event([OUTER_CONTACT], [True, False], timeout=2)
+    except queue.Empty:
+        pass
+    IGBT.train.set_target_speed(50)
+    try:
+        trains.GENERATOR.await_event([OUTER_CONTACT], [False], timeout=60)
+    except queue.Empty:
+        print("Train not moving. Outer contact timeout after 60s.")
+        return
+    print("Tripped")
+    IGBT.train.emergency_stop()
+    IGBT.train.sound_on()
+    GTO.train.sound_on()
+    time.sleep(30)
+    IGBT.drive(OUTER + O_AIRPORT, 20, trip=[(OUTER_CONTACT, -1.)])
+    IGBT.drive(OUTER - O_AIRPORT + OUTER, 20, trip=[(OUTER_CONTACT, -1.)])
+    IGBT.drive(OUTER * 2, 20, trip=[(OUTER_CONTACT, -1.)])
+
+    # while True:
+    #     pin, state = trains.GENERATOR.await_event([OUTER_CONTACT], [False, True], timeout=30, listener='0')
+    #     print(f"{pin} -> {state}")
+
+    # # Move trains to initial position
+    # if GTO.position == float('nan'):  # no log file
+    #     # if INNER_CONTACT on, GTO must be on inner, around -?.
+    #     # if outer on, check which train it is.
+    #     # can only test this with actual hardware
+    #     raise NotImplementedError  # ToDo
+    # else:  # log file present but move safely just in case
+    #     if GTO.state.outer_track:
+    #         GTO.train.set_target_speed(40)
+    #         IGBT.train.set_target_speed(40)
+    #         trigger = trains.GENERATOR.await_activated([INNER_CONTACT, OUTER_CONTACT, AIRPORT_CONTACT])
+    #     else:  # GTO on inner
+    #         IGBT.train.set_target_speed(40)
+    #         trains.GENERATOR.await_activated([OUTER_CONTACT], timeout=20.)
 
     # trains.GENERATOR.on_activated(INNER_CONTACT, lambda: )
     # trains.GENERATOR.on_activated(OUTER_CONTACT, lambda: )
 
+
+def measure_time():
+    trains.GENERATOR.register('timer')
+    IGBT.train.set_target_speed(100)
+    IGBT.train.acceleration = 1000
+    measured = []
+    for i, target_speed in reversed(tuple(enumerate(IGBT.train.speeds))):
+        print(f"Speed {i} (prior {target_speed} kmh)")
+        IGBT.train.set_target_speed(target_speed)
+        for i in range(2):
+            t0 = time.perf_counter()
+            trains.GENERATOR.await_event([OUTER_CONTACT], [False], listener='timer')
+            t = time.perf_counter() - t0
+            kmh = OUTER / t * 87 * 3.6 / 1000
+            if i == 0:
+                print(f"Warmup: {t}")
+            else:
+                print(f"Round time: {t}, kmh={kmh}")
+                measured.insert(0, kmh)
+    print(tuple(measured))
 
 
 def regular_round(pause=2.):
@@ -249,15 +301,10 @@ if __name__ == '__main__':
     write_current_state(0)
     schedule_at_fixed_rate(write_current_state, period=2.)
 
-    trains.setup(None)
+    trains.setup('COM5')
     trains.power_on()
-    #
-    # Thread(target=program).start()
+
+    Thread(target=program).start()
     # import plan_vis
     # plan_vis.show([GTO, IGBT])
 
-    IGBT.train.set_target_speed(40)
-    trains.GENERATOR.register('0')
-    while True:
-        pin, state = trains.GENERATOR.await_event([OUTER_CONTACT], [False, True], timeout=30, listener='0')
-        print(f"{pin} -> {state}")
