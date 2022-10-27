@@ -70,13 +70,14 @@ class Controller:
         braking_distance_m = .5 * (self.train.acceleration / 3.6) * braking_time ** 2 * (-1) ** (not self.state.aligned) * (-1) ** self.train.currently_in_reverse * (-1) ** (not self._increase_position) # * (-1 if self.state.aligned ^ (not self.train.currently_in_reverse) ^ (not self._increase_position) else 1)
         braking_distance_mm = braking_distance_m * 1000 / 87
         distance_to_drive = (self._target_signed_distance - self.train._cumulative_signed_distance)
-        if self._trip:  # keep going slowly if trigger not yet triggered (calculate minimum distance to drive)
+        if self._trip:
             _, contact_pos = self._trip[0]
             contact_to_goal = self._target_signed_distance - contact_pos
             distance_to_drive = max(distance_to_drive, contact_to_goal) if self._increase_position else min(distance_to_drive, contact_to_goal)
         print(f"{self.train.name}\t speed={self.train.signed_actual_speed:.0f}\t braking distance: {braking_distance_mm:.0f}\t  to drive: {distance_to_drive:.0f}   (aligned={self.state.aligned}, in_reverse={self.train.in_reverse}, increase_pos={self._increase_position}, cumulative={self.train._cumulative_signed_distance:.0f})")
         aligned_distance_to_drive = distance_to_drive * (1 if self._increase_position else -1)  # positive unless overshot
         if aligned_distance_to_drive <= braking_distance_mm:
+            # ToDo keep going slowly if trigger not yet triggered (calculate minimum distance to drive)
             self._brake_wait()
         elif aligned_distance_to_drive <= braking_distance_mm + 100:  # Go slowly for the last 4 cm
             self.train.set_target_speed(20)
