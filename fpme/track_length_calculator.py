@@ -46,15 +46,15 @@ def compute_length(tracks: str or tuple or list):
 # """)
 # print(f"Inner: {inner}")
 
-outer = compute_length("""
-188, 188, 230, 172, 188,
-230, 230, 172, 094, 188,
-230, 230, 230,
-188, 172, 188,
-230, 330, 188, 430,
-094, 188, 172, 130, 130, 672
-""")
-print(f"Outer: {outer}")
+# outer = compute_length("""
+# 188, 188, 230, 172, 188,
+# 230, 230, 172, 094, 188,
+# 230, 230, 230,
+# 188, 172, 188,
+# 230, 330, 188, 430,
+# 094, 188, 172, 130, 130, 672
+# """)
+# print(f"Outer: {outer}")
 
 # inner_connection = compute_length('130, 130, 130')
 # print(f"Inner connection: {inner_connection}")
@@ -75,3 +75,10 @@ print(f"Outer: {outer}")
 # 230, 230, 230,
 # """)
 # print(f"Outer until switch: {outer_until_switch}")
+
+i_airport_contact_west = compute_length("""
+130, 130, 130,
+188, 172,
+330, 188, 230, 130,
+""")
+print(f"Interim: {i_airport_contact_west}")

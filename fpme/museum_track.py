@@ -16,13 +16,15 @@ I_ERDING = 2835.6
 I_MUNICH = HALF_TRAIN + 50
 O_ERDING = 1595.6
 O_AIRPORT = 2565.4
-O_MUNICH = 4746.7
+O_MUNICH = 5100
 O_CONTACT_NORTH = 4558.2
+I_AIRPORT_CONTACT_WEST = -1801.0
 
 OUTER_CONTACT = 'RI'  # contact 1 (red)
 INNER_CONTACT = 'DSR'  # contact 2 (yellow)
 AIRPORT_CONTACT = 'CD'  # contact 3 (green)
 
+NAN = float('nan')
 
 @dataclass
 class State:

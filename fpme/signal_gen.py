@@ -74,10 +74,11 @@ class Motorola2(RS232Protocol):
         speed = speed + 1 if speed else speed  # keep 0 and None
         velocity_packet = ALL_ADDRESSES[address] + (T[1] if f0 else T[0]) + self.velocity_bytes(speed, reverse)
         packets = [velocity_packet]
-        for function, status in functions.items():
-            if function > 0:
-                function_packet = ALL_ADDRESSES[address] + (T[1] if f0 else T[0]) + self.function_bytes(speed, function, status)
-                packets.append(function_packet)
+        if speed is not None:
+            for function, status in functions.items():
+                if function > 0:
+                    function_packet = ALL_ADDRESSES[address] + (T[1] if f0 else T[0]) + self.function_bytes(speed, function, status)
+                    packets.append(function_packet)
         return [bytes(p) for p in packets]
 
     def velocity_bytes(self, speed: int, reverse: bool):
@@ -147,6 +148,7 @@ class ProcessSpawningGenerator:
         self._process = Process(target=setup_generator, args=(serial_port, self._control_queue, self._input_queue, self._active, self._short_circuited, self._error_message))
         self._process.start()
         self._listeners: Dict[Any, Queue] = {}
+        self._states = {'RI': None, 'CD': None, 'DSR': None, 'CTS': None}
         self._start_callback_dispatch_thread()
 
     def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
@@ -173,9 +175,14 @@ class ProcessSpawningGenerator:
         def call_f_on_change():
             while True:
                 pin, value = self._input_queue.get(block=True)
+                self._states[pin] = value
+                assert len(self._states) == 4
                 for queue in self._listeners.values():
                     queue.put((pin, value), block=True)
         threading.Thread(target=call_f_on_change).start()
+
+    def get_state(self, pin: str):
+        return self._states[pin]
 
     def await_event(self, pins: List[str], states: List[bool], timeout: float = None, listener: Any = None):
         single_use_listener = listener is None
@@ -251,6 +258,10 @@ class SignalGenerator:
                 self._dsr = ser.getDSR()
                 self._cd = ser.getCD()
                 self._ri = ser.getRI()
+                self._input_queue.put(('CTS', self._cts))
+                self._input_queue.put(('DSR', self._dsr))
+                self._input_queue.put(('CD', self._cd))
+                self._input_queue.put(('RI', self._ri))
             except SerialException as exc:
                 print(exc)
                 self._error_message.value = str(exc)
@@ -336,7 +347,7 @@ if __name__ == '__main__':
     # gen.set(4, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     # gen.set(5, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     # gen.set(6, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
-    gen.set(5, 8, False, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    gen.set(6, 8, True, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     gen.start()
 
     # gen.set(4, 10, False, {})
