@@ -347,7 +347,7 @@ if __name__ == '__main__':
     # gen.set(4, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     # gen.set(5, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     # gen.set(6, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
-    gen.set(6, 8, True, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    gen.set(6, 7, True, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     gen.start()
 
     # gen.set(4, 10, False, {})

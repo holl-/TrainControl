@@ -76,9 +76,14 @@ def compute_length(tracks: str or tuple or list):
 # """)
 # print(f"Outer until switch: {outer_until_switch}")
 
-i_airport_contact_west = compute_length("""
-130, 130, 130,
-188, 172,
-330, 188, 230, 130,
+# i_airport_contact_west = compute_length("""
+# 130, 130, 130,
+# 188, 172,
+# 330, 188, 230, 130,
+# """)
+# print(f"Interim: {i_airport_contact_west}")
+
+i_contact = compute_length("""
+130, 130, 672,
 """)
-print(f"Interim: {i_airport_contact_west}")
+print(f"Interim: {i_contact}")
