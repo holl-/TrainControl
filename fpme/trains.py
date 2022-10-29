@@ -106,11 +106,12 @@ class Train:
                 self._speed = min(self._speed + acceleration * dt, self._target_speed)
             else:
                 self._speed = max(self._speed - acceleration * dt, self._target_speed)
+        self._accumulate_distance()
         self._update_signal()
         if self.on_post_update:
             self.on_post_update()
 
-    def _accumualte_distance(self):
+    def _accumulate_distance(self):
         if GENERATOR.is_short_circuited:
             return
         speed_level, in_reverse, _ = self._broadcasting_state
@@ -119,14 +120,13 @@ class Train:
         if self._emergency_stopping:
             return
         t = time.perf_counter()
-        dt = t - self._dst_measured_time
+        dt = (t - self._dst_measured_time) * TIME_DILATION
         distance_driven = self.speeds[speed_level] / 3.6 * 1000 * dt / 87  # mm/s
         self._cumulative_abs_distance += distance_driven
         self._cumulative_signed_distance += distance_driven * (-1 if in_reverse else 1)
         self._dst_measured_time = t
 
     def _update_signal(self):
-        self._accumualte_distance()
         target_level = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
         if self.has_built_in_acceleration:
             speed_level = target_level
@@ -257,14 +257,15 @@ def destroy():
 
 
 def update_trains(dt):  # repeatedly called from setup()
-    # try:
+    # try:  # ToDo enable again
         for train in TRAINS:
-            train._update(dt)
+            train._update(dt * TIME_DILATION)
     # except Exception as exc:
     #     warnings.warn(f"Exception in update_trains(): {exc}", RuntimeWarning)
 
 
 TRAIN_UPDATE_PERIOD = 0.1
+TIME_DILATION = 1.
 
 
 def setup(serial_port: str or None):

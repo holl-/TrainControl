@@ -140,6 +140,7 @@ class ProcessSpawningGenerator:
 
     def __init__(self, serial_port: str):
         manager = Manager()
+        self.serial_port = serial_port
         self._active = Value('b', False)
         self._short_circuited = Value('b', False)
         self._error_message = manager.Value(c_char_p, "")

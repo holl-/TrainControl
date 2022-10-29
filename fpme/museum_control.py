@@ -33,7 +33,7 @@ class Controller:
         :param trip: Contacts to trip along the way, (pin, position)
         :return:
         """
-        print(f"{self.train.name} -> drive to {target_position}")
+        print(f"{self.train.name} add command to queue: drive to {target_position}")
         while self._executing:
             time.sleep(.2)
         self._t_started_waiting = None
@@ -44,7 +44,7 @@ class Controller:
         self._next_pause = pause
         self._trip = list(trip)
         trains.GENERATOR.register(self)
-        print(f">>> {self.train.name} -> drive {distance_mm} mm")
+        print(f">>> {self.train.name} -> drive {distance_mm:.0f} mm to position {State(0, self.state.outer_track, target_position, self.state.aligned)}")
         self._executing = True
         Thread(target=self._count_triggers).start()
         self.train.set_target_speed(math.copysign(1, distance_mm))
@@ -54,7 +54,7 @@ class Controller:
         while self._trip:
             pin, position = self._trip[0]
             print(f"{self.train} waiting for {pin}")
-            trains.GENERATOR.await_event([pin], [False], timeout=60, listener=self)
+            trains.GENERATOR.await_event([pin], [False], timeout=None, listener=self)
             delta = position - self.position
             self.state = State(self.train._cumulative_signed_distance, self.state.outer_track, position, self.state.aligned)
             print(f"{self.train} triggered {pin}, position updated by {delta} mm (actual - predicted)")
@@ -69,34 +69,23 @@ class Controller:
         if not self._executing:
             return
         self.state = update_state(self.state, self.train._cumulative_signed_distance)
-        braking_time = abs(self.train.signed_actual_speed) / self.train.acceleration
-        braking_distance_m = .5 * (self.train.acceleration / 3.6) * braking_time ** 2 * (-1) ** (not self.state.aligned) * (-1) ** self.train.currently_in_reverse * (-1) ** (not self._increase_position)
-        braking_distance_mm = braking_distance_m * 1000 / 87
-        signed_distance_to_drive = (self._target_signed_distance - self.train._cumulative_signed_distance)
-        if self._trip:
+        braking_distance = .5 * (self.train.deceleration / 3.6) * (abs(self.train.signed_actual_speed) / self.train.deceleration) ** 2 * 1000 / 87  # always positive
+        distance_in_drive_direction = (self._target_signed_distance - self.train._cumulative_signed_distance) * (1 if self._increase_signed_distance else -1)  # positive unless overshot
+        if self._trip and trains.GENERATOR.serial_port:
             _, contact_pos = self._trip[0]
             contact_to_goal = self._target_signed_distance - contact_pos
-            signed_distance_to_drive = max(signed_distance_to_drive, contact_to_goal) if self._increase_signed_distance else min(signed_distance_to_drive, -contact_to_goal)
-        print(f"{self.train.name}\t speed={self.train.signed_actual_speed:.0f}\t to drive:  {signed_distance_to_drive:.0f}\t  braking distance: {braking_distance_mm:.0f}\t   (aligned={self.state.aligned}, in_reverse={self.train.in_reverse}, increase_sd={self._increase_signed_distance}, cumulative={self.train._cumulative_signed_distance:.0f}, #trip={len(self._trip)})")
-        aligned_distance_to_drive = signed_distance_to_drive * (1 if self._increase_signed_distance else -1)  # positive unless overshot
-        if aligned_distance_to_drive <= braking_distance_mm:
+            distance_in_drive_direction = max(distance_in_drive_direction, contact_to_goal) if self._increase_signed_distance else min(distance_in_drive_direction, -contact_to_goal)
+        print(f"{self}\t speed={self.train.signed_actual_speed:.0f} -> {self.train.signed_target_speed}\t to drive:  {distance_in_drive_direction:.0f}\t  brake: {braking_distance:.0f}\t   (aligned={self.state.aligned}, in_reverse={self.train.in_reverse}, increase_sd={self._increase_signed_distance}, cumulative={self.train._cumulative_signed_distance:.0f}, #trip={len(self._trip)})")
+        if distance_in_drive_direction <= braking_distance:
             self._brake_wait()
-        elif aligned_distance_to_drive <= braking_distance_mm + 100:  # Go slowly for the last 4 cm
+        elif distance_in_drive_direction <= braking_distance + 100:  # Go slowly for the last 4 cm
             self.train.set_target_speed(20)
-        # if self._target_signed_distance is None:
-        #     if not self._trip:
-        #         self.train.set_target_speed(0)
-        #         self._executing = False
-        #     else:
-        #         self.train.set_target_speed(50)
         else:
             self.train.set_target_speed(80 * (1 if self._increase_signed_distance else -1))
-            # distance = self._target_signed_distance - self.train._cumulative_signed_distance
-            # self.train.set_target_speed(math.copysign(80, distance))
 
     def _brake_wait(self):
         """ Breaks if driving, else sets executing=False if pause is over. """
-        if self._trip:
+        if self._trip and trains.GENERATOR.serial_port:
             print(f"Cannot brake/wait because a contact {self._trip[0][0]} has not been tripped.")
             return
         if self.train.target_speed == 0:
@@ -112,10 +101,10 @@ class Controller:
 
     def __repr__(self):
         if self._target_signed_distance is not None:
-            status = f"{self._target_signed_distance - self.train._cumulative_signed_distance} from target"
+            status = f"{self._target_signed_distance - self.train._cumulative_signed_distance:.0f} mm from target"
         else:
             status = "done"
-        return f"{self.train.name} {status}"
+        return f"{self.train.name} @ {self.state} {status}"
 
 
 def program():
@@ -139,7 +128,7 @@ def program():
     print(f"IGBT at {IGBT.position:.0f}")
     # time.sleep(30)
     while True:
-        IGBT.drive(0, pause=5, trip=[(INNER_CONTACT, I_CONTACT_NORTH - TRAIN_CONTACT)])
+        IGBT.drive(0, pause=0, trip=[(INNER_CONTACT, I_CONTACT_NORTH - TRAIN_CONTACT)])
         # IGBT.drive(I_AIRPORT, pause=5)
         # IGBT.drive(I_ERDING, pause=5)
         IGBT.drive(INNER + abs(I_SAFE_REVERSAL), pause=5, trip=[(INNER_CONTACT, INNER - I_CONTACT_SOUTH)])

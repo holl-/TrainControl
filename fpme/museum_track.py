@@ -39,7 +39,7 @@ class State:
     aligned: bool  # Whether driving forward increases the position, None if unknown
 
     def __str__(self):
-        return f"{'?' if self.outer_track is None else 'outer' if self.outer_track else 'inner'} {self.position:.1f} {'?' if self.aligned is None else 'fwd' if self.aligned else 'bwd'}"
+        return f"{'?' if self.outer_track is None else 'outer' if self.outer_track else 'inner'} {self.position:.0f} {'?' if self.aligned is None else 'fwd' if self.aligned else 'bwd'}"
 
     @staticmethod
     def from_line(line: str):
