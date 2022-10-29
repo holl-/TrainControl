@@ -178,7 +178,7 @@ class ProcessSpawningGenerator:
                 pin, value = self._input_queue.get(block=True)
                 self._states[pin] = value
                 assert len(self._states) == 4
-                for queue in self._listeners.values():
+                for queue in tuple(self._listeners.values()):
                     queue.put((pin, value), block=True)
         threading.Thread(target=call_f_on_change).start()
 

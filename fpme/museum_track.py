@@ -14,7 +14,7 @@ OUTER_UNTIL_SWITCH = 2565.4
 I_AIRPORT = 1832.5
 I_ERDING = 2835.6
 I_MUNICH = 0
-I_SAFE_REVERSAL = -500
+I_SAFE_REVERSAL = -600
 O_ERDING = 1595.6
 O_AIRPORT = 2565.4
 O_MUNICH = 5100
@@ -28,6 +28,11 @@ I_CONTACT_SOUTH_O = -643.0
 OUTER_CONTACT = 'RI'  # contact 1 (red)
 INNER_CONTACT = 'DSR'  # contact 2 (yellow)
 AIRPORT_CONTACT = 'CD'  # contact 3 (green)
+CONTACT_NAMES = {
+    OUTER_CONTACT: 'outer',
+    INNER_CONTACT: 'inner',
+    AIRPORT_CONTACT: 'airport',
+}
 
 NAN = float('nan')
 
@@ -68,7 +73,8 @@ def update_state(state: State, cumulative_signed_distance):
     return State(cumulative_signed_distance, outer_track, position, aligned)
 
 
-
+def project_position(position: float, outer_track: bool):
+    return update_state(State(0, outer_track, position, True), 0).position
 
 
 # def exit_unsafe_switches(state: State) -> float:
