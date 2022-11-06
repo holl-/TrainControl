@@ -83,7 +83,8 @@ def compute_length(tracks: str or tuple or list):
 # """)
 # print(f"Interim: {i_airport_contact_west}")
 
-i_contact = compute_length("""
-130, 130, 672,
-""")
-print(f"Interim: {i_contact}")
+# i_contact = compute_length("""
+# 130, 130, 672,
+# """)
+# print(f"Interim: {i_contact}")
+print(compute_length('330'))

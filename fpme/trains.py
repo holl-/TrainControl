@@ -131,14 +131,15 @@ class Train:
         if self.has_built_in_acceleration:
             speed_level = target_level
         else:
-            if abs(self._target_speed) > abs(self._speed):  # ceil level
-                speed_level = [i for i, s in enumerate(self.speeds) if s >= abs(self._speed)][0] + 1
-                speed_level = min(speed_level, target_level)
-            elif abs(self._target_speed) < abs(self._speed):  # floor level
-                speed_level = [i for i, s in enumerate(self.speeds) if s <= abs(self._speed)][-1] - 1
-                speed_level = max(speed_level, target_level)
-            else:  # Equal
-                speed_level = target_level
+            speed_level = int(np.argmin(abs(np.asarray(self.speeds) - abs(self._speed))))
+            # if abs(self._target_speed) > abs(self._speed):  # ceil level
+            #     speed_level = [i for i, s in enumerate(self.speeds) if s >= abs(self._speed)][0] + 1
+            #     speed_level = min(speed_level, target_level)
+            # elif abs(self._target_speed) < abs(self._speed):  # floor level
+            #     speed_level = [i for i, s in enumerate(self.speeds) if s <= abs(self._speed)][-1] - 1
+            #     speed_level = max(speed_level, target_level)
+            # else:  # Equal
+            #     speed_level = target_level
         new_state = (speed_level, self.currently_in_reverse, self._function_dict)
         if new_state != self._broadcasting_state:
             self._broadcasting_state = new_state
@@ -213,15 +214,15 @@ class Train:
 
 TRAINS = [
     Train('GTO', "Ⓢ",
-          address=5,
+          address=3,
           acceleration=10.,
-          speeds=(0, .1, 11, 17, 22, 29, 36.2, 43.5, 50.9, 58.0, 64.9, 70.7, 77.1, 83.5, 89.9),
+          speeds=(0, .1, 11, 17, 22, 34.3, 35.6, 42.6, 49.8, 56.7, 63.7, 69.6, 76.5, 82.8, 89.8),
           stop_by_mm1_reverse=True),
 # Functions: 2: sound, 3: horn, 4: instant acceleration
     Train('IGBT', "Ⓢ",  # includes sound
           address=6,
           acceleration=4.,
-          speeds=(0, .1, 12, 18, 23, 30.8, 38.7, 46.2, 54.3, 62.0, 70.3, 78.1, 85.3, 93.4, 100.6),
+          speeds=(0, .1, 7, 15, 24, 30.8, 38.7, 46.2, 54.3, 62.0, 70.3, 78.1, 85.3, 93.4, 100.6),
           stop_by_mm1_reverse=True),
 ]
 

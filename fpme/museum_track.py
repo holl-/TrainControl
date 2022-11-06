@@ -11,18 +11,18 @@ OUTER_CONNECTION = 643.0
 INTERIM = 1794.8
 OUTER_UNTIL_SWITCH = 2565.4
 
-I_AIRPORT = 1832.5
-I_ERDING = 2835.6
+I_AIRPORT = 1700
+I_ERDING = 2600
 I_MUNICH = 0
-I_SAFE_REVERSAL = -600
+I_SAFE_REVERSAL = -500
 O_ERDING = 1595.6
-O_AIRPORT = 2565.4
+O_AIRPORT = 2750
 O_MUNICH = 5100
 O_CONTACT_NORTH = 4558.2
 I_AIRPORT_CONTACT_WEST = -1801.0
-I_CONTACT_NORTH = -925.5
+I_CONTACT_NORTH = -925.5-269.6
 I_CONTACT_SOUTH = -565.5
-I_CONTACT_NORTH_O = -1003.0
+I_CONTACT_NORTH_O = -1003.0-269.6
 I_CONTACT_SOUTH_O = -643.0
 
 OUTER_CONTACT = 'RI'  # contact 1 (red)
@@ -55,6 +55,8 @@ class State:
 
 
 def update_state(state: State, cumulative_signed_distance):
+    if state.outer_track is None:
+        return state
     delta = (int(state.aligned) * 2 - 1) * (cumulative_signed_distance - state.cumulative_signed_distance)
     position = state.position + delta
     outer_track = state.outer_track

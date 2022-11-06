@@ -10,7 +10,7 @@ import matplotlib.image as mpimg
 
 def show(trains: Iterable[museum_control.Controller]):
     img = mpimg.imread('Gleisplan v3.png')
-    fig, ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots(1, 1, figsize=(5, 3.5))
     ax.imshow(img, extent=(-2.5, 194.5, -2, 195))
     circles = [plt.Circle((3, 3), radius=2) for train in trains]
     for circle in circles:
@@ -19,7 +19,7 @@ def show(trains: Iterable[museum_control.Controller]):
     for i in range(1000):
         for train, circle in zip(trains, circles):
             circle.set_center(get_position(train.state))
-        plt.pause(0.005)
+        plt.pause(0.02)
         plt.draw()
 
 

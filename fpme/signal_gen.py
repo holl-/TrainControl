@@ -176,6 +176,7 @@ class ProcessSpawningGenerator:
         def call_f_on_change():
             while True:
                 pin, value = self._input_queue.get(block=True)
+                print(f"                {pin}={value}")
                 self._states[pin] = value
                 assert len(self._states) == 4
                 for queue in tuple(self._listeners.values()):
@@ -345,10 +346,9 @@ if __name__ == '__main__':
     # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
     # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
 
-    # gen.set(4, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
-    # gen.set(5, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
-    # gen.set(6, 5, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
-    gen.set(6, 7, True, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    gen.set(6, 2, True, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    # gen.set(3, 2, False, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    # gen.set(6, 6, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     gen.start()
 
     # gen.set(4, 10, False, {})
