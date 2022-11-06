@@ -161,7 +161,7 @@ def program():
     else:
         move_to_standard_pos()
     GTO.drive(O_MUNICH, pause=5)  # trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)])
-    if 1:
+    if len(sys.argv) > 1:
         opening_round(pause=15., pause_random=0.)
     else:
         IGBT.drive(0, pause=0, trip=[(INNER_CONTACT, I_CONTACT_NORTH - TRAIN_CONTACT)])
@@ -378,6 +378,8 @@ def write_current_state(_dt=None):
 
 
 if __name__ == '__main__':
+    print("sys.argv:", sys.argv)
+
     # launch_time = time.perf_counter()
     # while not pc_has_power():
     #     if time.perf_counter() - launch_time < 5 * 60:
@@ -393,7 +395,7 @@ if __name__ == '__main__':
     write_current_state(0)
     schedule_at_fixed_rate(write_current_state, period=2.)
 
-    trains.setup('COM5')
+    trains.setup('/dev/ttyUSB0')  # COM5
 
     Thread(target=program).start()
     import plan_vis
