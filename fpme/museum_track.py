@@ -12,11 +12,11 @@ INTERIM = 1794.8
 OUTER_UNTIL_SWITCH = 2565.4
 
 I_AIRPORT = 1700
-I_ERDING = 2600
+I_ERDING = 2630
 I_MUNICH = 0
 I_SAFE_REVERSAL = -500
-O_ERDING = 1595.6
-O_AIRPORT = 2750
+O_ERDING = 1650
+O_AIRPORT = 2700
 O_MUNICH = 5100
 O_CONTACT_NORTH = 4558.2
 I_AIRPORT_CONTACT_WEST = -1801.0
@@ -62,7 +62,7 @@ def update_state(state: State, cumulative_signed_distance):
     outer_track = state.outer_track
     aligned = state.aligned
     if outer_track and position > OUTER + HALF_TRAIN:
-        position -= OUTER
+        position = position % OUTER
     elif outer_track and position < -OUTER_CONNECTION - HALF_TRAIN:
         outer_track = False
         position += (OUTER_CONNECTION - INNER_CONNECTION)

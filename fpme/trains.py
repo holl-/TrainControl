@@ -147,7 +147,11 @@ class Train:
 
     @property
     def _function_dict(self):
-        return {0: self.lights, 1: False, 2: self.sound, 3: False, 4: True}
+        if self._broadcasting_state[0] != 0:
+            sound = self.sound
+        else:
+            sound = self.sound and self._broadcasting_state[2][2]
+        return {0: self.lights, 1: False, 2: sound, 3: False, 4: True}
 
     def emergency_stop(self):
         self._target_speed *= 0.
@@ -215,14 +219,14 @@ class Train:
 TRAINS = [
     Train('GTO', "Ⓢ",
           address=3,
-          acceleration=10.,
-          speeds=(0, .1, 11, 17, 22, 34.3, 35.6, 42.6, 49.8, 56.7, 63.7, 69.6, 76.5, 82.8, 89.8),
+          acceleration=3.,
+          speeds=(0, .1, 6.1, 13.4, 19.9, 28.7, 35.6, 42.6, 49.8, 56.7, 63.7, 69.6, 76.5 * 1.07, 82.8 * 1.07, 89.8 * 1.07),
           stop_by_mm1_reverse=True),
 # Functions: 2: sound, 3: horn, 4: instant acceleration
     Train('IGBT', "Ⓢ",  # includes sound
           address=6,
-          acceleration=4.,
-          speeds=(0, .1, 7, 15, 24, 30.8, 38.7, 46.2, 54.3, 62.0, 70.3, 78.1, 85.3, 93.4, 100.6),
+          acceleration=3.,
+          speeds=(0.0, .1, 7, 15.7, 23.8, 31.9, 39.5, 47.1, 55.1, 63.3, 70.8, 79.0, 87.0, 93.8, 102.9),
           stop_by_mm1_reverse=True),
 ]
 
