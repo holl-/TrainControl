@@ -14,6 +14,9 @@ from fpme.museum_track import *
 from fpme.ubuntu_helpers import *
 
 
+sys.path.append('..')
+
+
 class Controller:
 
     def __init__(self, train: trains.Train, last_position: State or None):
@@ -175,6 +178,7 @@ def program():
             set_wake_time(tomorrow_at(), shutdown_now=True)
             exit()
             return
+        # TODO wait for :20, :20, :40
         module = choice(modules)
         # module = outside_fast
         module(pause=15., pause_random=10)
@@ -210,7 +214,7 @@ def opening_round(pause: float, pause_random: float):
     GTO.drive(O_MUNICH, pause=pause + random.random() * pause_random, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
 
 
-def outside_fast(pause: float, pause_random: float, times=4):
+def outside_fast(pause: float, pause_random: float, times=2):
     print("------------------ Outside fast ------------------")
     contacts = [(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT + OUTER * (i + 1)) for i in range(times)]
     GTO.drive(OUTER + OUTER*times + O_ERDING, pause=pause + random.random() * pause_random, trip=contacts)
@@ -380,12 +384,13 @@ def write_current_state(_dt=None):
 if __name__ == '__main__':
     print("sys.argv:", sys.argv)
 
-    # launch_time = time.perf_counter()
-    # while not pc_has_power():
-    #     if time.perf_counter() - launch_time < 5 * 60:
-    #         time.sleep(2)
-    #     else:
-    #         set_wake_time(tomorrow_at(), shutdown_now=True)
+    launch_time = time.perf_counter()
+    while not pc_has_power():
+        print("Waiting for AC...")
+        if time.perf_counter() - launch_time < 5 * 60:
+            time.sleep(5)
+        else:
+            set_wake_time(tomorrow_at(), shutdown_now=True)
 
     _LAST_POSITIONS = read_last_positions()
     GTO = Controller(trains.get_by_name('GTO'), _LAST_POSITIONS[0] or State(0, True, NAN, True))
