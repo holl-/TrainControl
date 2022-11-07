@@ -225,7 +225,7 @@ TRAINS = [
     Train('GTO', "Ⓢ",
           address=3,
           acceleration=3.,
-          speeds=(0, .1, 6.5, 13.9, 20.5, 29.4, 36.2, 43.2, 50.4, 57.6, 64.3, 70.7, 78.0, 84, 91),
+          speeds=(0, .1, 6.5, 13.9, 20.5, 29.4, 36.2, 43.2, 50.4, 57.6, 64.3, 70.7, 78.0, 84.6, 91.6),
           stop_by_mm1_reverse=True),
 # Functions: 2: sound, 3: horn, 4: instant acceleration
     Train('IGBT', "Ⓢ",  # includes sound
