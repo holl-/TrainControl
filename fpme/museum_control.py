@@ -221,6 +221,7 @@ def opening_round(pause: float, pause_random: float):
     IGBT.drive(I_AIRPORT, pause=0)
     print()
     print("Press Enter to Start")
+    print()
     input()
     GTO.train.sound_on()
     IGBT.train.sound_on()
@@ -414,12 +415,13 @@ if __name__ == '__main__':
     print("sys.argv:", sys.argv)
 
     launch_time = time.perf_counter()
-    while not pc_has_power():
-        print("Waiting for AC...")
-        if time.perf_counter() - launch_time < 5 * 60:
-            time.sleep(5)
-        else:
-            set_wake_time(tomorrow_at(), shutdown_now=True)
+    if 'debug' not in sys.argv:
+        while not pc_has_power():
+            print("Waiting for AC...")
+            if time.perf_counter() - launch_time < 5 * 60:
+                time.sleep(5)
+            else:
+                set_wake_time(tomorrow_at(), shutdown_now=True)
 
     _LAST_POSITIONS = read_last_positions()
     GTO = Controller(trains.get_by_name('GTO'), _LAST_POSITIONS[0] or State(0, True, NAN, True))
@@ -432,6 +434,7 @@ if __name__ == '__main__':
     trains.setup('/dev/ttyUSB0')  # COM5
 
     Thread(target=measure_speeds).start()
-    import plan_vis
-    plan_vis.show([GTO, IGBT])
+    if 'gui' in sys.argv:
+        import plan_vis
+        plan_vis.show([GTO, IGBT])
 
