@@ -10,6 +10,6 @@ setup(
     author='Philipp Holl',
     author_email='philipp@mholl.de',
     url='https://github.com/holl-/TrainControl',
-    include_package_data=False,
+    include_package_data=True,
     install_requires=['numpy', 'pyserial'],
 )

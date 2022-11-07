@@ -1,3 +1,4 @@
+import os.path
 from typing import Iterable
 
 import museum_control
@@ -9,7 +10,7 @@ import matplotlib.image as mpimg
 
 
 def show(trains: Iterable[museum_control.Controller]):
-    img = mpimg.imread('Gleisplan v3.png')
+    img = mpimg.imread(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Gleisplan v3.png'))
     fig, ax = plt.subplots(1, 1, figsize=(5, 3.5))
     ax.imshow(img, extent=(-2.5, 194.5, -2, 195))
     circles = [plt.Circle((3, 3), radius=2) for train in trains]
