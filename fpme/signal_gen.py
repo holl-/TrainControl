@@ -345,8 +345,9 @@ if __name__ == '__main__':
     gen = ProcessSpawningGenerator('COM5')
     # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
     # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
+    # IGBT = 6, GTO = 3
 
-    gen.set(6, 2, True, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
+    gen.set(3, 6, False, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     # gen.set(3, 2, False, {0: True, 1: False, 2: False, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     # gen.set(6, 6, False, {0: True, 1: False, 2: True, 3: False, 4: True})  # 2: sound, 3: horn, 4: instant acceleration
     gen.start()

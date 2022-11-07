@@ -126,6 +126,11 @@ class Train:
         self._cumulative_signed_distance += distance_driven * (-1 if in_reverse else 1)
         self._dst_measured_time = t
 
+    @property
+    def cumulative_signed_distance(self):
+        self._accumulate_distance()
+        return self._cumulative_signed_distance
+
     def _update_signal(self):
         target_level = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
         if self.has_built_in_acceleration:
@@ -220,7 +225,7 @@ TRAINS = [
     Train('GTO', "Ⓢ",
           address=3,
           acceleration=3.,
-          speeds=(0, .1, 6.1, 13.4, 19.9, 28.7, 35.6, 42.6, 49.8, 56.7, 63.7, 69.6, 76.5 * 1.07, 82.8 * 1.07, 89.8 * 1.07),
+          speeds=(0, .1, 6.5, 13.9, 20.5, 29.4, 36.2, 43.2, 50.4, 57.6, 64.3, 70.7, 78.0, 84, 91),
           stop_by_mm1_reverse=True),
 # Functions: 2: sound, 3: horn, 4: instant acceleration
     Train('IGBT', "Ⓢ",  # includes sound
