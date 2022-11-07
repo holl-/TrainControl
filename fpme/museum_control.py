@@ -1,5 +1,6 @@
 import math
 import queue
+import time
 from random import random, randint
 import sys
 from threading import Thread, Lock
@@ -183,8 +184,8 @@ def program():
         move_to_standard_pos()
     GTO.drive(O_MUNICH, pause=5)  # trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)])
     if 'opening' in sys.argv:
-        opening_round(pause=15., pause_random=0.)
-        regular_round(pause=15., pause_random=10.)
+        opening_round()
+        regular_round(pause=8., pause_random=10.)
     else:
         IGBT.drive(0, pause=0, trip=[(INNER_CONTACT, I_CONTACT_NORTH - TRAIN_CONTACT)])
         if 'no-sound' not in sys.argv:
@@ -209,12 +210,13 @@ def program():
                 print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec} s) ----------------")
                 time.sleep(wait_sec)
         module = modules[choose_index(module_stats)]
+        print("                         Queuing module")
         module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
 
         
-def regular_round(pause: float, pause_random: float):
-    print("--------------------- Regular round ------------------")
-    for i in range(2):
+def regular_round(pause: float, pause_random: float, rounds=2):
+    for i in range(rounds):
+        print(f"------------------ Regular round {i} / {rounds} ------------------")
         IGBT.drive(I_AIRPORT, pause=pause + random() * pause_random)
         GTO.drive(OUTER + O_ERDING, pause=pause + random() * pause_random)
         IGBT.drive(I_ERDING, pause=pause + random() * pause_random)
@@ -224,24 +226,22 @@ def regular_round(pause: float, pause_random: float):
         IGBT.drive(0, pause=pause + random() * pause_random)
 
 
-def opening_round(pause: float, pause_random: float):
+def opening_round():
     print("------------------------- Opening Round ----------------------")
-    IGBT.drive(I_AIRPORT, pause=0)
+    IGBT.drive(I_AIRPORT, pause=0, wait_for='done')
     print()
     print("Press Enter to Start")
-    print()
-    input()
     if 'no-sound' not in sys.argv:
         GTO.train.sound_on()
         IGBT.train.sound_on()
-    GTO.drive(OUTER + O_ERDING, pause=pause + random() * pause_random)
+    GTO.drive(OUTER + O_ERDING, pause=25)
     time.sleep(6)
-    IGBT.drive(I_ERDING, pause=pause + random() * pause_random)
+    IGBT.drive(I_ERDING + 50, pause=20)
     # Keep going to standard position
-    IGBT.drive(INNER, pause=pause + random() * pause_random)
-    GTO.drive(O_AIRPORT, pause=pause + random() * pause_random)
+    IGBT.drive(INNER, pause=5)
+    GTO.drive(O_AIRPORT, pause=7)
     IGBT.drive(INNER + abs(I_SAFE_REVERSAL), pause=0, trip=[(INNER_CONTACT, INNER + abs(I_CONTACT_SOUTH) - TRAIN_CONTACT)])
-    GTO.drive(O_MUNICH, pause=pause + random() * pause_random, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
+    GTO.drive(O_MUNICH, pause=8, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
 
 
 def outside_fast(pause: float, pause_random: float, rounds=3):
