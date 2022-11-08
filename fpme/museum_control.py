@@ -386,7 +386,7 @@ def move_to_standard_pos():
             GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)], max_speed=50)
         else:
             GTO.drive(OUTER + O_ERDING, 0)
-            GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)], max_speed=50)
+            GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)], max_speed=50, use_emergency_stop=True)
         IGBT.drive(I_MUNICH, 0)
     # --- IGBT on outer ---
     elif IGBT.inner_track:  # IGBT on airport switch
@@ -401,12 +401,12 @@ def move_to_standard_pos():
         else:
             GTO.drive(O_SAFE_WAIT, 0)
         IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
-        GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
+        GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)], use_emergency_stop=True)
         IGBT.drive(I_MUNICH, 0)
     elif IGBT.outer_track and IGBT.position < GTO.position < O_CONTACT_NORTH - TRAIN_CONTACT and check_not_triggered(OUTER_CONTACT):
         print("Reversing IGBT into inner track")
         IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
-        GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
+        GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)], use_emergency_stop=True)
         IGBT.drive(I_MUNICH, 0)
     elif IGBT.outer_track:
         IGBT.drive(OUTER + HALF_TRAIN + 100, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - HALF_TRAIN)])
@@ -415,7 +415,7 @@ def move_to_standard_pos():
         else:
             GTO.drive(O_SAFE_WAIT, 0)
         IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
-        GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
+        GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)], use_emergency_stop=True)
         IGBT.drive(I_MUNICH, 0)
     else:
         print(f"Unknown configuration: {GTO}, {IGBT}", file=sys.stderr)
