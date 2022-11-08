@@ -10,16 +10,20 @@ import matplotlib.image as mpimg
 
 
 def show(trains: Iterable[museum_control.Controller]):
+    colors = {'GTO': 'blue', 'IGBT': 'green'}
     img = mpimg.imread(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Gleisplan v3.png'))
     fig, ax = plt.subplots(1, 1, figsize=(5, 3.5))
     ax.imshow(img, extent=(-2.5, 194.5, -2, 195))
-    circles = [plt.Circle((3, 3), radius=2) for train in trains]
-    for circle in circles:
-        ax.add_patch(circle)
 
-    for i in range(1000):
-        for train, circle in zip(trains, circles):
-            circle.set_center(get_position(train.state))
+    while True:
+        plt.gca().collections.clear()
+        for train in trains:
+            center = get_position(train.state)
+            front = get_position(update_state(train.state, train.train._cumulative_signed_distance + HALF_TRAIN))
+            back = get_position(update_state(train.state, train.train._cumulative_signed_distance - HALF_TRAIN))
+            plt.quiver([back[0], center[0]], [back[1], center[1]],
+                       [center[0] - back[0], front[0] - center[0]], [center[1] - back[1], front[1] - center[1]],
+                       color=colors[train.train.name], scale=1, scale_units='x')
         plt.pause(0.02)
         plt.draw()
 
