@@ -29,7 +29,6 @@ sys.path.append('..')
 class Controller:
 
     def __init__(self, train: trains.Train, last_position: State or None):
-        print(f"Creating controller for {train}")
         self.train = train
         self.state = last_position
         train.on_post_update = self._update
@@ -54,6 +53,7 @@ class Controller:
         :param trip: Contacts to trip along the way, (pin, position)
         :param wait_for: One of 'brake', 'done', None
         """
+        pause /= trains.TIME_DILATION
         print(f"{self.train.name} add command to queue: drive to {target_position} tripping {len(trip)}")
         while self._executing:
             time.sleep(.2)
@@ -70,7 +70,7 @@ class Controller:
         self._braking = False
         print(self._contact_to_target)
         # trains.GENERATOR.register(self)
-        print(f">>> {self.train.name} -> drive {distance_mm:.0f} mm to position {State(0, self.state.outer_track, target_position, self.aligned)}. Trip: {', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])}")
+        print(f">>> {self.train.name} -> drive {distance_mm:.0f} mm to position {State(0, self.outer_track, target_position, self.aligned)}. Trip: {', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])}")
         self._executing = True
         Thread(target=self._count_triggers).start()
         if wait_for == 'brake':
@@ -88,7 +88,7 @@ class Controller:
             pin, position = self._trip[0]
             print(f"{self.train} waiting for {pin}")
             trains.GENERATOR.await_event([pin], [False], timeout=None)
-            p_position = project_position(position, self.state.outer_track)
+            p_position = project_position(position, self.outer_track)
             with self._update_lock:
                 self.state = update_state(self.state, self.train.cumulative_signed_distance)
                 delta = p_position - self.position
@@ -102,7 +102,7 @@ class Controller:
                         print(f"⚠ {self} triggered {CONTACT_NAMES[pin]}, would update position by {delta} mm (actual - predicted) which is no plausible. Stopping train. Specified position={position}, projected={p_position}", file=sys.stderr)
                         self.emergency_stop()
                         continue
-                self.state = State(self.train.cumulative_signed_distance, self.state.outer_track, p_position, self.aligned)
+                self.state = State(self.train.cumulative_signed_distance, self.outer_track, p_position, self.aligned)
                 self.state = update_state(self.state, self.state.cumulative_signed_distance)
                 self._target_signed_distance -= delta
                 print(f"🛈 {self} triggered {CONTACT_NAMES[pin]}, position updated by {delta} mm (actual - predicted) from {self_prev}", file=sys.stderr)
@@ -116,6 +116,10 @@ class Controller:
     @property
     def aligned(self):
         return self.state.aligned
+    
+    @property
+    def outer_track(self):
+        return self.state.outer_track
     
     def emergency_stop(self):
         self.train.emergency_stop()
@@ -132,8 +136,8 @@ class Controller:
                 if self._contact_to_target[0] > distance_in_drive_direction:
                     distance_in_drive_direction = self._contact_to_target[0]
                     self.state = State(self.state.cumulative_signed_distance, prev_state.outer_track, prev_state.position, prev_state.aligned)
-            if time.perf_counter() - self._last_print >= 4.:
-                print(f"{self}\t speed={self.train.signed_actual_speed:.0f} -> {self.train.signed_target_speed}\t to drive:  {distance_in_drive_direction:.0f}\t  brake: {braking_distance:.0f}\t   (cumulative={self.train.cumulative_signed_distance:.0f}, trip={', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])})")
+            if time.perf_counter() - self._last_print >= 5.:
+                print(f"    {self}\t speed={self.train.signed_actual_speed:.0f}->{self.train.signed_target_speed}\tto drive: {distance_in_drive_direction:.0f}\tbrake: {braking_distance:.0f}\t(trip={', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])})")
                 self._last_print = time.perf_counter()
             if distance_in_drive_direction <= braking_distance:
                 self._brake_wait()
@@ -183,14 +187,14 @@ def program():
     print(f"Status: outer={trains.GENERATOR.get_state(OUTER_CONTACT)}, inner={trains.GENERATOR.get_state(INNER_CONTACT)}, airport={trains.GENERATOR.get_state(AIRPORT_CONTACT)}")
     if math.isnan(GTO.position) or math.isnan(IGBT.position):
         detect_train_positions_from_scratch()
+        GTO.drive(O_MUNICH, pause=5)  # trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)])
+        IGBT.drive(0, pause=0, trip=[(INNER_CONTACT, I_CONTACT_NORTH - TRAIN_CONTACT)])
     else:
         move_to_standard_pos()
-    GTO.drive(O_MUNICH, pause=5)  # trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)])
     if 'opening' in sys.argv:
         opening_round()
         regular_round(pause=8., pause_random=10.)
     else:
-        IGBT.drive(0, pause=0, trip=[(INNER_CONTACT, I_CONTACT_NORTH - TRAIN_CONTACT)])
         if 'no-sound' not in sys.argv:
             GTO.train.sound_on()
             IGBT.train.sound_on()
@@ -311,7 +315,7 @@ def detect_train_positions_from_scratch():
             print("Outer contact tripped: which train is it?")
             GTO.emergency_stop()
             IGBT.emergency_stop()
-            if IGBT.state.outer_track is False:
+            if IGBT.outer_track is False:
                 print("It must have been GTO because IGBT is inside.")
                 GTO.state = State(GTO.train.cumulative_signed_distance, True, O_CONTACT_NORTH - TRAIN_CONTACT, aligned=True)
             else:
@@ -347,20 +351,32 @@ def detect_train_positions_from_scratch():
 def move_to_standard_pos():
     print("---------------- Moving to standard positions -----------------")
     print(f"Current position estimate: {GTO}, {IGBT}")
-    trains.GENERATOR.register('detect')
+    # --- Check contacts, update train positions if tripped ---
     if trains.GENERATOR.get_state(AIRPORT_CONTACT) is False:
-        print("IGBT already on inner (airport contact)")
-        if IGBT.position > I_AIRPORT_CONTACT_WEST + HALF_TRAIN:
+        print("IGBT on airport contact")
+        if IGBT.position > I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT:
             print("correcting IGBT position to airport contact")
-            IGBT.state = State(IGBT.train.cumulative_signed_distance, False, I_AIRPORT_CONTACT_WEST + HALF_TRAIN, IGBT.aligned)
-        elif IGBT.position < - INNER_CONNECTION - INTERIM + HALF_TRAIN:
-            print("IGBT on airport switch")
-            raise NotImplementedError
-    if IGBT.state.outer_track:
-        print("IGBT last seen on outer track")
+            IGBT.state = State(IGBT.train.cumulative_signed_distance, False, I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT, IGBT.aligned)
+    if trains.GENERATOR.get_state(OUTER_CONTACT) is False and not IGBT.outer_track:
+        print("GTO on outer contact")
+        if GTO.position < O_CONTACT_NORTH - TRAIN_CONTACT:
+            print("correcting GTO position to outer contact")
+            GTO.state = State(GTO.train.cumulative_signed_distance, True, O_CONTACT_NORTH - TRAIN_CONTACT + 10, True)
+    print(f"Assumed positions: {GTO}, {IGBT}")
+    # --- Move trains to standard positions ---
+    # elif IGBT.position < - INNER_CONNECTION - INTERIM + HALF_TRAIN:
+    #     print("IGBT on airport switch")
+    #     raise NotImplementedError
+    if IGBT.outer_track and IGBT.position < GTO.position < O_CONTACT_NORTH - TRAIN_CONTACT and check_not_triggered(OUTER_CONTACT):
+        print("Reversing IGBT into inner track")
+        IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
+        GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
+        IGBT.drive(I_MUNICH, 0)
+    elif IGBT.outer_track:
         # move GTO to a safe position
         # reverse IGBT until on interim
         raise NotImplementedError
+        
     elif trains.GENERATOR.get_state(AIRPORT_CONTACT) is True:
         print("IGBT last seen on inner track")
         if -INTERIM < IGBT.position < -HALF_TRAIN:
@@ -387,19 +403,25 @@ def move_to_standard_pos():
         except queue.Empty:
             print("IGBT not moving")
 
-    if trains.GENERATOR.get_state(OUTER_CONTACT) is not False:
-        # drive GTO to outer contact
-        GTO.train.set_target_speed(50)
-        try:
-            trains.GENERATOR.await_event([OUTER_CONTACT], [False], timeout=60, listener='detect')
-            GTO.state = State(GTO.train.cumulative_signed_distance, True, O_CONTACT_NORTH - TRAIN_CONTACT, aligned=True)
-            GTO.emergency_stop()
-        except queue.Empty:
-            print("GTO not moving")
-                
-    trains.GENERATOR.unregister('detect')
+    # if trains.GENERATOR.get_state(OUTER_CONTACT) is not False:
+    #     # drive GTO to outer contact
+    #     GTO.train.set_target_speed(50)
+    #     try:
+    #         trains.GENERATOR.await_event([OUTER_CONTACT], [False], timeout=60, listener='detect')
+    #         GTO.state = State(GTO.train.cumulative_signed_distance, True, O_CONTACT_NORTH - TRAIN_CONTACT, aligned=True)
+    #         GTO.emergency_stop()
+    #     except queue.Empty:
+    #         print("GTO not moving")
+
     print(f"Finished move to standard pos. Now {GTO}, {IGBT}")
-    time.sleep(2)
+
+
+def check_not_triggered(contact):
+    return VIRTUAL or trains.GENERATOR.get_state(contact) is True
+
+
+def check_triggered(contact):
+    return VIRTUAL or trains.GENERATOR.get_state(contact) is False
 
 
 def measure_speeds():
@@ -444,9 +466,13 @@ def write_current_state(_dt=None):
 if __name__ == '__main__':
     print("sys.argv:", sys.argv)
     DEBUG = 'debug' in sys.argv
+    VIRTUAL = 'virtual' in sys.argv
+    SHOW = 'show' in sys.argv
+    if VIRTUAL and DEBUG:
+        trains.TIME_DILATION = 10
 
     launch_time = time.perf_counter()
-    if not DEBUG:
+    if not DEBUG and not SHOW:
         while not pc_has_power():
             print("Waiting for AC...")
             if time.perf_counter() - launch_time < 5 * 60:
@@ -458,22 +484,25 @@ if __name__ == '__main__':
     GTO = Controller(trains.get_by_name('GTO'), _LAST_POSITIONS[0] or State(0, True, NAN, True))
     IGBT = Controller(trains.get_by_name('IGBT'), _LAST_POSITIONS[1] or State(0, None, NAN, None))
 
-    LOG = create_log_file()
-    write_current_state(0)
-    schedule_at_fixed_rate(write_current_state, period=2.)
+    if not VIRTUAL and not SHOW:
+        LOG = create_log_file()
+        write_current_state(0)
+        schedule_at_fixed_rate(write_current_state, period=2.)
 
-    VIRTUAL = 'virtual' in sys.argv
-    if VIRTUAL:
-        port = None
-    elif platform.system() == 'Windows':
-        port = 'COM5'
-    else:
-        port = '/dev/ttyUSB0'
-    print(f"Setting up signal generator on port '{port}'")
-    trains.setup(port)
+    if not SHOW:
+        if VIRTUAL:
+            port = None
+        elif platform.system() == 'Windows':
+            port = 'COM5'
+        else:
+            port = '/dev/ttyUSB0'
+        print(f"Setting up signal generator on port '{port}'")
+        trains.setup(port)
 
-    Thread(target=program).start()
-    if 'gui' in sys.argv:
+        Thread(target=program).start()
+    if SHOW or 'gui' in sys.argv:
+        print(IGBT)
+        print(GTO)
         import plan_vis
         plan_vis.show([GTO, IGBT])
 
