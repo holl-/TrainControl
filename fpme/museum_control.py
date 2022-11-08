@@ -193,27 +193,32 @@ def program():
         if 'no-sound' not in sys.argv:
             GTO.train.sound_on()
             IGBT.train.sound_on()
-    # modules = [regular_round, outside_fast, both_outside]
-    # module_stats = [0] * len(modules)
-    # while True:
-    #     if not DEBUG:
-    #         if not pc_has_power():
-    #             write_current_state()
-    #             set_wake_time(tomorrow_at(), shutdown_now=True)
-    #             exit()
-    #             return
-    #         now = datetime.datetime.now()
-    #         if now.minute % 20 > 5:
-    #             module_stats = [0] * len(modules)  # Reset module counter
-    #             wait_minutes = 20 - (now.minute % 20)
-    #             next_minute = (now.minute + wait_minutes) % 60
-    #             next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
-    #             wait_sec = (next_time - now).total_seconds()
-    #             print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec} s) ----------------")
-    #             time.sleep(wait_sec)
-    #     module = modules[choose_index(module_stats)]
-    #     print("                         Queuing module")
-    #     module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
+    modules = [regular_round, outside_fast, both_outside]
+    module_stats = [0] * len(modules)
+    while True:
+        if not DEBUG:
+            if not pc_has_power():
+                write_current_state()
+                set_wake_time(tomorrow_at(), shutdown_now=True)
+                exit()
+                return
+            now = datetime.datetime.now()
+            if now.minute % 20 > 5:
+                if now.hour == 16 and now.minute > 40:
+                    write_current_state()
+                    set_wake_time(tomorrow_at(), shutdown_now=True)
+                    exit()
+                    return
+                module_stats = [0] * len(modules)  # Reset module counter
+                wait_minutes = 20 - (now.minute % 20)
+                next_minute = (now.minute + wait_minutes) % 60
+                next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
+                wait_sec = (next_time - now).total_seconds()
+                print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec} s) ----------------")
+                time.sleep(wait_sec)
+        module = modules[choose_index(module_stats)]
+        print("                         Queuing module")
+        module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
 
         
 def regular_round(pause: float, pause_random: float, rounds=1):
@@ -402,44 +407,6 @@ def move_to_standard_pos():
     else:
         print(f"Unknown configuration: {GTO}, {IGBT}", file=sys.stderr)
         raise NotImplementedError(f"Unknown configuration: {GTO}, {IGBT}")
-
-        
-    # elif trains.GENERATOR.get_state(AIRPORT_CONTACT) is True:
-    #     print("IGBT last seen on inner track")
-    #     if -INTERIM < IGBT.position < -HALF_TRAIN:
-    #         print("Driving IGBT to airport contact")
-    #         IGBT.train.set_target_speed(-50 if IGBT.aligned else 50)
-    #         aligned = IGBT.aligned
-    #     elif IGBT.position < -INTERIM:
-    #         # move GTO to a safe position
-    #         # drive a full round
-    #         raise NotImplementedError
-    #     elif IGBT.position < 2000:
-    #         print("Driving IGBT to airport contact, reverse-exiting the circle")
-    #         IGBT.train.set_target_speed(-50 if IGBT.aligned else 50)
-    #         aligned = IGBT.aligned
-    #     else:  # on inner circle
-    #         print("IGBT continue driving circle")
-    #         IGBT.train.set_target_speed(50 if IGBT.aligned else -50)
-    #         aligned = not IGBT.aligned
-    #     try:
-    #         trains.GENERATOR.await_event([AIRPORT_CONTACT], [False], timeout=60, listener='detect')
-    #         IGBT.emergency_stop()
-    #         IGBT.state = State(IGBT.train.cumulative_signed_distance, False, I_AIRPORT_CONTACT_WEST+TRAIN_CONTACT, aligned)
-    #         print("IGBT arrived at airport contact")
-    #     except queue.Empty:
-    #         print("IGBT not moving")
-
-    # if trains.GENERATOR.get_state(OUTER_CONTACT) is not False:
-    #     # drive GTO to outer contact
-    #     GTO.train.set_target_speed(50)
-    #     try:
-    #         trains.GENERATOR.await_event([OUTER_CONTACT], [False], timeout=60, listener='detect')
-    #         GTO.state = State(GTO.train.cumulative_signed_distance, True, O_CONTACT_NORTH - TRAIN_CONTACT, aligned=True)
-    #         GTO.emergency_stop()
-    #     except queue.Empty:
-    #         print("GTO not moving")
-
     print(f"Finished move to standard pos. Now {GTO}, {IGBT}")
 
 
@@ -490,6 +457,24 @@ def write_current_state(_dt=None):
     LOG.flush()
 
 
+def monitor_power():
+    print("🛈 Power monitor engaged.")
+    while True:
+        time.sleep(1)
+        if trains.GENERATOR.is_short_circuited:
+            print("⚠ No power on track or short-circuited.", file=sys.stderr)
+            if not pc_has_power():
+                print("PC has now power either. Shutting down.")
+                write_current_state()
+                set_wake_time(tomorrow_at(), shutdown_now=True)
+                exit()
+                return
+            else:  # likely short-circuited
+                print("🛈 PC still has power.")
+                time.sleep(9)
+                trains.GENERATOR.start()
+
+
 if __name__ == '__main__':
     print("sys.argv:", sys.argv)
     DEBUG = 'debug' in sys.argv
@@ -506,6 +491,7 @@ if __name__ == '__main__':
                 time.sleep(5)
             else:
                 set_wake_time(tomorrow_at(), shutdown_now=True)
+        Thread(target=monitor_power).start()
 
     _LAST_POSITIONS = read_last_positions()
     GTO = Controller(trains.get_by_name('GTO'), _LAST_POSITIONS[0] or State(0, True, NAN, True))
