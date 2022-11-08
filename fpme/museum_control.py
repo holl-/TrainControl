@@ -31,8 +31,10 @@ class Controller:
         self._last_print = -1
         self._braking = False
         self._update_lock = Lock()
+        self._max_speed = None
+        self._use_emergency_stop = None
 
-    def drive(self, target_position, pause: float or None, trip: List[Tuple[str, float]] = (), wait_for=None):
+    def drive(self, target_position, pause: float or None, trip: List[Tuple[str, float]] = (), wait_for=None, max_speed=80., use_emergency_stop=False):
         """
         Blocks until previous operation finished.
 
@@ -47,6 +49,8 @@ class Controller:
             time.sleep(.2)
         if VIRTUAL:
             trip = []
+        self._max_speed = max_speed
+        self._use_emergency_stop = use_emergency_stop
         self._t_started_waiting = None
         distance_mm = (target_position - self.position) * (1 if self.aligned else -1)  # distance from the train's orientation
         self._target_signed_distance = self.state.cumulative_signed_distance + distance_mm
@@ -58,7 +62,8 @@ class Controller:
         self._braking = False
         print(self._contact_to_target)
         # trains.GENERATOR.register(self)
-        print(f">>> {self.train.name} -> drive {distance_mm:.0f} mm to position {State(0, self.outer_track, target_position, self.aligned)}. Trip: {', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])}")
+        print(f">>> {self.train.name} -> drive {distance_mm:.0f} mm to position {State(0, self.outer_track, target_position, self.aligned)}. Trip: {', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])}"
+              f"{' with emergency stop' if use_emergency_stop else ''}")
         self._executing = True
         Thread(target=self._count_triggers).start()
         if wait_for == 'brake':
@@ -131,7 +136,7 @@ class Controller:
             if time.perf_counter() - self._last_print >= 5.:
                 print(f"    {self}\t speed={self.train.signed_actual_speed:.0f}->{self.train.signed_target_speed}\tto drive: {distance_in_drive_direction:.0f}\tbrake: {braking_distance:.0f}\t(trip={', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])})")
                 self._last_print = time.perf_counter()
-            if distance_in_drive_direction < -10 and abs(self.train._speed) > 0:
+            if distance_in_drive_direction < 0 and abs(self.train._speed) > 0 and self._use_emergency_stop:
                 print(f"Emergency stop {self}", file=sys.stderr)
                 self.train.emergency_stop()
             if distance_in_drive_direction <= braking_distance:
@@ -140,7 +145,7 @@ class Controller:
                 target_speed = min(abs(self.train._speed), 20) if self._braking else 20
                 self.train.set_target_speed(target_speed * (1 if self._increase_signed_distance else -1))
             else:
-                target_speed = min(abs(self.train._speed), 80) if self._braking else 80
+                target_speed = min(abs(self.train._speed), self._max_speed) if self._braking else self._max_speed
                 self.train.set_target_speed(target_speed * (1 if self._increase_signed_distance else -1))
 
     def _brake_wait(self):
@@ -169,15 +174,15 @@ class Controller:
 
 
 def program():
-    print("Power on")
+    print(f"🛈 Starting signal output on {trains.GENERATOR.serial_port}.")
     trains.power_on()
-    print("Waiting for contacts to be initialized")
+    print("🛈 Waiting for contacts to be initialized")
     try:  # Wait for contacts to be initialized.
         trains.GENERATOR.await_event([], [True, False], timeout=1)
     except queue.Empty:
         pass
     while trains.GENERATOR.is_short_circuited:  # no power or short-circuited
-        print("No power on tracks")
+        print("⚠ No power on tracks. Program will start once tracks are on-line.", file=sys.stderr)
         time.sleep(10)
     print(f"Status: outer={trains.GENERATOR.get_state(OUTER_CONTACT)}, inner={trains.GENERATOR.get_state(INNER_CONTACT)}, airport={trains.GENERATOR.get_state(AIRPORT_CONTACT)}")
     if math.isnan(GTO.position) or math.isnan(IGBT.position):
@@ -193,32 +198,29 @@ def program():
         if 'no-sound' not in sys.argv:
             GTO.train.sound_on()
             IGBT.train.sound_on()
-    modules = [regular_round, outside_fast, both_outside]
-    module_stats = [0] * len(modules)
-    while True:
-        if not DEBUG:
-            if not pc_has_power():
-                write_current_state()
-                set_wake_time(tomorrow_at(), shutdown_now=True)
-                exit()
-                return
-            now = datetime.datetime.now()
-            if now.minute % 20 > 5:
-                if now.hour == 16 and now.minute > 40:
-                    write_current_state()
-                    set_wake_time(tomorrow_at(), shutdown_now=True)
-                    exit()
-                    return
-                module_stats = [0] * len(modules)  # Reset module counter
-                wait_minutes = 20 - (now.minute % 20)
-                next_minute = (now.minute + wait_minutes) % 60
-                next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
-                wait_sec = (next_time - now).total_seconds()
-                print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec} s) ----------------")
-                time.sleep(wait_sec)
-        module = modules[choose_index(module_stats)]
-        print("                         Queuing module")
-        module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
+    # modules = [regular_round, outside_fast, both_outside]
+    # module_stats = [0] * len(modules)
+    # while True:
+    #     if not DEBUG:
+    #         # AC is checked by power monitor, no need to do it here.
+    #         now = datetime.datetime.now()
+    #         if now.minute % 20 > 5:
+    #             if now.hour == 16 and now.minute > 40:
+    #                 print(f"The museum is closing. Time: {now}. Shutting down.")
+    #                 write_current_state()
+    #                 set_wake_time(tomorrow_at(), shutdown_now=True)
+    #                 exit()
+    #                 return
+    #             module_stats = [0] * len(modules)  # Reset module counter
+    #             wait_minutes = 20 - (now.minute % 20)
+    #             next_minute = (now.minute + wait_minutes) % 60
+    #             next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
+    #             wait_sec = (next_time - now).total_seconds()
+    #             print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec:.0f} s) ----------------")
+    #             time.sleep(wait_sec)
+    #     module = modules[choose_index(module_stats)]
+    #     print("                         Queuing module")
+    #     module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
 
         
 def regular_round(pause: float, pause_random: float, rounds=1):
@@ -371,15 +373,18 @@ def move_to_standard_pos():
         elif IGBT.inner_track and IGBT.position >= 2000:
             IGBT.drive(INNER + abs(I_SAFE_REVERSAL), 0, trip=[(INNER_CONTACT, INNER + abs(I_CONTACT_SOUTH) - TRAIN_CONTACT)])
         elif IGBT.inner_track and -INNER_CONNECTION-INTERIM+2*HALF_TRAIN + 100 < IGBT.position <= -20:  # On interim
-            IGBT.drive(I_AIRPORT_CONTACT_WEST, 0, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST+TRAIN_CONTACT)])
+            IGBT.drive(I_AIRPORT_CONTACT_WEST, 0, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST+TRAIN_CONTACT)], use_emergency_stop=True)
         if GTO.position < O_CONTACT_NORTH-TRAIN_CONTACT and check_not_triggered(OUTER_CONTACT):
-            GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
+            GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)], max_speed=50)
         else:
-            GTO.drive(OUTER + O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)])
+            GTO.drive(OUTER + O_ERDING, 0)
+            GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)], max_speed=50)
         IGBT.drive(I_MUNICH, 0)
     # --- IGBT on outer ---
     elif IGBT.inner_track:  # IGBT on airport switch
-        if GTO.position >= 1000:
+        if O_ERDING - 2 * HALF_TRAIN < GTO.position < OUTER_UNTIL_SWITCH:
+            GTO.drive(0, 0)
+        else:
             GTO.drive(O_MUNICH, 0)
         IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING), 0)
         IGBT.drive(OUTER + HALF_TRAIN + 100, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-HALF_TRAIN)])
@@ -461,16 +466,17 @@ def monitor_power():
     print("🛈 Power monitor engaged.")
     while True:
         time.sleep(1)
+        if not trains.GENERATOR:
+            continue
         if trains.GENERATOR.is_short_circuited:
-            print("⚠ No power on track or short-circuited.", file=sys.stderr)
             if not pc_has_power():
-                print("PC has now power either. Shutting down.")
+                print("⚠ PC and tracks have no power. Shutting down. (power monitor)", file=sys.stderr)
                 write_current_state()
                 set_wake_time(tomorrow_at(), shutdown_now=True)
                 exit()
                 return
             else:  # likely short-circuited
-                print("🛈 PC still has power.")
+                print("⚠ No power on track or short-circuited but PC still has power. (power monitor)", file=sys.stderr)
                 time.sleep(19)
                 trains.GENERATOR.start()
 
@@ -486,7 +492,7 @@ if __name__ == '__main__':
     launch_time = time.perf_counter()
     if not DEBUG and not SHOW:
         while not pc_has_power():
-            print("Waiting for AC...")
+            print(f"Waiting for AC... ({time.perf_counter() - launch_time} / {5 * 60})")
             if time.perf_counter() - launch_time < 5 * 60:
                 time.sleep(5)
             else:
@@ -509,7 +515,7 @@ if __name__ == '__main__':
             port = 'COM5'
         else:
             port = '/dev/ttyUSB0'
-        print(f"Setting up signal generator on port '{port}'")
+        print(f"🛈 Preparing signal generator for port '{port}'")
         trains.setup(port)
 
         Thread(target=program).start()
