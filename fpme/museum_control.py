@@ -471,7 +471,7 @@ def monitor_power():
                 return
             else:  # likely short-circuited
                 print("🛈 PC still has power.")
-                time.sleep(9)
+                time.sleep(19)
                 trains.GENERATOR.start()
 
 
