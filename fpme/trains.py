@@ -112,6 +112,8 @@ class Train:
             self.on_post_update()
 
     def _accumulate_distance(self):
+        last_t = self._dst_measured_time
+        self._dst_measured_time = time.perf_counter()
         if GENERATOR.is_short_circuited:
             return
         speed_level, in_reverse, _ = self._broadcasting_state
@@ -119,12 +121,10 @@ class Train:
             return
         if self._emergency_stopping:
             return
-        t = time.perf_counter()
-        dt = (t - self._dst_measured_time) * TIME_DILATION
+        dt = (self._dst_measured_time - last_t) * TIME_DILATION
         distance_driven = self.speeds[speed_level] / 3.6 * 1000 * dt / 87  # mm/s
         self._cumulative_abs_distance += distance_driven
         self._cumulative_signed_distance += distance_driven * (-1 if in_reverse else 1)
-        self._dst_measured_time = t
 
     @property
     def cumulative_signed_distance(self):
