@@ -1,18 +1,6 @@
 import math
 import platform
 import queue
-import time
-from random import random, randint
-import sys
-from threading import Thread, Lock
-from typing import Tuple
-
-from fpme import trains
-from fpme.helper import schedule_at_fixed_rate
-from fpme.museum_track import *
-from fpme.ubuntu_helpers import *
-import math
-import queue
 import sys
 from random import random, randint
 from threading import Thread, Lock
@@ -120,6 +108,10 @@ class Controller:
     @property
     def outer_track(self):
         return self.state.outer_track
+
+    @property
+    def inner_track(self):
+        return not self.state.outer_track
     
     def emergency_stop(self):
         self.train.emergency_stop()
@@ -139,6 +131,9 @@ class Controller:
             if time.perf_counter() - self._last_print >= 5.:
                 print(f"    {self}\t speed={self.train.signed_actual_speed:.0f}->{self.train.signed_target_speed}\tto drive: {distance_in_drive_direction:.0f}\tbrake: {braking_distance:.0f}\t(trip={', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])})")
                 self._last_print = time.perf_counter()
+            if distance_in_drive_direction < -10 and abs(self.train._speed) > 0:
+                print(f"Emergency stop {self}", file=sys.stderr)
+                self.train.emergency_stop()
             if distance_in_drive_direction <= braking_distance:
                 self._brake_wait()
             elif distance_in_drive_direction <= braking_distance + 100:  # Go slowly for the last 4 cm
@@ -198,27 +193,27 @@ def program():
         if 'no-sound' not in sys.argv:
             GTO.train.sound_on()
             IGBT.train.sound_on()
-    modules = [regular_round, outside_fast, both_outside]
-    module_stats = [0] * len(modules)
-    while True:
-        if not DEBUG:
-            if not pc_has_power():
-                write_current_state()
-                set_wake_time(tomorrow_at(), shutdown_now=True)
-                exit()
-                return
-            now = datetime.datetime.now()
-            if now.minute % 20 > 5:
-                module_stats = [0] * len(modules)  # Reset module counter
-                wait_minutes = 20 - (now.minute % 20)
-                next_minute = (now.minute + wait_minutes) % 60
-                next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
-                wait_sec = (next_time - now).total_seconds()
-                print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec} s) ----------------")
-                time.sleep(wait_sec)
-        module = modules[choose_index(module_stats)]
-        print("                         Queuing module")
-        module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
+    # modules = [regular_round, outside_fast, both_outside]
+    # module_stats = [0] * len(modules)
+    # while True:
+    #     if not DEBUG:
+    #         if not pc_has_power():
+    #             write_current_state()
+    #             set_wake_time(tomorrow_at(), shutdown_now=True)
+    #             exit()
+    #             return
+    #         now = datetime.datetime.now()
+    #         if now.minute % 20 > 5:
+    #             module_stats = [0] * len(modules)  # Reset module counter
+    #             wait_minutes = 20 - (now.minute % 20)
+    #             next_minute = (now.minute + wait_minutes) % 60
+    #             next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
+    #             wait_sec = (next_time - now).total_seconds()
+    #             print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec} s) ----------------")
+    #             time.sleep(wait_sec)
+    #     module = modules[choose_index(module_stats)]
+    #     print("                         Queuing module")
+    #     module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
 
         
 def regular_round(pause: float, pause_random: float, rounds=1):
@@ -268,7 +263,7 @@ def both_outside(pause: float, pause_random: float, rounds=1):
         print("---------------------- Switching direction of inner ---------------")
         IGBT.drive(INNER + abs(I_SAFE_REVERSAL), pause=0, trip=[(INNER_CONTACT, INNER + abs(I_CONTACT_SOUTH) - TRAIN_CONTACT)])
     print("------------------ Exiting inner round -------------------")
-    GTO.drive(OUTER + 3500, pause=0, wait_for='brake')
+    GTO.drive(OUTER + O_SAFE_WAIT, pause=0, wait_for='brake')
     IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING), pause=pause + random() * pause_random, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT)])
     for i in range(rounds):
         print(f"-------------------- Both outer {i} / {rounds} ----------------------")
@@ -279,7 +274,7 @@ def both_outside(pause: float, pause_random: float, rounds=1):
         GTO.drive(O_AIRPORT, pause=pause + random() * pause_random, wait_for='brake')
         IGBT.drive(OUTER + O_ERDING, pause=pause + random() * pause_random, wait_for='brake')
     print("----------------------- Entering inner round -----------------------")
-    GTO.drive(3500, pause=0)
+    GTO.drive(O_SAFE_WAIT, pause=0)
     IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, pause=0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
     GTO.drive(O_MUNICH, pause=pause + random() * pause_random, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
     IGBT.drive(I_MUNICH, pause=pause + random() * pause_random)
@@ -364,44 +359,76 @@ def move_to_standard_pos():
             GTO.state = State(GTO.train.cumulative_signed_distance, True, O_CONTACT_NORTH - TRAIN_CONTACT + 10, True)
     print(f"Assumed positions: {GTO}, {IGBT}")
     # --- Move trains to standard positions ---
-    # elif IGBT.position < - INNER_CONNECTION - INTERIM + HALF_TRAIN:
-    #     print("IGBT on airport switch")
-    #     raise NotImplementedError
-    if IGBT.outer_track and IGBT.position < GTO.position < O_CONTACT_NORTH - TRAIN_CONTACT and check_not_triggered(OUTER_CONTACT):
+    # --- IGBT on inner track ---
+    if IGBT.inner_track and IGBT.position > -INNER_CONNECTION-INTERIM+2*HALF_TRAIN + 100:
+        if IGBT.inner_track and -20 < IGBT.position < 2000:
+            IGBT.drive(I_SAFE_REVERSAL, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH + TRAIN_CONTACT)])
+        elif IGBT.inner_track and IGBT.position >= 2000:
+            IGBT.drive(INNER + abs(I_SAFE_REVERSAL), 0, trip=[(INNER_CONTACT, INNER + abs(I_CONTACT_SOUTH) - TRAIN_CONTACT)])
+        elif IGBT.inner_track and -INNER_CONNECTION-INTERIM+2*HALF_TRAIN + 100 < IGBT.position <= -20:  # On interim
+            IGBT.drive(I_AIRPORT_CONTACT_WEST, 0, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST+TRAIN_CONTACT)])
+        if GTO.position < O_CONTACT_NORTH-TRAIN_CONTACT and check_not_triggered(OUTER_CONTACT):
+            GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
+        else:
+            GTO.drive(OUTER + O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)])
+        IGBT.drive(I_MUNICH, 0)
+    # --- IGBT on outer ---
+    elif IGBT.inner_track:  # IGBT on airport switch
+        if GTO.position >= 1000:
+            GTO.drive(O_MUNICH, 0)
+        IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING), 0)
+        IGBT.drive(OUTER + HALF_TRAIN + 100, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-HALF_TRAIN)])
+        if GTO.position > OUTER - HALF_TRAIN - 100:
+            GTO.drive(O_SAFE_WAIT + OUTER, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-HALF_TRAIN)])
+        else:
+            GTO.drive(O_SAFE_WAIT, 0)
+        IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
+        GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
+        IGBT.drive(I_MUNICH, 0)
+    elif IGBT.outer_track and IGBT.position < GTO.position < O_CONTACT_NORTH - TRAIN_CONTACT and check_not_triggered(OUTER_CONTACT):
         print("Reversing IGBT into inner track")
         IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
         GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
         IGBT.drive(I_MUNICH, 0)
     elif IGBT.outer_track:
-        # move GTO to a safe position
-        # reverse IGBT until on interim
-        raise NotImplementedError
+        IGBT.drive(OUTER + HALF_TRAIN + 100, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - HALF_TRAIN)])
+        if GTO.position > OUTER - HALF_TRAIN - 100:
+            GTO.drive(O_SAFE_WAIT + OUTER, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - HALF_TRAIN)])
+        else:
+            GTO.drive(O_SAFE_WAIT, 0)
+        IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
+        GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
+        IGBT.drive(I_MUNICH, 0)
+    else:
+        print(f"Unknown configuration: {GTO}, {IGBT}", file=sys.stderr)
+        raise NotImplementedError(f"Unknown configuration: {GTO}, {IGBT}")
+
         
-    elif trains.GENERATOR.get_state(AIRPORT_CONTACT) is True:
-        print("IGBT last seen on inner track")
-        if -INTERIM < IGBT.position < -HALF_TRAIN:
-            print("Driving IGBT to airport contact")
-            IGBT.train.set_target_speed(-50 if IGBT.aligned else 50)
-            aligned = IGBT.aligned
-        elif IGBT.position < -INTERIM:
-            # move GTO to a safe position
-            # drive a full round
-            raise NotImplementedError
-        elif IGBT.position < 2000:
-            print("Driving IGBT to airport contact, reverse-exiting the circle")
-            IGBT.train.set_target_speed(-50 if IGBT.aligned else 50)
-            aligned = IGBT.aligned
-        else:  # on inner circle
-            print("IGBT continue driving circle")
-            IGBT.train.set_target_speed(50 if IGBT.aligned else -50)
-            aligned = not IGBT.aligned
-        try:
-            trains.GENERATOR.await_event([AIRPORT_CONTACT], [False], timeout=60, listener='detect')
-            IGBT.emergency_stop()
-            IGBT.state = State(IGBT.train.cumulative_signed_distance, False, I_AIRPORT_CONTACT_WEST+TRAIN_CONTACT, aligned)
-            print("IGBT arrived at airport contact")
-        except queue.Empty:
-            print("IGBT not moving")
+    # elif trains.GENERATOR.get_state(AIRPORT_CONTACT) is True:
+    #     print("IGBT last seen on inner track")
+    #     if -INTERIM < IGBT.position < -HALF_TRAIN:
+    #         print("Driving IGBT to airport contact")
+    #         IGBT.train.set_target_speed(-50 if IGBT.aligned else 50)
+    #         aligned = IGBT.aligned
+    #     elif IGBT.position < -INTERIM:
+    #         # move GTO to a safe position
+    #         # drive a full round
+    #         raise NotImplementedError
+    #     elif IGBT.position < 2000:
+    #         print("Driving IGBT to airport contact, reverse-exiting the circle")
+    #         IGBT.train.set_target_speed(-50 if IGBT.aligned else 50)
+    #         aligned = IGBT.aligned
+    #     else:  # on inner circle
+    #         print("IGBT continue driving circle")
+    #         IGBT.train.set_target_speed(50 if IGBT.aligned else -50)
+    #         aligned = not IGBT.aligned
+    #     try:
+    #         trains.GENERATOR.await_event([AIRPORT_CONTACT], [False], timeout=60, listener='detect')
+    #         IGBT.emergency_stop()
+    #         IGBT.state = State(IGBT.train.cumulative_signed_distance, False, I_AIRPORT_CONTACT_WEST+TRAIN_CONTACT, aligned)
+    #         print("IGBT arrived at airport contact")
+    #     except queue.Empty:
+    #         print("IGBT not moving")
 
     # if trains.GENERATOR.get_state(OUTER_CONTACT) is not False:
     #     # drive GTO to outer contact
