@@ -198,29 +198,29 @@ def program():
         if 'no-sound' not in sys.argv:
             GTO.train.sound_on()
             IGBT.train.sound_on()
-    # modules = [regular_round, outside_fast, both_outside]
-    # module_stats = [0] * len(modules)
-    # while True:
-    #     if not DEBUG:
-    #         # AC is checked by power monitor, no need to do it here.
-    #         now = datetime.datetime.now()
-    #         if now.minute % 20 > 5:
-    #             if now.hour == 16 and now.minute > 40:
-    #                 print(f"The museum is closing. Time: {now}. Shutting down.")
-    #                 write_current_state()
-    #                 set_wake_time(tomorrow_at(), shutdown_now=True)
-    #                 exit()
-    #                 return
-    #             module_stats = [0] * len(modules)  # Reset module counter
-    #             wait_minutes = 20 - (now.minute % 20)
-    #             next_minute = (now.minute + wait_minutes) % 60
-    #             next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
-    #             wait_sec = (next_time - now).total_seconds()
-    #             print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec:.0f} s) ----------------")
-    #             time.sleep(wait_sec)
-    #     module = modules[choose_index(module_stats)]
-    #     print("                         Queuing module")
-    #     module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
+    modules = [regular_round, outside_fast, both_outside]
+    module_stats = [0] * len(modules)
+    while True:
+        if not DEBUG:
+            # AC is checked by power monitor, no need to do it here.
+            now = datetime.datetime.now()
+            if now.minute % 20 > 5:
+                if now.hour == 16 and now.minute > 40:
+                    print(f"The museum is closing. Time: {now}. Shutting down.")
+                    write_current_state()
+                    set_wake_time(tomorrow_at(), shutdown_now=True)
+                    exit()
+                    return
+                module_stats = [0] * len(modules)  # Reset module counter
+                wait_minutes = 20 - (now.minute % 20)
+                next_minute = (now.minute + wait_minutes) % 60
+                next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
+                wait_sec = (next_time - now).total_seconds()
+                print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec:.0f} s) ----------------")
+                time.sleep(wait_sec)
+        module = modules[choose_index(module_stats)]
+        print("                         Queuing module")
+        module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
 
         
 def regular_round(pause: float, pause_random: float, rounds=1):
