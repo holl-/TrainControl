@@ -1,4 +1,5 @@
 import math
+import platform
 import queue
 import time
 from random import random, randint
@@ -56,6 +57,8 @@ class Controller:
         print(f"{self.train.name} add command to queue: drive to {target_position} tripping {len(trip)}")
         while self._executing:
             time.sleep(.2)
+        if VIRTUAL:
+            trip = []
         self._t_started_waiting = None
         distance_mm = (target_position - self.position) * (1 if self.aligned else -1)  # distance from the train's orientation
         self._target_signed_distance = self.state.cumulative_signed_distance + distance_mm
@@ -214,7 +217,7 @@ def program():
         module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
 
         
-def regular_round(pause: float, pause_random: float, rounds=2):
+def regular_round(pause: float, pause_random: float, rounds=1):
     for i in range(rounds):
         print(f"------------------ Regular round {i} / {rounds} ------------------")
         IGBT.drive(I_AIRPORT, pause=pause + random() * pause_random)
@@ -255,7 +258,7 @@ def outside_fast(pause: float, pause_random: float, rounds=3):
         IGBT.drive(I_MUNICH, pause=pause + random() * pause_random)
 
 
-def both_outside(pause: float, pause_random: float, rounds=2):
+def both_outside(pause: float, pause_random: float, rounds=1):
     assert rounds >= 1, "not implemented for rounds=0"
     if not IGBT.aligned:
         print("---------------------- Switching direction of inner ---------------")
@@ -459,7 +462,15 @@ if __name__ == '__main__':
     write_current_state(0)
     schedule_at_fixed_rate(write_current_state, period=2.)
 
-    trains.setup('/dev/ttyUSB0')  # COM5
+    VIRTUAL = 'virtual' in sys.argv
+    if VIRTUAL:
+        port = None
+    elif platform.system() == 'Windows':
+        port = 'COM5'
+    else:
+        port = '/dev/ttyUSB0'
+    print(f"Setting up signal generator on port '{port}'")
+    trains.setup(port)
 
     Thread(target=program).start()
     if 'gui' in sys.argv:
