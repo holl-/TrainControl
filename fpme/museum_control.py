@@ -34,6 +34,10 @@ class Controller:
         self._max_speed = None
         self._use_emergency_stop = None
 
+    def wait(self):
+        while self._executing:
+            time.sleep(.2)
+
     def drive(self, target_position, pause: float or None, trip: List[Tuple[str, float]] = (), wait_for=None, max_speed=80., use_emergency_stop=False):
         """
         Blocks until previous operation finished.
@@ -43,10 +47,9 @@ class Controller:
         :param trip: Contacts to trip along the way, (pin, position)
         :param wait_for: One of 'brake', 'done', None
         """
-        pause /= trains.TIME_DILATION
         print(f"{self.train.name} add command to queue: drive to {target_position} tripping {len(trip)}")
-        while self._executing:
-            time.sleep(.2)
+        self.wait()
+        pause /= trains.TIME_DILATION
         if VIRTUAL:
             trip = []
         self._max_speed = max_speed
@@ -205,6 +208,10 @@ def program():
             # AC is checked by power monitor, no need to do it here.
             now = datetime.datetime.now()
             if now.minute % 20 > 5:
+                IGBT.wait()
+                GTO.wait()
+                trains.power_off()
+                now = datetime.datetime.now()
                 if now.hour == 16 and now.minute > 40:
                     print(f"The museum is closing. Time: {now}. Shutting down.")
                     write_current_state()
@@ -218,6 +225,7 @@ def program():
                 wait_sec = (next_time - now).total_seconds()
                 print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec:.0f} s) ----------------")
                 time.sleep(wait_sec)
+                trains.power_on()
         module = modules[choose_index(module_stats)]
         print("                         Queuing module")
         module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
@@ -468,17 +476,16 @@ def monitor_power():
         time.sleep(1)
         if not trains.GENERATOR:
             continue
-        if trains.GENERATOR.is_short_circuited:
-            if not pc_has_power():
-                print("⚠ PC and tracks have no power. Shutting down. (power monitor)", file=sys.stderr)
-                write_current_state()
-                set_wake_time(tomorrow_at(), shutdown_now=True)
-                exit()
-                return
-            else:  # likely short-circuited
-                print("⚠ No power on track or short-circuited but PC still has power. (power monitor)", file=sys.stderr)
-                time.sleep(19)
-                trains.GENERATOR.start()
+        if trains.GENERATOR.is_short_circuited and pc_has_power():  # likely short-circuited
+            print("⚠ No power on track or short-circuited but PC still has power. (power monitor)", file=sys.stderr)
+            time.sleep(19)
+            trains.GENERATOR.start()
+        if not pc_has_power():
+            print("⚠ PC has no power. Shutting down. (power monitor)", file=sys.stderr)
+            write_current_state()
+            set_wake_time(tomorrow_at(), shutdown_now=True)
+            exit()
+            return
 
 
 if __name__ == '__main__':
