@@ -110,7 +110,7 @@ class Controller:
                 self._contact_to_target.pop(0)
                 distance_in_drive_direction = (self._target_signed_distance - self.train.cumulative_signed_distance) * (1 if self._increase_signed_distance else -1)  # positive unless overshot
                 if distance_in_drive_direction < 0 and not self._trip:
-                    print(f"Emergency stop {self}", file=sys.stderr)
+                    print(f"Emergency stop {self} due to contact-induced position update", file=sys.stderr)
                     self.emergency_stop()
 
     @property
@@ -147,6 +147,9 @@ class Controller:
             if time.perf_counter() - self._last_print >= 5.:
                 print(f"    {self}\t speed={self.train.signed_actual_speed:.0f}->{self.train.signed_target_speed}\tto drive: {distance_in_drive_direction:.0f}\tbrake: {braking_distance:.0f}\t(trip={', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])})")
                 self._last_print = time.perf_counter()
+            if distance_in_drive_direction < 0 and abs(self.train._speed) > 0 and self._use_emergency_stop:
+                print(f"Emergency stop {self} due to overshoot.", file=sys.stderr)
+                self.train.emergency_stop()
             if distance_in_drive_direction <= braking_distance:
                 self._brake_wait()
             elif distance_in_drive_direction <= braking_distance + 100:  # Go slowly for the last 4 cm
