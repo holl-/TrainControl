@@ -228,9 +228,10 @@ def program():
                 next_minute = (now.minute + wait_minutes) % 60
                 next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
                 wait_sec = (next_time - now).total_seconds()
-                print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec:.0f} s) ----------------")
-                time.sleep(wait_sec)
+                print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec:.0f} s, power 30s earlier) ----------------")
+                time.sleep(max(0., wait_sec - 30))
                 trains.power_on()
+                time.sleep(30)
         module = modules[choose_index(module_stats)]
         print("                         Queuing module")
         module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
