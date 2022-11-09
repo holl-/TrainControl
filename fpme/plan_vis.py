@@ -14,8 +14,15 @@ def show(trains: Iterable[museum_control.Controller]):
     img = mpimg.imread(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Gleisplan v3.png'))
     fig, ax = plt.subplots(1, 1, figsize=(5, 3.5))
     ax.imshow(img, extent=(-2.5, 194.5, -2, 195))
+    CLOSED = []
 
-    while True:
+    def on_close(event):
+        CLOSED.append(True)
+        print("User closed GUI")
+
+    fig.canvas.mpl_connect('close_event', on_close)
+
+    while not CLOSED:
         plt.gca().collections.clear()
         for train in trains:
             center = get_position(train.state)
@@ -26,6 +33,7 @@ def show(trains: Iterable[museum_control.Controller]):
                        color=colors[train.train.name], scale=1, scale_units='x')
         plt.pause(0.02)
         plt.draw()
+    print("Exiting UI")
 
 
 def get_position(state: State):
