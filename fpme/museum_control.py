@@ -2,6 +2,7 @@ import math
 import platform
 import queue
 import sys
+import time
 from random import random, randint
 from threading import Thread, Lock
 from typing import Tuple
@@ -210,6 +211,7 @@ def program():
             if now.minute % 20 > 5:
                 IGBT.wait()
                 GTO.wait()
+                time.sleep(10)
                 trains.power_off()
                 now = datetime.datetime.now()
                 if now.hour == 16 and now.minute > 40:
