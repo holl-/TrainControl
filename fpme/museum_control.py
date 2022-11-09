@@ -496,14 +496,13 @@ def monitor_power():
 
 if __name__ == '__main__':
     print("sys.argv:", sys.argv)
-    DEBUG = 'debug' in sys.argv
     VIRTUAL = 'virtual' in sys.argv
-    SHOW = 'show' in sys.argv
+    DEBUG = 'debug' in sys.argv
     if VIRTUAL and DEBUG:
         trains.TIME_DILATION = 10
 
     launch_time = time.perf_counter()
-    if not DEBUG and not SHOW:
+    if not DEBUG:
         while not pc_has_power():
             print(f"Waiting for AC... ({time.perf_counter() - launch_time} / {5 * 60})")
             if time.perf_counter() - launch_time < 5 * 60:
@@ -516,25 +515,24 @@ if __name__ == '__main__':
     GTO = Controller(trains.get_by_name('GTO'), _LAST_POSITIONS[0] or State(0, True, NAN, True))
     IGBT = Controller(trains.get_by_name('IGBT'), _LAST_POSITIONS[1] or State(0, None, NAN, None))
 
-    if not VIRTUAL and not SHOW:
+    if not VIRTUAL:
         LOG = create_log_file()
         write_current_state(0)
         schedule_at_fixed_rate(write_current_state, period=2.)
 
-    if not SHOW:
-        if VIRTUAL:
-            port = None
-        elif platform.system() == 'Windows':
-            port = 'COM5'
-        else:
-            port = '/dev/ttyUSB0'
-        print(f"🛈 Preparing signal generator for port '{port}'")
-        trains.setup(port)
+    if VIRTUAL:
+        port = None
+    elif platform.system() == 'Windows':
+        port = 'COM5'
+    else:
+        port = '/dev/ttyUSB0'
+    print(f"🛈 Preparing signal generator for port '{port}'")
+    trains.setup(port)
 
-        Thread(target=program).start()
-    if SHOW or 'gui' in sys.argv:
-        print(IGBT)
-        print(GTO)
-        import plan_vis
-        plan_vis.show([GTO, IGBT])
+    Thread(target=program).start()
+    
+    print(IGBT)
+    print(GTO)
+    import plan_vis
+    plan_vis.show([GTO, IGBT])
 
