@@ -253,6 +253,7 @@ def opening_round():
     IGBT.drive(I_AIRPORT, pause=0, wait_for='done')
     print()
     print("Press Enter to Start")
+    input()
     if 'no-sound' not in sys.argv:
         GTO.train.sound_on()
         IGBT.train.sound_on()
@@ -530,7 +531,7 @@ if __name__ == '__main__':
     trains.setup(port)
 
     Thread(target=program).start()
-    
+
     print(IGBT)
     print(GTO)
     import plan_vis
