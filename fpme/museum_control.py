@@ -68,6 +68,9 @@ class Controller:
         # trains.GENERATOR.register(self)
         print(f">>> {self.train.name} -> drive {distance_mm:.0f} mm to position {State(0, self.outer_track, target_position, self.aligned)}. Trip: {', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])}"
               f"{' with emergency stop' if use_emergency_stop else ''}")
+        if abs(distance_mm) < 10:
+            print("Already there.")
+            return
         self._executing = True
         Thread(target=self._count_triggers).start()
         if wait_for == 'brake':
