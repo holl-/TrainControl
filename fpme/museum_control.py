@@ -286,7 +286,7 @@ def both_outside(pause: float, pause_random: float, rounds=1):
         IGBT.drive(INNER + abs(I_SAFE_REVERSAL), pause=0, trip=[(INNER_CONTACT, INNER + abs(I_CONTACT_SOUTH) - TRAIN_CONTACT)])
     print("------------------ Exiting inner round -------------------")
     GTO.drive(OUTER + O_SAFE_WAIT, pause=0, wait_for='brake')
-    IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING), pause=pause + random() * pause_random, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT)])
+    IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING), pause=pause/2 + random() * pause_random / 2, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT)])
     for i in range(rounds):
         print(f"-------------------- Both outer {i} / {rounds} ----------------------")
         GTO.drive(O_MUNICH, pause=pause + random() * pause_random, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
