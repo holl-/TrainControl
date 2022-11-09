@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
 
-def show(trains: Iterable[museum_control.Controller]):
+def show(trains: Iterable[museum_control.Controller], exit_on_close=False):
     colors = {'GTO': 'blue', 'IGBT': 'green'}
     img = mpimg.imread(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Gleisplan v3.png'))
     fig, ax = plt.subplots(1, 1, figsize=(5, 3.5))
@@ -19,6 +19,8 @@ def show(trains: Iterable[museum_control.Controller]):
     def on_close(event):
         CLOSED.append(True)
         print("User closed GUI")
+        if exit_on_close:
+            exit()
 
     fig.canvas.mpl_connect('close_event', on_close)
 
