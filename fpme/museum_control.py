@@ -511,7 +511,7 @@ if __name__ == '__main__':
     launch_time = time.perf_counter()
     if not DEBUG:
         while not pc_has_power():
-            print(f"Waiting for AC... ({time.perf_counter() - launch_time} / {5 * 60})")
+            print(f"Waiting for AC... ({time.perf_counter() - launch_time:.0f} / {5 * 60} s)")
             if time.perf_counter() - launch_time < 5 * 60:
                 time.sleep(5)
             else:
