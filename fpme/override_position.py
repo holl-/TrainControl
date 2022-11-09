@@ -1,6 +1,7 @@
 import sys
 
-from fpme import trains, plan_vis
+from fpme import trains
+import plan_vis
 from fpme.museum_control import *
 
 HELP_MESSAGE = """Please specify
