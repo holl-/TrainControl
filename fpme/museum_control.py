@@ -399,7 +399,7 @@ def move_to_standard_pos():
         IGBT.drive(I_MUNICH, 0)
     # --- IGBT on outer ---
     elif IGBT.inner_track:  # IGBT on airport switch
-        if O_ERDING - 2 * HALF_TRAIN < GTO.position < OUTER_UNTIL_SWITCH:
+        if GTO.position < OUTER_UNTIL_SWITCH:
             GTO.drive(HALF_TRAIN + 100, 0)
         else:
             GTO.drive(O_MUNICH, 0)
