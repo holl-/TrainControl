@@ -383,7 +383,8 @@ def move_to_standard_pos():
         elif IGBT.inner_track and IGBT.position >= 2000:
             IGBT.drive(INNER + abs(I_SAFE_REVERSAL), 0, trip=[(INNER_CONTACT, INNER + abs(I_CONTACT_SOUTH) - TRAIN_CONTACT)])
         elif IGBT.inner_track and -INNER_CONNECTION-INTERIM+2*HALF_TRAIN + 100 < IGBT.position <= -20:  # On interim
-            IGBT.drive(I_AIRPORT_CONTACT_WEST, 0, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST+TRAIN_CONTACT)], use_emergency_stop=True)
+            IGBT.drive(I_AIRPORT_CONTACT_WEST, 0, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST+TRAIN_CONTACT)], use_emergency_stop=True, max_speed=40)
+            IGBT.drive(I_AIRPORT_CONTACT_WEST+TRAIN_CONTACT+100, 0)
         if GTO.position < O_CONTACT_NORTH-TRAIN_CONTACT and check_not_triggered(OUTER_CONTACT):
             GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)], max_speed=50)
         else:
