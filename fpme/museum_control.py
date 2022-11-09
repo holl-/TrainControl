@@ -261,7 +261,7 @@ def opening_round():
         IGBT.train.sound_on()
     GTO.drive(OUTER + O_ERDING, pause=25)
     time.sleep(6)
-    IGBT.drive(I_ERDING + 50, pause=20)
+    IGBT.drive(I_ERDING, pause=20)
     # Keep going to standard position
     IGBT.drive(INNER, pause=5)
     GTO.drive(O_AIRPORT, pause=7)
@@ -286,7 +286,8 @@ def both_outside(pause: float, pause_random: float, rounds=1):
         print("---------------------- Switching direction of inner ---------------")
         IGBT.drive(INNER + abs(I_SAFE_REVERSAL), pause=0, trip=[(INNER_CONTACT, INNER + abs(I_CONTACT_SOUTH) - TRAIN_CONTACT)])
     print("------------------ Exiting inner round -------------------")
-    GTO.drive(OUTER + O_SAFE_WAIT, pause=0, wait_for='brake')
+    if HALF_TRAIN + 100 < GTO.position < O_SAFE_WAIT:
+        GTO.drive(OUTER + O_SAFE_WAIT, pause=0, wait_for='brake')
     IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING), pause=pause/2 + random() * pause_random / 2, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT)])
     for i in range(rounds):
         print(f"-------------------- Both outer {i} / {rounds} ----------------------")
