@@ -127,7 +127,7 @@ class Controller:
 
     def _update(self):
         with self._update_lock:
-            prev_state = self.state
+            prev_state: State = self.state
             self.state = update_state(self.state, self.train.cumulative_signed_distance)
             if not self._executing:
                 return
@@ -136,6 +136,7 @@ class Controller:
             if self._trip and trains.GENERATOR.serial_port:
                 if self._contact_to_target[0] > distance_in_drive_direction:
                     distance_in_drive_direction = self._contact_to_target[0]
+                    self._target_signed_distance += self.state.cumulative_signed_distance - prev_state.cumulative_signed_distance
                     self.state = State(self.state.cumulative_signed_distance, prev_state.outer_track, prev_state.position, prev_state.aligned)
             if time.perf_counter() - self._last_print >= 5.:
                 print(f"    {self}\t speed={self.train.signed_actual_speed:.0f}->{self.train.signed_target_speed}\tto drive: {distance_in_drive_direction:.0f}\tbrake: {braking_distance:.0f}\t(trip={', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])})")
