@@ -209,7 +209,7 @@ def program():
         if not DEBUG:
             # AC is checked by power monitor, no need to do it here.
             now = datetime.datetime.now()
-            if now.minute % 15 > 3:  # :00:00 - :03:59 (4 minutes)
+            if now.minute % 15 > 1:  # :00:00 - :01:59 (2 minutes)
                 IGBT.wait()
                 GTO.wait()
                 time.sleep(10)
