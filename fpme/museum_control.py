@@ -228,7 +228,7 @@ def program():
                     exit()
                     return
                 module_stats = [0] * len(modules)  # Reset module counter
-                wait_minutes = 20 - (now.minute % 20)
+                wait_minutes = 15 - (now.minute % 15)
                 next_minute = (now.minute + wait_minutes) % 60
                 next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
                 wait_sec = (next_time - now).total_seconds()
