@@ -89,19 +89,12 @@ class Controller:
             print(f"{self.train} waiting for {pin}")
             trains.GENERATOR.await_event([pin], [False], timeout=None)
             p_position = project_position(position, self.outer_track)
+            self_prev = str(self)
             with self._update_lock:
                 self.state = update_state(self.state, self.train.cumulative_signed_distance)
-                delta = p_position - self.position
-                self_prev = str(self)
-                if abs(delta) > 1000:
-                    if abs(position - self.position) < 1000:  # The train has not crossed projection threshold yet
-                        p_position = position
-                        delta = position - self.position
-                        print(f"⚠ {self} triggered {CONTACT_NAMES[pin]} before crossing projection threshold. Using non-projected position to compute delta.", file=sys.stderr)
-                    else:
-                        print(f"⚠ {self} triggered {CONTACT_NAMES[pin]}, would update position by {delta} mm (actual - predicted) which is no plausible. Stopping train. Specified position={position}, projected={p_position}", file=sys.stderr)
-                        self.emergency_stop()
-                        continue
+                proj_delta = p_position - self.position
+                original_delta = position - self.position
+                delta = original_delta if abs(original_delta) < abs(proj_delta) else proj_delta
                 self.state = State(self.train.cumulative_signed_distance, self.outer_track, p_position, self.aligned)
                 self.state = update_state(self.state, self.state.cumulative_signed_distance)
                 self._target_signed_distance -= delta
