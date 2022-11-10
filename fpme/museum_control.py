@@ -204,7 +204,7 @@ def program():
             GTO.train.sound_on()
             IGBT.train.sound_on()
     modules = [regular_round, outside_fast, both_outside]
-    module_index = 0
+    module_index = 1
     while True:
         if not DEBUG:
             # AC is checked by power monitor, no need to do it here.
@@ -267,11 +267,11 @@ def opening_round():
     GTO.drive(O_MUNICH, pause=8, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
 
 
-def outside_fast(pause: float, pause_random: float, rounds=5):
+def outside_fast(pause: float, pause_random: float, rounds=4):
     print("------------------ Outside fast ------------------")
     contacts = [(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT + OUTER * (i + 1)) for i in range(rounds)]
-    GTO.drive(OUTER * rounds + O_MUNICH, pause=pause + random() * pause_random, trip=contacts)
-    for i in range(1 + rounds // 5):
+    for i in range(2):
+        GTO.drive(OUTER * rounds + O_MUNICH, pause=pause + random() * pause_random, trip=contacts)
         IGBT.drive(I_AIRPORT, pause=pause + random() * pause_random)
         IGBT.drive(I_ERDING, pause=pause + random() * pause_random)
         IGBT.drive(INNER + abs(I_SAFE_REVERSAL), pause=0, trip=[(INNER_CONTACT, INNER + abs(I_CONTACT_SOUTH) - TRAIN_CONTACT)])
