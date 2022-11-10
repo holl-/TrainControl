@@ -215,13 +215,13 @@ def program():
         if not DEBUG:
             # AC is checked by power monitor, no need to do it here.
             now = datetime.datetime.now()
-            if now.minute % 20 > 5:
+            if now.minute % 15 > 3:  # :00:00 - :03:59 (4 minutes)
                 IGBT.wait()
                 GTO.wait()
                 time.sleep(10)
                 trains.power_off()
                 now = datetime.datetime.now()
-                if now.hour == 16 and now.minute > 40:
+                if now.hour == 16 and now.minute > 45:
                     print(f"The museum is closing. Time: {now}. Shutting down.")
                     write_current_state()
                     set_wake_time(tomorrow_at(), shutdown_now=True)
