@@ -229,6 +229,7 @@ def program():
                 time.sleep(max(0., wait_sec - 30))
                 trains.power_on()
                 time.sleep(30)
+                correct_positions_based_on_contacts()
         module = modules[choose_index(module_stats)]
         print("                         Queuing module")
         module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
@@ -363,13 +364,11 @@ def detect_train_positions_from_scratch():
     print(f"Detection complete. Trains in starting positions.")
 
 
-def move_to_standard_pos():
-    print("---------------- Moving to standard positions -----------------")
-    print(f"Current position estimate: {GTO}, {IGBT}")
-    # --- Check contacts, update train positions if tripped ---
+def correct_positions_based_on_contacts():
+    print("Checking contacts and updating positions")
     if trains.GENERATOR.get_state(AIRPORT_CONTACT) is False:
         print("IGBT on airport contact")
-        if IGBT.position > I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT:
+        if IGBT.position > I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT or IGBT.outer_track:
             print("correcting IGBT position to airport contact")
             IGBT.state = State(IGBT.train.cumulative_signed_distance, False, I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT, IGBT.aligned)
     if trains.GENERATOR.get_state(OUTER_CONTACT) is False and not IGBT.outer_track:
@@ -377,6 +376,25 @@ def move_to_standard_pos():
         if GTO.position < O_CONTACT_NORTH - TRAIN_CONTACT:
             print("correcting GTO position to outer contact")
             GTO.state = State(GTO.train.cumulative_signed_distance, True, O_CONTACT_NORTH - TRAIN_CONTACT + 10, True)
+    if trains.GENERATOR.get_state(INNER_CONTACT) is False:
+        if IGBT.outer_track:
+            print("correcting IGBT position to inner contact (from outer ring)")
+            IGBT.state = State(IGBT.train.cumulative_signed_distance, False, (I_CONTACT_SOUTH + I_CONTACT_NORTH) / 2, IGBT.aligned)
+        elif IGBT.position > I_CONTACT_SOUTH + TRAIN_CONTACT:
+            print("correcting IGBT position to inner contact (from inner ring)")
+            IGBT.state = State(IGBT.train.cumulative_signed_distance, False, I_CONTACT_SOUTH - 100, IGBT.aligned if IGBT.position < 1000 else not IGBT.aligned)
+            if IGBT.position >= 1000:
+                print("correcting IGBT alignment, assuming it finished the ring.")
+        elif IGBT.position < I_CONTACT_NORTH - TRAIN_CONTACT:
+            print("correcting IGBT position to inner contact (from airport)")
+            IGBT.state = State(IGBT.train.cumulative_signed_distance, False, I_CONTACT_NORTH + 100, IGBT.aligned)
+
+
+def move_to_standard_pos():
+    print("---------------- Moving to standard positions -----------------")
+    print(f"Current position estimate: {GTO}, {IGBT}")
+    # --- Check contacts, update train positions if tripped ---
+    correct_positions_based_on_contacts()
     print(f"Assumed positions: {GTO}, {IGBT}")
     # --- Move trains to standard positions ---
     # --- IGBT on inner track ---
