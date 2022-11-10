@@ -204,7 +204,7 @@ def program():
             GTO.train.sound_on()
             IGBT.train.sound_on()
     modules = [regular_round, outside_fast, both_outside]
-    module_stats = [0] * len(modules)
+    module_index = 0
     while True:
         if not DEBUG:
             # AC is checked by power monitor, no need to do it here.
@@ -221,7 +221,6 @@ def program():
                     set_wake_time(tomorrow_at(), shutdown_now=True)
                     exit()
                     return
-                module_stats = [0] * len(modules)  # Reset module counter
                 wait_minutes = 15 - (now.minute % 15)
                 next_minute = (now.minute + wait_minutes) % 60
                 next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
@@ -231,12 +230,13 @@ def program():
                 trains.power_on()
                 time.sleep(30)
                 correct_positions_based_on_contacts()
-        module = modules[choose_index(module_stats)]
+        module = modules[module_index]
         print("                         Queuing module")
         module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
+        module_index = (module_index + 1) % len(modules)
 
         
-def regular_round(pause: float, pause_random: float, rounds=1):
+def regular_round(pause: float, pause_random: float, rounds=2):
     for i in range(rounds):
         print(f"------------------ Regular round {i} / {rounds} ------------------")
         IGBT.drive(I_AIRPORT, pause=pause + random() * pause_random)
@@ -267,7 +267,7 @@ def opening_round():
     GTO.drive(O_MUNICH, pause=8, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
 
 
-def outside_fast(pause: float, pause_random: float, rounds=3):
+def outside_fast(pause: float, pause_random: float, rounds=5):
     print("------------------ Outside fast ------------------")
     contacts = [(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT + OUTER * (i + 1)) for i in range(rounds)]
     GTO.drive(OUTER * rounds + O_MUNICH, pause=pause + random() * pause_random, trip=contacts)
