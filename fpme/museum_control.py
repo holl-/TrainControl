@@ -204,7 +204,13 @@ def program():
             GTO.train.sound_on()
             IGBT.train.sound_on()
     modules = [regular_round, outside_fast, both_outside]
-    module_index = 1
+    module_index = randint(0, len(modules) - 1)
+    if 'regular' in sys.argv:
+        module_index = 0
+    if 'fast' in sys.argv:
+        module_index = 1
+    if 'outside' in sys.argv:
+        module_index = 2
     while True:
         if not DEBUG:
             # AC is checked by power monitor, no need to do it here.
@@ -231,9 +237,19 @@ def program():
                 time.sleep(30)
                 correct_positions_based_on_contacts()
         module = modules[module_index]
+        if 'measure' in sys.argv:
+            IGBT.wait()
+            GTO.wait()
+            print("~~ Beginning measurement ~~")
+            module_start_time = time.perf_counter()
         print("                         Queuing module")
-        module(pause=5. if DEBUG else 10., pause_random=0 if DEBUG else 15)
+        module(pause=10., pause_random=15)
         module_index = (module_index + 1) % len(modules)
+        if 'measure' in sys.argv:
+            IGBT.wait()
+            GTO.wait()
+            module_end_time = time.perf_counter()
+            print(f"~~ Module took {module_end_time - module_start_time} seconds ({(module_end_time - module_start_time) * trains.TIME_DILATION / 60:.1f} minutes real time). ~~")
 
         
 def regular_round(pause: float, pause_random: float, rounds=2):
