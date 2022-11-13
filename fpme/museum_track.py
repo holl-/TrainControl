@@ -115,6 +115,19 @@ def read_last_positions() -> List[State or None]:
     return [State.from_line(s) for s in lines[-1].split(',')]
 
 
+def read_positions(log_index=None):
+    log_index = get_last_log_index() if log_index is None else log_index
+    with open(f'logs/pos_{log_index}.txt', 'r') as f:
+        lines = f.readlines()
+    info = ""
+    for line in lines:
+        if line.startswith('#'):
+            info = line.strip()
+        else:
+            states = [State.from_line(s) for s in line.split(',')]
+            yield info, states
+
+
 def create_log_file():
     os.path.isdir('logs') or os.makedirs('logs')
     return open(f'logs/pos_{get_last_log_index() + 1}.txt', 'w')

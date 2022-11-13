@@ -1,5 +1,5 @@
 import os.path
-from typing import Iterable
+from typing import Iterable, Callable
 
 import museum_control
 from museum_control import State, update_state, OUTER_CONNECTION, OUTER, INTERIM, OUTER_UNTIL_SWITCH, HALF_TRAIN, INNER_CONNECTION, INNER, project_position
@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
 
-def show(trains: Iterable[museum_control.Controller], exit_on_close=False):
+def show(trains: Iterable[museum_control.Controller], exit_on_close=False, title_provider: Callable = None):
     colors = {'GTO': 'blue', 'IGBT': 'green'}
     img = mpimg.imread(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Gleisplan v3.png'))
     fig, ax = plt.subplots(1, 1, figsize=(5, 3.5))
@@ -36,7 +36,10 @@ def show(trains: Iterable[museum_control.Controller], exit_on_close=False):
             if train._target_signed_distance is not None:
                 target = get_position(update_state(train.state, train._target_signed_distance))
                 plt.scatter(target[0], target[1], c=colors[train.train.name])
-        plt.title(", ".join([f'{train.train.name}: {signed_speed_level(train)}' for train in trains]))
+        if title_provider is not None:
+            plt.title(title_provider())
+        else:
+            plt.title(", ".join([f'{train.train.name}: {signed_speed_level(train)}' for train in trains]))
         plt.draw()
         plt.pause(0.02)
     print("Exiting UI")
