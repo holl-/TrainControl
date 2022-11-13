@@ -111,7 +111,7 @@ class Controller:
                 proj_delta = p_position - self.position
                 original_delta = position - self.position
                 delta = original_delta if abs(original_delta) < abs(proj_delta) else proj_delta
-                self.state = State(self.train.cumulative_signed_distance, self.outer_track, p_position, self.aligned)
+                self.state = State(self.train.cumulative_signed_distance, self.outer_track, self.position + delta, self.aligned)
                 self.state = update_state(self.state, self.state.cumulative_signed_distance)
                 self._target_signed_distance -= delta
                 print(f"🛈 {self} triggered {CONTACT_NAMES[pin]}, position updated by {delta} mm (actual - predicted) from {self_prev}", file=sys.stderr)
