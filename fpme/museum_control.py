@@ -15,6 +15,9 @@ from fpme.ubuntu_helpers import *
 sys.path.append('..')
 
 
+FAILURE_STATE = []
+
+
 class Controller:
 
     def __init__(self, train: trains.Train, last_position: State or None):
@@ -34,6 +37,7 @@ class Controller:
         self._update_lock = Lock()
         self._max_speed = None
         self._use_emergency_stop = None
+        self._approx_arrival_time = -1.
 
     def wait(self):
         while self._executing:
@@ -64,9 +68,15 @@ class Controller:
         self._trip = list(trip)
         self._contact_to_target = [abs(target_position - pos) for _, pos in self._trip]
         self._braking = False
+        max_speed_mm_s = max_speed / 3.6 * 1000 / 87
+        max_acc_time = max_speed / self.train.acceleration
+        max_acc_distance = .5 * (self.train.acceleration / 3.6) * max_acc_time ** 2 * 1000 / 87  # always positive
+        max_v_distance_mm = max(0, distance_mm - 2 * max_acc_distance)
+        max_v_time = max_v_distance_mm / max_speed_mm_s
+        travel_time = 2 * max_acc_time + max_v_time
+        self._approx_arrival_time = time.perf_counter() + travel_time
         print(self._contact_to_target)
-        # trains.GENERATOR.register(self)
-        print(f">>> {self.train.name} -> drive {distance_mm:.0f} mm to position {State(0, self.outer_track, target_position, self.aligned)}. Trip: {', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])}"
+        print(f">>> {self.train.name} -> drive {distance_mm:.0f} mm to position {State(0, self.outer_track, target_position, self.aligned)}. Estimated {travel_time:.1f} seconds. Trip: {', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])}"
               f"{' with emergency stop' if use_emergency_stop else ''}")
         if abs(distance_mm) < 10:
             print("Already there.")
@@ -141,6 +151,10 @@ class Controller:
             if time.perf_counter() - self._last_print >= 5.:
                 print(f"    {self}\t speed={self.train.signed_actual_speed:.0f}->{self.train.signed_target_speed}\tto drive: {distance_in_drive_direction:.0f}\tbrake: {braking_distance:.0f}\t(trip={', '.join([CONTACT_NAMES[pin] + f' @ {pos:.0f}' for pin, pos in self._trip])})")
                 self._last_print = time.perf_counter()
+            if self._trip and time.perf_counter() > self._approx_arrival_time + 30:
+                FAILURE_STATE.append(True)
+                trains.power_off()
+                print("Train is more than 30 seconds delayed. Assuming collision or derailment.\n\nRestart the PC to resume.\n\n", end='', file=sys.stderr)
             if distance_in_drive_direction < 0 and abs(self.train._speed) > 0 and self._use_emergency_stop:
                 print(f"Emergency stop {self} due to overshoot.", file=sys.stderr)
                 self.train.emergency_stop()
