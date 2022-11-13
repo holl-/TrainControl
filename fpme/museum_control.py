@@ -16,6 +16,14 @@ sys.path.append('..')
 
 
 FAILURE_STATE = []
+ACTION_DESCRIPTION = []
+LOGGED_ACTION_DESCRIPTION = []
+
+
+def printlog(message):
+    print("-------------------------", message, "-------------------------")
+    ACTION_DESCRIPTION.clear()
+    ACTION_DESCRIPTION.append(message)
 
 
 class Controller:
@@ -245,7 +253,7 @@ def program():
                 next_minute = (now.minute + wait_minutes) % 60
                 next_time = now.replace(hour=now.hour if next_minute else now.hour + 1, minute=next_minute, second=0, microsecond=0)
                 wait_sec = (next_time - now).total_seconds()
-                print(f"---------------- Waiting {wait_minutes} minutes ({wait_sec:.0f} s, power 30s earlier) ----------------")
+                printlog(f"Waiting {wait_minutes} minutes ({wait_sec:.0f} s, power 30s earlier)")
                 time.sleep(max(0., wait_sec - 30))
                 trains.power_on()
                 time.sleep(30)
@@ -268,7 +276,7 @@ def program():
         
 def regular_round(pause: float, pause_random: float, rounds=2):
     for i in range(rounds):
-        print(f"------------------ Regular round {i} / {rounds} ------------------")
+        printlog(f"Regular round {i+1} / {rounds}")
         IGBT.drive(I_AIRPORT, pause=pause + random() * pause_random)
         GTO.drive(OUTER + O_ERDING, pause=pause + random() * pause_random)
         IGBT.drive(I_ERDING, pause=pause + random() * pause_random)
@@ -279,7 +287,7 @@ def regular_round(pause: float, pause_random: float, rounds=2):
 
 
 def opening_round():
-    print("------------------------- Opening Round ----------------------")
+    printlog("Opening Round")
     IGBT.drive(I_AIRPORT, pause=0, wait_for='done')
     print()
     print("Press Enter to Start")
@@ -298,9 +306,9 @@ def opening_round():
 
 
 def outside_fast(pause: float, pause_random: float, rounds=4):
-    print("------------------ Outside fast ------------------")
     contacts = [(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT + OUTER * (i + 1)) for i in range(rounds)]
     for i in range(2):
+        printlog(f"Outside fast ({i+1} / 2)")
         GTO.drive(OUTER * rounds + O_MUNICH, pause=pause + random() * pause_random, trip=contacts)
         IGBT.drive(I_AIRPORT, pause=pause + random() * pause_random)
         IGBT.drive(I_ERDING, pause=pause + random() * pause_random)
@@ -311,21 +319,21 @@ def outside_fast(pause: float, pause_random: float, rounds=4):
 def both_outside(pause: float, pause_random: float, rounds=1):
     assert rounds >= 1, "not implemented for rounds=0"
     if not IGBT.aligned:
-        print("---------------------- Switching direction of inner ---------------")
+        printlog("Switching direction of inner")
         IGBT.drive(INNER + abs(I_SAFE_REVERSAL), pause=0, trip=[(INNER_CONTACT, INNER + abs(I_CONTACT_SOUTH) - TRAIN_CONTACT)])
-    print("------------------ Exiting inner round -------------------")
     if HALF_TRAIN + 100 < GTO.position < O_SAFE_WAIT:
         GTO.drive(OUTER + O_SAFE_WAIT, pause=0, wait_for='brake')
+    printlog("Exiting inner round")
     IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING), pause=pause/2 + random() * pause_random / 2, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT)])
     for i in range(rounds):
-        print(f"-------------------- Both outer {i} / {rounds} ----------------------")
+        printlog(f"Both outer {i+1} / {rounds}")
         GTO.drive(O_MUNICH, pause=pause + random() * pause_random, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
         IGBT.drive(O_AIRPORT, pause=pause + random() * pause_random, wait_for='brake')
         GTO.drive(OUTER + O_ERDING, pause=pause + random() * pause_random, wait_for='brake')
         IGBT.drive(O_MUNICH, pause=pause + random() * pause_random, wait_for='brake', trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
         GTO.drive(O_AIRPORT, pause=pause + random() * pause_random, wait_for='brake')
         IGBT.drive(OUTER + O_ERDING, pause=pause + random() * pause_random, wait_for='brake')
-    print("----------------------- Entering inner round -----------------------")
+    printlog("Entering inner round")
     GTO.drive(O_SAFE_WAIT, pause=0)
     IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, pause=0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
     GTO.drive(O_MUNICH, pause=pause + random() * pause_random, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
@@ -333,7 +341,7 @@ def both_outside(pause: float, pause_random: float, rounds=1):
 
 
 def detect_train_positions_from_scratch():
-    print("--------------- Detecting positions ----------------")
+    printlog("Detecting positions")
     trains.GENERATOR.register('detect')
     GTO.state = State(GTO.train.cumulative_signed_distance, True, NAN, True)
     IGBT.state = State(GTO.train.cumulative_signed_distance, None, NAN, None)
@@ -422,7 +430,7 @@ def correct_positions_based_on_contacts():
 
 
 def move_to_standard_pos():
-    print("---------------- Moving to standard positions -----------------")
+    printlog("Moving to standard positions")
     print(f"Current position estimate: {GTO}, {IGBT}")
     # --- Check contacts, update train positions if tripped ---
     correct_positions_based_on_contacts()
@@ -521,6 +529,10 @@ def choose_index(counts):
 
 
 def write_current_state(_dt=None):
+    if ACTION_DESCRIPTION != LOGGED_ACTION_DESCRIPTION and ACTION_DESCRIPTION:
+        LOG.write(f"# {ACTION_DESCRIPTION[0]}\n")
+        LOGGED_ACTION_DESCRIPTION.clear()
+        LOGGED_ACTION_DESCRIPTION.extend(ACTION_DESCRIPTION)
     LOG.write(f"{str(GTO.state)},{str(IGBT.state)}\n")
     LOG.flush()
 

@@ -109,6 +109,7 @@ def read_last_positions() -> List[State or None]:
         return [None, None]
     with open(f'logs/pos_{last_log_index}.txt', 'r') as f:
         lines = f.readlines()
+    lines = [line for line in lines if not line.startswith('#')]
     if not lines:
         return [None, None]
     return [State.from_line(s) for s in lines[-1].split(',')]
