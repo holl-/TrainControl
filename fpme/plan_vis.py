@@ -2,7 +2,7 @@ import os.path
 from typing import Iterable
 
 import museum_control
-from museum_control import State, update_state, OUTER_CONNECTION, OUTER, INTERIM, OUTER_UNTIL_SWITCH, HALF_TRAIN, INNER_CONNECTION, INNER
+from museum_control import State, update_state, OUTER_CONNECTION, OUTER, INTERIM, OUTER_UNTIL_SWITCH, HALF_TRAIN, INNER_CONNECTION, INNER, project_position
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -33,8 +33,12 @@ def show(trains: Iterable[museum_control.Controller], exit_on_close=False):
             plt.quiver([back[0], center[0]], [back[1], center[1]],
                        [center[0] - back[0], front[0] - center[0]], [center[1] - back[1], front[1] - center[1]],
                        color=colors[train.train.name], scale=1, scale_units='x')
-        plt.pause(0.02)
+            if train._target_signed_distance is not None:
+                target = get_position(update_state(train.state, train._target_signed_distance))
+                plt.scatter(target[0], target[1], c=colors[train.train.name])
+        plt.title(", ".join([f'{train.train.name}: {signed_speed_level(train)}' for train in trains]))
         plt.draw()
+        plt.pause(0.02)
     print("Exiting UI")
 
 
@@ -67,3 +71,8 @@ def get_position(state: State):
         ]
         P, X, Y = np.array(PXY).T
         return np.interp(p, P, X), np.interp(p, P, Y)
+
+
+def signed_speed_level(train: museum_control.Controller) -> int:
+    speed_level, in_reverse, _ = train.train._broadcasting_state
+    return -speed_level if in_reverse else speed_level
