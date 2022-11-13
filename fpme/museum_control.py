@@ -16,14 +16,12 @@ sys.path.append('..')
 
 
 FAILURE_STATE = []
-ACTION_DESCRIPTION = []
-LOGGED_ACTION_DESCRIPTION = []
+ACTION_DESCRIPTIONS = []
 
 
 def printlog(message):
     print("-------------------------", message, "-------------------------")
-    ACTION_DESCRIPTION.clear()
-    ACTION_DESCRIPTION.append(message)
+    ACTION_DESCRIPTIONS.append(message)
 
 
 class Controller:
@@ -117,6 +115,7 @@ class Controller:
                 self.state = update_state(self.state, self.state.cumulative_signed_distance)
                 self._target_signed_distance -= delta
                 print(f"🛈 {self} triggered {CONTACT_NAMES[pin]}, position updated by {delta} mm (actual - predicted) from {self_prev}", file=sys.stderr)
+                ACTION_DESCRIPTIONS.append(f"{self.train.name} triggered {CONTACT_NAMES[pin]}: delta={delta} mm (actual - predicted) from {self_prev}")
                 self._trip.pop(0)
                 self._contact_to_target.pop(0)
                 distance_in_drive_direction = (self._target_signed_distance - self.train.cumulative_signed_distance) * (1 if self._increase_signed_distance else -1)  # positive unless overshot
@@ -529,10 +528,10 @@ def choose_index(counts):
 
 
 def write_current_state(_dt=None):
-    if ACTION_DESCRIPTION != LOGGED_ACTION_DESCRIPTION and ACTION_DESCRIPTION:
-        LOG.write(f"# {ACTION_DESCRIPTION[0]}\n")
-        LOGGED_ACTION_DESCRIPTION.clear()
-        LOGGED_ACTION_DESCRIPTION.extend(ACTION_DESCRIPTION)
+    if ACTION_DESCRIPTIONS:
+        for description in ACTION_DESCRIPTIONS:
+            LOG.write(f"# {description}\n")
+        ACTION_DESCRIPTIONS.clear()
     LOG.write(f"{str(GTO.state)},{str(IGBT.state)}\n")
     LOG.flush()
 
