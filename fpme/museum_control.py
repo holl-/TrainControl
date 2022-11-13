@@ -334,7 +334,7 @@ def both_outside(pause: float, pause_random: float, rounds=1):
         IGBT.drive(OUTER + O_ERDING, pause=pause + random() * pause_random, wait_for='brake')
     printlog("Entering inner round")
     GTO.drive(O_SAFE_WAIT, pause=0)
-    IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, pause=0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
+    IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, pause=0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O + TRAIN_CONTACT)], wait_for='done')
     GTO.drive(O_MUNICH, pause=pause + random() * pause_random, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
     IGBT.drive(I_MUNICH, pause=pause + random() * pause_random)
 
@@ -457,26 +457,26 @@ def move_to_standard_pos():
         else:
             GTO.drive(O_MUNICH, 0)
         IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING), 0)
-        IGBT.drive(OUTER + HALF_TRAIN + 100, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-HALF_TRAIN)])
+        IGBT.drive(OUTER + HALF_TRAIN + 100, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)])
         if GTO.position > OUTER - HALF_TRAIN - 100:
-            GTO.drive(O_SAFE_WAIT + OUTER, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-HALF_TRAIN)])
+            GTO.drive(O_SAFE_WAIT + OUTER, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)])
         else:
             GTO.drive(O_SAFE_WAIT, 0)
-        IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
+        IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O+TRAIN_CONTACT)], wait_for='done')
         GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)], use_emergency_stop=True)
         IGBT.drive(I_MUNICH, 0)
     elif IGBT.outer_track and IGBT.position < GTO.position < O_CONTACT_NORTH - TRAIN_CONTACT and check_not_triggered(OUTER_CONTACT):
         print("Reversing IGBT into inner track")
-        IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
+        IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O+TRAIN_CONTACT)], wait_for='done')
         GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)], use_emergency_stop=True)
         IGBT.drive(I_MUNICH, 0)
     elif IGBT.outer_track:
-        IGBT.drive(OUTER + HALF_TRAIN + 100, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - HALF_TRAIN)])
+        IGBT.drive(OUTER + HALF_TRAIN + 100, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
         if GTO.position > OUTER - HALF_TRAIN - 100:
-            GTO.drive(O_SAFE_WAIT + OUTER, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - HALF_TRAIN)])
+            GTO.drive(O_SAFE_WAIT + OUTER, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
         else:
             GTO.drive(O_SAFE_WAIT, 0)
-        IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O)], wait_for='done')
+        IGBT.drive(- OUTER_CONNECTION - HALF_TRAIN - 250, 0, trip=[(INNER_CONTACT, I_CONTACT_SOUTH_O+TRAIN_CONTACT)], wait_for='done')
         GTO.drive(O_MUNICH, 0, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)], use_emergency_stop=True)
         IGBT.drive(I_MUNICH, 0)
     else:
