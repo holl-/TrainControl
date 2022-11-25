@@ -323,13 +323,13 @@ def both_outside(pause: float, pause_random: float, rounds=1):
     # if HALF_TRAIN + 100 < GTO.position < O_SAFE_WAIT:  # GTO must be in Munich
     #     GTO.drive(OUTER + O_SAFE_WAIT, pause=0, wait_for='brake')
     printlog("Exiting inner round")
-    IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING), pause=pause/2 + random() * pause_random / 2, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT)])
+    IGBT.drive(-INTERIM - INNER_CONNECTION - (OUTER_UNTIL_SWITCH - O_ERDING) + 140, pause=pause/2 + random() * pause_random / 2, trip=[(AIRPORT_CONTACT, I_AIRPORT_CONTACT_WEST + TRAIN_CONTACT)])
     for i in range(rounds):
         printlog(f"Both outer {i+1} / {rounds}")
         if i > 0:  # if i==0, GTO is already in Munich
             GTO.drive(O_MUNICH, pause=pause + random() * pause_random, trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
         IGBT.drive(O_AIRPORT + 80, pause=pause/2 + random() * pause_random / 2, wait_for='brake')
-        GTO.drive(OUTER + O_ERDING - 80, pause=pause + random() * pause_random, wait_for='brake')
+        GTO.drive(OUTER + O_ERDING, pause=pause + random() * pause_random, wait_for='brake')
         IGBT.drive(O_MUNICH, pause=pause + random() * pause_random, wait_for='brake', trip=[(OUTER_CONTACT, O_CONTACT_NORTH - TRAIN_CONTACT)])
         GTO.drive(O_AIRPORT + 120, pause=pause / 2 + random() * pause_random / 2, wait_for='brake')
         IGBT.drive(OUTER + O_ERDING - 200, pause=pause + random() * pause_random, wait_for='brake')
