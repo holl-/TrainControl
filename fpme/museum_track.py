@@ -112,7 +112,16 @@ def read_last_positions() -> List[State or None]:
     lines = [line for line in lines if not line.startswith('#')]
     if not lines:
         return [None, None]
-    return [State.from_line(s) for s in lines[-1].split(',')]
+    try:
+        return [State.from_line(s) for s in lines[-1].split(',')]
+    except Exception as exc:
+        print(f"Failed to read last position from line '{lines[-1].strip()}': {exc}")
+        if len(lines) > 1:
+            print(f"Previous line '{lines[-2].strip()}'")
+            return [State.from_line(s) for s in lines[-2].split(',')]
+        else:
+            print(f"No previous line. No state information available.")
+            return [None, None]
 
 
 def read_positions(log_index=None):
