@@ -26,7 +26,8 @@ def printlog(message):
 
 class Controller:
 
-    def __init__(self, train: trains.Train, last_position: State or None):
+    def __init__(self, train: trains.Train, last_position: State or None, missing: bool):
+        self.missing = missing
         self.train = train
         self.state = last_position
         train.on_post_update = self._update
@@ -58,6 +59,8 @@ class Controller:
         :param trip: Contacts to trip along the way, (pin, position)
         :param wait_for: One of 'brake', 'done', None
         """
+        if self.missing:
+            return
         print(f"{self.train.name} add command to queue: drive to {target_position} tripping {len(trip)}")
         self.wait()
         pause /= trains.TIME_DILATION
@@ -211,7 +214,7 @@ def program():
         print("⚠ No power on tracks. Program will start once tracks are on-line.", file=sys.stderr)
         time.sleep(10)
     print(f"Status: outer={trains.GENERATOR.get_state(OUTER_CONTACT)}, inner={trains.GENERATOR.get_state(INNER_CONTACT)}, airport={trains.GENERATOR.get_state(AIRPORT_CONTACT)}")
-    if math.isnan(GTO.position) or math.isnan(IGBT.position):
+    if (not GTO.missing and math.isnan(GTO.position)) or (not IGBT.missing and math.isnan(IGBT.position)):
         detect_train_positions_from_scratch()
         GTO.drive(O_MUNICH, pause=5)  # trip=[(OUTER_CONTACT, O_CONTACT_NORTH-TRAIN_CONTACT)])
         IGBT.drive(0, pause=0, trip=[(INNER_CONTACT, I_CONTACT_NORTH - TRAIN_CONTACT)])
@@ -573,8 +576,8 @@ if __name__ == '__main__':
         Thread(target=monitor_power).start()
 
     _LAST_POSITIONS = read_last_positions()
-    GTO = Controller(trains.get_by_name('GTO'), _LAST_POSITIONS[0] or State(0, True, NAN, True))
-    IGBT = Controller(trains.get_by_name('IGBT'), _LAST_POSITIONS[1] or State(0, None, NAN, None))
+    GTO = Controller(trains.get_by_name('GTO'), _LAST_POSITIONS[0] or State(0, True, NAN, True), 'IGBT' in sys.argv)
+    IGBT = Controller(trains.get_by_name('IGBT'), _LAST_POSITIONS[1] or State(0, None, NAN, None), 'GTO' in sys.argv)
 
     if not VIRTUAL:
         LOG = create_log_file()
