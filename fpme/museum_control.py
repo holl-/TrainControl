@@ -164,7 +164,11 @@ class Controller:
             if self._trip and time.perf_counter() > self._approx_arrival_time + 30:
                 FAILURE_STATE.append(True)
                 trains.power_off()
-                print("Train is more than 30 seconds delayed. Assuming collision or derailment.\n\nRestart the PC to resume.\n\n", end='', file=sys.stderr)
+                IGBT.state = State(IGBT.state.cumulative_signed_distance, None, float('nan'), None)
+                GTO.state = State(IGBT.state.cumulative_signed_distance, None, float('nan'), None)
+                printlog("Train is more than 30 seconds delayed. Assuming collision or derailment. Forgetting train positions")
+                print(f"{self} hat den Kontakt '{CONTACT_NAMES[self._trip[0][0]]}' nicht erreicht (Mehr als 30 Sekunden Verspätung)."
+                      f"\nWahrscheinlich Entgleisung oder Kollision.\n\nBitte IGBT auf inneres und GTO auf äußeres Gleis setzen, dann PC neu starten.\n\n", end='', file=sys.stderr)
             if distance_in_drive_direction < 0 and abs(self.train._speed) > 0 and self._use_emergency_stop:
                 print(f"Emergency stop {self} due to overshoot.", file=sys.stderr)
                 self.train.emergency_stop()
