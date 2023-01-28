@@ -164,7 +164,28 @@ class Controller:
             if self._trip and time.perf_counter() > self._approx_arrival_time + 30:
                 self.missing = True
                 self._executing = False
-                print(f"{self} hat den Kontakt '{CONTACT_NAMES[self._trip[0][0]]}' nicht erreicht (Mehr als 30 Sekunden Verspätung). Diese S-Bahn wird bis zum nächsten Neustart nicht mehr fahren.")
+                self.state = State(self.state.cumulative_signed_distance, None, float('nan'), None)
+                if self == IGBT:
+                    self.train.emergency_stop()
+                    print(f""""
+                    {self} hat den Kontakt '{CONTACT_NAMES[self._trip[0][0]]}' nicht erreicht (Mehr als 30 Sekunden Verspätung).
+                    Die Position wurde zurückgesetzt.
+                    Diese S-Bahn wird bis zum nächsten Neustart nicht mehr fahren.""")
+                elif self == GTO:
+                    print(f""""
+                    {self} hat den Kontakt '{CONTACT_NAMES[self._trip[0][0]]}' nicht erreicht (Mehr als 30 Sekunden Verspätung).
+                    Die Position wurde zurückgesetzt.
+                    Diese S-Bahn wird nun vorwärts fahren, bis sie den Kontakt erreicht.""")
+
+                    def sync_GTO():
+                        self.train.set_target_speed(50)
+                        pin, _ = trains.GENERATOR.await_event([OUTER_CONTACT], [False], timeout=None, listener=f'sync_GTO')
+                        self.train.emergency_stop()
+                        self.state = State(self.train.cumulative_signed_distance, True, O_CONTACT_NORTH - TRAIN_CONTACT, aligned=True)
+                        print("GTO-Position synchronisiert. Diese S-Bahn bekommt nun wieder reguläre Befehle.")
+                        self.missing = False
+
+                    Thread(target=sync_GTO).start()
                 # FAILURE_STATE.append(True)
                 # trains.power_off()
                 # IGBT.state = State(IGBT.state.cumulative_signed_distance, None, float('nan'), None)
