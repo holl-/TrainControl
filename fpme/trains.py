@@ -1,11 +1,11 @@
 import math
 import time
 import warnings
-from collections import namedtuple
 from dataclasses import dataclass
 from typing import Tuple
 
 import numpy
+import numpy as np
 
 from helper import schedule_at_fixed_rate
 from fpme import signal_gen
@@ -232,16 +232,31 @@ TRAINS = [
                      TrainFunction("Fahrtlicht hinten", 3, False, False),
                      INSTANT_ACCELERATION),
           speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136)),
-    Train('Dampf', "🚂",
-          address=78,
-          acceleration=30.,
-          image=("Dampf.png", 402, 146),
-          speeds=(0, 0.1, 0.2, 0.3, 48, 80, 100, 110, 120, 140, 165, 180, 192, 202, 210)),
+    # Train('Dampf', "🚂",
+    #       address=78,
+    #       acceleration=30.,
+    #       image=("Dampf.png", 402, 146),
+    #       speeds=(0, 0.1, 0.2, 0.3, 48, 80, 100, 110, 120, 140, 165, 180, 192, 202, 210)),
     Train('Diesel', "🛲",
           address=72,
           acceleration=30.,
           image=("Diesel.png", 287, 127),
           speeds=(0, 0.1, 1, 60, 100, 130, 150, 180, 187, 192, 197, 202, 207, 212, 217)),
+    Train('Diesel (Beige)', "🛲",
+          address=73,
+          acceleration=30.,
+          image=("Diesel-Beige.png", 287, 127),
+          speeds=np.linspace(0, 150, 15)),
+    Train('E-Lok (Grün)', "🚉",
+          address=23,
+          acceleration=30.,
+          image=("E-Lok Gruen.png", 287, 127),
+          speeds=np.linspace(0, 150, 15)),
+    Train('Schienenbus', "🚌",
+          address=62,
+          acceleration=40.,
+          image=("Schienenbus.png", 287, 127),
+          speeds=np.linspace(0, 150, 15)),
 ]
 
 def get_by_name(train_name):
