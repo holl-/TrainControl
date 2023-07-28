@@ -20,6 +20,7 @@ class TrainFunction:
 
 
 LIGHT = TrainFunction('Licht', 0, False, True)
+SLOW_MODE = TrainFunction("Langsam-Modus", 3, False, False)
 INSTANT_ACCELERATION = TrainFunction("Instantane Beschleunigung", 4, True, False)
 
 
@@ -31,9 +32,9 @@ class Train:
                  address: int,
                  speeds=tuple([i * 20 for i in range(15)]),
                  acceleration=20.,
-                 has_built_in_acceleration=False,
+                 use_built_in_acceleration=False,
                  protocol=None,
-                 stop_by_mm1_reverse=False,
+                 stop_by_mm1_reverse=True,
                  image: Tuple[str, int, int] = ("", -1, -1),
                  directional_image: Tuple[str, int, int] = None,
                  functions: Tuple[TrainFunction, ...] = (LIGHT,)):
@@ -45,7 +46,7 @@ class Train:
         self.protocol = protocol  # special protocol for this train
         self.speeds: tuple = speeds  # 14 entries
         self.locomotive_speeds = speeds  # unencumbered by cars
-        self.has_built_in_acceleration: bool = has_built_in_acceleration
+        self.use_built_in_acceleration: bool = use_built_in_acceleration
         self.acceleration: float = acceleration
         self.stop_by_mm1_reverse = stop_by_mm1_reverse
         self.image: Tuple[str, int, int] = image
@@ -116,7 +117,7 @@ class Train:
 
     def _update_signal(self):
         target_level = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
-        if self.has_built_in_acceleration:
+        if self.use_built_in_acceleration:
             speed_level = target_level
         else:
             if abs(self._target_speed) > abs(self._speed):  # ceil level
@@ -201,18 +202,19 @@ TRAINS = [
           address=60,
           acceleration=40.,
           image=("ICE.png", 237, 124),
-          speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288)),
+          speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288),
+          functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION)),
     Train('RB', "🚉",
           address=24,
           acceleration=30.,
           protocol=signal_gen.Motorola1(),
           image=("E-Lok DB.png", 343, 113),
           directional_image=("E-Lok DB right.png", 343, 113),
-          speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 183)),
+          speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 183),
+          stop_by_mm1_reverse=False),
     Train('RE', "🚉",
           address=1,
           acceleration=30.,
-          has_built_in_acceleration=False,
           image=("E-Lok BW.png", 284, 103),
           directional_image=("E-Lok BW right.png", 284, 103),
           functions=(LIGHT,
@@ -220,12 +222,11 @@ TRAINS = [
                      TrainFunction("Motor", 2, False, False),
                      TrainFunction("Horn", 3, False, False),
                      TrainFunction("Direktsteuerung", 4, True, False)),
-          speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226)),
+          speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226),
+          stop_by_mm1_reverse=False),
     Train('S', "Ⓢ",
           address=48,
           acceleration=20.,
-          has_built_in_acceleration=False,
-          stop_by_mm1_reverse=True,
           image=("S-Bahn.png", 210, 71),
           functions=(LIGHT,
                      TrainFunction("Nebelscheinwerfer", 2, False, False),
@@ -241,22 +242,28 @@ TRAINS = [
           address=72,
           acceleration=30.,
           image=("Diesel.png", 287, 127),
-          speeds=(0, 0.1, 1, 60, 100, 130, 150, 180, 187, 192, 197, 202, 207, 212, 217)),
+          speeds=np.linspace(0, 217, 15),
+          functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION)),
     Train('218', "🛲",
           address=73,
           acceleration=30.,
           image=("Thumb_BR218_Beige.png", 287, 127),
-          speeds=np.linspace(0, 150, 15)),
+          speeds=np.linspace(0, 200, 15),
+          functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION)),
     Train('E40', "🚉",
           address=23,
           acceleration=30.,
           image=("Thumb_E40.png", 287, 127),
-          speeds=np.linspace(0, 150, 15)),
+          speeds=np.linspace(0, 220, 15),
+          stop_by_mm1_reverse=False,
+          functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction('Hupe', -1, False, False))),
     Train('Bus', "🚌",
           address=62,
           acceleration=40.,
           image=("Thumb_Schienenbus.png", 287, 127),
-          speeds=np.linspace(0, 150, 15)),
+          speeds=np.linspace(0, 150, 15),
+          stop_by_mm1_reverse=False,
+          functions=()),
 ]
 
 def get_by_name(train_name):
