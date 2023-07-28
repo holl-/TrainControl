@@ -422,6 +422,7 @@ def admin_update(_n, checklist, *args):
     trigger_id, trigger_prop = trigger["prop_id"].split(".")
     if trigger_id == 'admin-kill':
         trains.destroy()
+        time.sleep(.5)
         os._exit(0)
     elif trigger_id == 'power-off-admin':
         trains.power_off()

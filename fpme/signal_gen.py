@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 from multiprocessing import Value, Process, Queue, Manager
@@ -163,6 +164,8 @@ class ProcessSpawningGenerator:
         return bool(self._active.value) and not bool(self._short_circuited.value)
 
     def terminate(self):
+        self._queue.put(('terminate',))
+        time.sleep(.1)
         self._process.terminate()
 
     @property
@@ -204,12 +207,20 @@ class SignalGenerator:
         self._ser = None
         if serial_port:
             try:
+                print(f"Opening serial port {serial_port}...")
                 ser = serial.Serial(port=serial_port, baudrate=38400, parity=serial.PARITY_NONE,
                                     stopbits=serial.STOPBITS_ONE, bytesize=serial.SIXBITS,
                                     write_timeout=None,  # non-blocking write
                                     rtscts=False,  # no flow control
                                     dsrdtr=False,  # no flow control
                                     )
+                # ser = serial.Serial(port=serial_port, baudrate=38400, parity=serial.PARITY_NONE,
+                #                     stopbits=serial.STOPBITS_ONE, bytesize=serial.SIXBITS,
+                #                     write_timeout=None,  # non-blocking write
+                #                     rtscts=False,  # no flow control
+                #                     dsrdtr=False,  # no flow control
+                #                     )
+                print(f"{serial_port} opened successfully")
                 self._ser = ser
             except SerialException as exc:
                 print(exc)
@@ -240,6 +251,9 @@ class SignalGenerator:
     def start(self):
         # assert not self._active.value  # ToDo this breaks the app sometimes
         threading.Thread(target=self.run, name='RS_232_Signal_Generator').start()
+
+    def terminate(self):
+        os._exit(0)
 
     def run(self):
         assert not self._active.value
@@ -281,16 +295,14 @@ class SignalGenerator:
 
 
 if __name__ == '__main__':
-    gen = ProcessSpawningGenerator('COM5')
+    gen = ProcessSpawningGenerator('COM4')
     gen.start()
     # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
     # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
 
-    gen.set(1, 0, False, {4: True})
+    gen.set(23, 0, False, {0: False, 1: False, 2: False, 3: False, 4: True})
     time.sleep(1)
-    gen.set(1, 11, False, {4: True})
-    time.sleep(3)
-    gen.set(1, 0, False, {4: True})
+    gen.set(23, 0, False, {0: True, 1: True, 2: True, 3: True, 4: True})
     # for i in range(10):
     #     for f in [0, 1, 2, 3, 4]:
     #         gen.set(1, 5, False, {i: i == f for i in range(5)})
