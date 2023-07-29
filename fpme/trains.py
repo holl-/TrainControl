@@ -203,7 +203,7 @@ TRAINS = [
           address=60,
           acceleration=40.,
           image=("ICE.png", 237, 124),
-          speeds=(0, 0.1, 0.2, 11.8, 70, 120, 188.1, 208.8, 222.1, 235.6, 247.3, 258.3, 266.1, 274.5, 288),
+          speeds=np.linspace(0, 288, 15),
           functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION)),
     Train('RB', "🚉",
           address=24,
@@ -219,10 +219,9 @@ TRAINS = [
           image=("E-Lok BW.png", 284, 103),
           directional_image=("E-Lok BW right.png", 284, 103),
           functions=(LIGHT,
-                     TrainFunction("Innenbeleuchtung", 1, False, True),
-                     TrainFunction("Motor", 2, False, False),
-                     TrainFunction("Horn", 3, False, False),
-                     TrainFunction("Direktsteuerung", 4, True, False)),
+                     TrainFunction("Nebelscheinwerfer", 2, False, False),
+                     TrainFunction("Fahrtlicht hinten", 3, False, False),
+                     INSTANT_ACCELERATION),
           speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226),
           stop_by_mm1_reverse=False),
     Train('S', "Ⓢ",
@@ -230,8 +229,9 @@ TRAINS = [
           acceleration=20.,
           image=("S-Bahn.png", 210, 71),
           functions=(LIGHT,
-                     TrainFunction("Nebelscheinwerfer", 2, False, False),
-                     TrainFunction("Fahrtlicht hinten", 3, False, False),
+                     TrainFunction("Innenbeleuchtung", 1, False, True),
+                     TrainFunction("Motor", 2, False, False),
+                     TrainFunction("Horn", 3, False, False),
                      INSTANT_ACCELERATION),
           speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136)),
     # Train('Dampf', "🚂",
@@ -248,20 +248,20 @@ TRAINS = [
     Train('218', "🛲",
           address=73,
           acceleration=30.,
-          image=("Thumb_BR218_Beige.png", 287, 127),
+          image=("Thumb_BR218_Beige.png", 234, 100),
           speeds=np.linspace(0, 200, 15),
           functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION)),
     Train('E40', "🚉",
           address=23,
           acceleration=30.,
-          image=("Thumb_E40.png", 287, 127),
+          image=("Thumb_E40.png", 227, 105),
           speeds=np.linspace(0, 220, 15),
           stop_by_mm1_reverse=False,
           functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction('Hupe', -1, False, False))),
     Train('Bus', "🚌",
           address=62,
           acceleration=40.,
-          image=("Thumb_Schienenbus.png", 287, 127),
+          image=("Thumb_Schienenbus.png", 224, 86),
           speeds=np.linspace(0, 150, 15),
           stop_by_mm1_reverse=False,
           functions=()),
@@ -324,13 +324,3 @@ def setup(serial_port: str or None):
 def set_global_speed_limit(limit: float or None):
     for train in TRAINS:
         train.set_speed_limit(limit)
-
-
-def set_train_cars_connected(train_cars):
-    if train_cars:
-        # get_by_name('ICE').set_speed_factor(288 / 300)
-        get_by_name('Dampf-Lok').set_speed_factor(106 / 210)
-        get_by_name('Diesel-Lok').set_speed_factor(166 / 210)
-    else:
-        for train in TRAINS:
-            train.set_speed_factor(1)
