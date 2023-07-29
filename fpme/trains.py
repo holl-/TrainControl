@@ -329,3 +329,4 @@ def set_global_speed_limit(limit: float or None):
 def set_lights_on(on: bool):
     for train in TRAINS:
         train._func_active = on
+        train._update_signal()
