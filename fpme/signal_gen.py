@@ -138,6 +138,8 @@ class ProcessSpawningGenerator:
     def __init__(self):
         self._active = Value('b', False)
         self._short_circuited = Value('b', False)
+        self._error_message = None
+        self._process = None
         self._queue = Queue()
 
     def setup(self, serial_port: str):
@@ -177,11 +179,15 @@ class ProcessSpawningGenerator:
         return bool(self._short_circuited.value)
 
     @property
-    def error_message(self):
+    def error_message(self) -> str:
+        if self._error_message is None:
+            return ""
         return self._error_message.value
 
     @property
     def has_error(self):
+        if self._error_message is None:
+            return False
         return bool(self._error_message.value)
 
 
