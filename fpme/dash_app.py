@@ -451,7 +451,7 @@ def admin_update(_n, checklist, *args):
     elif trains.GENERATOR.has_error:
         signal_status = f"⛔ {trains.GENERATOR.error_message}"
     elif trains.GENERATOR.is_short_circuited:
-        signal_status = '⚠ short-circuited'
+        signal_status = '⚠ short-circuited or no power'
     elif trains.is_power_on():
         signal_status = '✅'
     else:
