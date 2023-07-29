@@ -432,8 +432,9 @@ def admin_update(_n, checklist, *args):
     elif trigger_id == 'admin-checklist':
         switches.set_all_locked('lock-all-switches' in checklist)
         trains.set_global_speed_limit(120 if 'global-speed-limit' in checklist else None)
-        global _SCHEDULE_MODE
-        _SCHEDULE_MODE = 'schedule-mode' in checklist
+        # global _SCHEDULE_MODE
+        # _SCHEDULE_MODE = 'schedule-mode' in checklist
+        trains.set_lights_on('lights-on' in checklist)
 
     elif trigger_id.startswith('admin-kick-'):
         train = trains.get_by_name(trigger_id[len('admin-kick-'):])
