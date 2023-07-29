@@ -135,14 +135,18 @@ class Motorola2(RS232Protocol):
 
 class ProcessSpawningGenerator:
 
-    def __init__(self, serial_port: str):
-        manager = Manager()
+    def __init__(self):
         self._active = Value('b', False)
         self._short_circuited = Value('b', False)
-        self._error_message = manager.Value(c_char_p, "")
         self._queue = Queue()
-        self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited, self._error_message))
-        self._process.start()
+
+    def setup(self, serial_port: str):
+        with Manager() as manager:
+            self._error_message = manager.Value(c_char_p, "")
+            self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited, self._error_message))
+            self._process.start()
+            self._process.join()
+            print("Child process terminated.")
 
     def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
         assert isinstance(address, int)
