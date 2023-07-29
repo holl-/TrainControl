@@ -507,7 +507,7 @@ def get_incoming(train: trains.Train):
 
 
 LOCAL_IP = get_ip()
-PORT = 8051
+PORT = 80
 SERIAL_PORT: Optional[str] = 'COM4'
 RELAY_ERR = None
 _SCHEDULE_MODE = False
