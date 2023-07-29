@@ -143,8 +143,6 @@ admin_controls = [
     dcc.Markdown("# Status", id='admin-status'),
     dcc.Checklist(id='admin-checklist', labelStyle=dict(display='block'), options=[
         {'label': "Max 120 km/h", 'value': 'global-speed-limit'},
-        {'label': "Züge haben Wagen", 'value': 'train-cars'},
-        # {'label': "Fahrplan-Modus (Nur benötigte Weichen schalten)", 'value': 'schedule-mode'},
         {'label': "Weichen sperren", 'value': 'lock-all-switches'},
         {'label': "Lichter an", 'value': 'lights-on'},
     ]),
@@ -434,7 +432,6 @@ def admin_update(_n, checklist, *args):
     elif trigger_id == 'admin-checklist':
         switches.set_all_locked('lock-all-switches' in checklist)
         trains.set_global_speed_limit(120 if 'global-speed-limit' in checklist else None)
-        trains.set_train_cars_connected('train-cars' in checklist)
         global _SCHEDULE_MODE
         _SCHEDULE_MODE = 'schedule-mode' in checklist
 
