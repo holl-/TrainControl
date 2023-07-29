@@ -36,6 +36,7 @@ class Train:
                  use_built_in_acceleration=False,
                  protocol=None,
                  stop_by_mm1_reverse=True,
+                 always_use_mm1_stop=False,
                  image: Tuple[str, int, int] = ("", -1, -1),
                  directional_image: Tuple[str, int, int] = None,
                  functions: Tuple[TrainFunction, ...] = (LIGHT,)):
@@ -45,11 +46,13 @@ class Train:
         self.address: int = address
         self.icon = icon
         self.protocol = protocol  # special protocol for this train
-        self.speeds: tuple = speeds  # 14 entries
+        self.speed_codes = tuple(i for i, s in enumerate(speeds) if s is not None)
+        self.speeds: tuple = tuple(s for s in speeds if s is not None)
         self.locomotive_speeds = speeds  # unencumbered by cars
         self.use_built_in_acceleration: bool = use_built_in_acceleration
         self.acceleration: float = acceleration
         self.stop_by_mm1_reverse = stop_by_mm1_reverse
+        self.always_use_mm1_stop = always_use_mm1_stop
         self.image: Tuple[str, int, int] = image
         self.directional_image = directional_image
         self.functions = functions
@@ -117,22 +120,25 @@ class Train:
         self._update_signal()
 
     def _update_signal(self):
-        target_level = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
+        target_idx = int(numpy.argmin([abs(s - abs(self._target_speed)) for s in self.speeds]))  # ≥ 0
         if self.use_built_in_acceleration:
-            speed_level = target_level
+            speed_idx = target_idx
         else:
             if abs(self._target_speed) > abs(self._speed):  # ceil level
-                speed_level = [i for i, s in enumerate(self.speeds) if s >= abs(self._speed)][0] + 1
-                speed_level = min(speed_level, target_level)
+                speed_idx = [i for i, s in enumerate(self.speeds) if s >= abs(self._speed)][0] + 1
+                speed_idx = min(speed_idx, target_idx)
             elif abs(self._target_speed) < abs(self._speed):  # floor level
-                speed_level = [i for i, s in enumerate(self.speeds) if s <= abs(self._speed)][-1] - 1
-                speed_level = max(speed_level, target_level)
+                speed_idx = [i for i, s in enumerate(self.speeds) if s <= abs(self._speed)][-1] - 1
+                speed_idx = max(speed_idx, target_idx)
             else:  # Equal
-                speed_level = target_level
-        new_state = (speed_level, self.currently_in_reverse, self._func_active)
+                speed_idx = target_idx
+        speed_code = self.speed_codes[speed_idx]
+        if speed_code == 0 and self.always_use_mm1_stop:
+            speed_code = None
+        new_state = (speed_code, self.currently_in_reverse, self._func_active)
         if new_state != self._broadcasting_state:
             self._broadcasting_state = new_state
-            GENERATOR.set(self.address, speed_level, self.currently_in_reverse, {0: self._func_active}, protocol=self.protocol)
+            GENERATOR.set(self.address, speed_code, self.currently_in_reverse, {0: self._func_active}, protocol=self.protocol)
 
     def emergency_stop(self):
         self._target_speed *= 0.
@@ -140,10 +146,10 @@ class Train:
         currently_in_reverse = self._broadcasting_state[1]
         if self.stop_by_mm1_reverse:
             GENERATOR.set(self.address, None, False, {0: self._func_active}, protocol=self.protocol)
-            self._broadcasting_state = (0., False, self._func_active)
+            self._broadcasting_state = (0, False, self._func_active)
         else:
             GENERATOR.set(self.address, 0, not currently_in_reverse, {0: self._func_active}, protocol=self.protocol)
-            self._broadcasting_state = (0., not currently_in_reverse, self._func_active)
+            self._broadcasting_state = (0, not currently_in_reverse, self._func_active)
         self._emergency_stopping = True
 
     @property
@@ -249,8 +255,9 @@ TRAINS = [
           address=73,
           acceleration=30.,
           image=("Thumb_BR218_Beige.png", 234, 100),
-          speeds=np.linspace(0, 200, 15),
-          functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION)),
+          speeds=[0, None, 31,  47,  62,  78,  94, 110, 125, 141, 157, 172, 188, 204, 220],
+          functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION),
+          always_use_mm1_stop=True),
     Train('E40', "🚉",
           address=23,
           acceleration=30.,
