@@ -324,3 +324,8 @@ def setup(serial_port: str or None):
 def set_global_speed_limit(limit: float or None):
     for train in TRAINS:
         train.set_speed_limit(limit)
+
+
+def set_lights_on(on: bool):
+    for train in TRAINS:
+        train._func_active = on
