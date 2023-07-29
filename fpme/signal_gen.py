@@ -135,14 +135,20 @@ class Motorola2(RS232Protocol):
 
 class ProcessSpawningGenerator:
 
-    def __init__(self, serial_port: str):
-        manager = Manager()
+    def __init__(self):
         self._active = Value('b', False)
         self._short_circuited = Value('b', False)
-        self._error_message = manager.Value(c_char_p, "")
+        self._error_message = None
+        self._process = None
         self._queue = Queue()
-        self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited, self._error_message))
-        self._process.start()
+
+    def setup(self, serial_port: str):
+        with Manager() as manager:
+            self._error_message = manager.Value(c_char_p, "")
+            self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited, self._error_message))
+            self._process.start()
+            self._process.join()
+            print("Child process terminated.")
 
     def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
         assert isinstance(address, int)
@@ -173,11 +179,15 @@ class ProcessSpawningGenerator:
         return bool(self._short_circuited.value)
 
     @property
-    def error_message(self):
+    def error_message(self) -> str:
+        if self._error_message is None:
+            return ""
         return self._error_message.value
 
     @property
     def has_error(self):
+        if self._error_message is None:
+            return False
         return bool(self._error_message.value)
 
 
@@ -295,14 +305,18 @@ class SignalGenerator:
 
 
 if __name__ == '__main__':
-    gen = ProcessSpawningGenerator('COM4')
+    gen = ProcessSpawningGenerator()
+    threading.Thread(target=lambda: gen.setup('COM4')).start()
+    time.sleep(.5)
     gen.start()
     # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
     # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
 
-    gen.set(23, 0, False, {0: False, 1: False, 2: False, 3: False, 4: True})
-    time.sleep(1)
-    gen.set(23, 0, False, {0: True, 1: True, 2: True, 3: True, 4: True})
+    for i in range(3, 4):
+        gen.set(3, 6, False, {0: False})
+    while True:
+        print(gen.is_short_circuited)
+        time.sleep(.1)
     # for i in range(10):
     #     for f in [0, 1, 2, 3, 4]:
     #         gen.set(1, 5, False, {i: i == f for i in range(5)})

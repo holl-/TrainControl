@@ -2,6 +2,7 @@ import math
 import time
 import warnings
 from dataclasses import dataclass
+from threading import Thread
 from typing import Tuple
 
 import numpy
@@ -266,6 +267,7 @@ TRAINS = [
           functions=()),
 ]
 
+
 def get_by_name(train_name):
     for train in TRAINS:
         if train.name == train_name:
@@ -309,7 +311,11 @@ TRAIN_UPDATE_PERIOD = 0.1
 
 def setup(serial_port: str or None):
     global GENERATOR
-    GENERATOR = signal_gen.ProcessSpawningGenerator(serial_port)
+    GENERATOR = signal_gen.ProcessSpawningGenerator()
+    def setup_generator():
+        GENERATOR.setup(serial_port)
+    Thread(target=setup_generator).start()
+    # --- train updates ---
     for train in TRAINS:
         train._update_signal()  # Broadcast initial states, otherwise trains will keep going with previous speed
     schedule_at_fixed_rate(update_trains, TRAIN_UPDATE_PERIOD)

@@ -533,7 +533,7 @@ if __name__ == '__main__':
             print(f"Starting Waitress server on {LOCAL_IP}, port {PORT}: http://{LOCAL_IP}:{PORT}/")
             waitress.serve(app.server, port=PORT)
         except ImportError:
-            raise AssertionError(f"Please install waitress sor bjoern")
+            raise AssertionError(f"Please install 'waitress' or 'bjoern'")
             # print(f"Starting debug server on {LOCAL_IP}, port {PORT}: http://{LOCAL_IP}:{PORT}/")
             # app.run_server(debug=True, host='0.0.0.0', port=PORT)  # this runs the program twice!
     # trains.power_on()
