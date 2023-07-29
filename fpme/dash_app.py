@@ -142,7 +142,7 @@ admin_controls = [
     html.Button("Beenden", id='admin-kill'),
     dcc.Markdown("# Status", id='admin-status'),
     dcc.Checklist(id='admin-checklist', labelStyle=dict(display='block'), options=[
-        {'label': "Max 120 km/h", 'value': 'global-speed-limit'},
+        {'label': "Max 100 km/h", 'value': 'global-speed-limit'},
         {'label': "Weichen sperren", 'value': 'lock-all-switches'},
         {'label': "Lichter an", 'value': 'lights-on'},
     ]),
@@ -431,7 +431,7 @@ def admin_update(_n, checklist, *args):
         train.emergency_stop()
     elif trigger_id == 'admin-checklist':
         switches.set_all_locked('lock-all-switches' in checklist)
-        trains.set_global_speed_limit(120 if 'global-speed-limit' in checklist else None)
+        trains.set_global_speed_limit(100 if 'global-speed-limit' in checklist else None)
         # global _SCHEDULE_MODE
         # _SCHEDULE_MODE = 'schedule-mode' in checklist
         trains.set_lights_on('lights-on' in checklist)
