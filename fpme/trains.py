@@ -8,8 +8,8 @@ from typing import Tuple
 import numpy
 import numpy as np
 
-from helper import schedule_at_fixed_rate
-from fpme import signal_gen
+from .helper import schedule_at_fixed_rate
+from . import signal_gen
 
 
 @dataclass

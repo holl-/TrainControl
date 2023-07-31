@@ -11,7 +11,7 @@ from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 from dash import callback_context
 
-from fpme import trains, switches, signal_gen
+from . import trains, switches, signal_gen
 
 
 class Client:
@@ -70,7 +70,7 @@ def clear_inactive_clients():
 
 app = dash.Dash('Modelleisenbahn', external_stylesheets=[dbc.themes.BOOTSTRAP, 'slider.css'], title='Modelleisenbahn', update_title=None)
 
-with open('../welcome_text.md') as file:
+with open('welcome_text.md') as file:
     welcome_text = file.read()
 welcome_layout = html.Div(id='welcome', children=[
     dcc.Markdown(welcome_text),
@@ -513,9 +513,9 @@ RELAY_ERR = None
 _SCHEDULE_MODE = False
 
 
-if __name__ == '__main__':
+def start():
     try:
-        import relay8
+        from . import relay8
         print("Relay initialized, track switches online.")
     except AssertionError as err:
         print(err)
