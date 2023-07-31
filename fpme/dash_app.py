@@ -519,6 +519,7 @@ def start():
         print("Relay initialized, track switches online.")
     except AssertionError as err:
         print(err)
+        global RELAY_ERR
         RELAY_ERR = err
     trains.setup(SERIAL_PORT)
     try:
