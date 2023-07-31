@@ -507,13 +507,16 @@ def get_incoming(train: trains.Train):
 
 
 LOCAL_IP = get_ip()
-PORT = 80
-SERIAL_PORT: Optional[str] = 'COM4'
 RELAY_ERR = None
 _SCHEDULE_MODE = False
+PORT = None
+SERIAL_PORT = None
 
 
-def start():
+def start(port=80, serial_port='COM4'):
+    global PORT, SERIAL_PORT
+    PORT = port
+    SERIAL_PORT = serial_port
     try:
         from . import relay8
         print("Relay initialized, track switches online.")
@@ -521,16 +524,16 @@ def start():
         print(err)
         global RELAY_ERR
         RELAY_ERR = err
-    trains.setup(SERIAL_PORT)
+    trains.setup(serial_port)
     try:
         import bjoern
-        print(f"Starting Bjoern server on {LOCAL_IP}, port {PORT}: http://{LOCAL_IP}:{PORT}/")
-        bjoern.run(app.server, port=PORT, host='0.0.0.0')
+        print(f"Starting Bjoern server on {LOCAL_IP}, port {port}: http://{LOCAL_IP}:{port}/")
+        bjoern.run(app.server, port=port, host='0.0.0.0')
     except ImportError:
         try:
             import waitress
-            print(f"Starting Waitress server on {LOCAL_IP}, port {PORT}: http://{LOCAL_IP}:{PORT}/")
-            waitress.serve(app.server, port=PORT)
+            print(f"Starting Waitress server on {LOCAL_IP}, port {port}: http://{LOCAL_IP}:{port}/")
+            waitress.serve(app.server, port=port)
         except ImportError:
             raise AssertionError(f"Please install 'waitress' or 'bjoern'")
             # print(f"Starting debug server on {LOCAL_IP}, port {PORT}: http://{LOCAL_IP}:{PORT}/")
