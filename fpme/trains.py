@@ -206,7 +206,7 @@ class Train:
 
 TRAINS = [
     Train('ICE', "🚅",
-          address=60,
+          address=3,
           acceleration=40.,
           image=("ICE.png", 237, 124),
           speeds=np.linspace(0, 288, 15),
