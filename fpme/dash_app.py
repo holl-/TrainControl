@@ -11,7 +11,7 @@ from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 from dash import callback_context
 
-from . import trains, switches, signal_gen
+from . import train_control, switches, signal_gen
 
 
 class Client:
@@ -66,6 +66,15 @@ def clear_inactive_clients():
             del CLIENTS[client.user_id]
             if client.train is not None:
                 client.train.set_target_speed(0)
+
+
+def fit_image_size(img_res, max_width, max_height):
+    image_aspect = img_res[0] / img_res[1]
+    max_aspect = max_width / max_height
+    if image_aspect > max_aspect:  # wide image: fit width
+        return max_width, img_res[1] * max_width / img_res[0]
+    else:  # narrow image: fit height
+        return img_res[0] * max_height / img_res[1], max_height
 
 
 app = dash.Dash('Modelleisenbahn', external_stylesheets=[dbc.themes.BOOTSTRAP, 'slider.css'], title='Modelleisenbahn', update_title=None)
@@ -130,7 +139,7 @@ def build_control():
 
 switch_trains = html.Div([
     html.Div([], style={'display': 'inline-block', 'width': 20, 'height': 10}),
-    *[html.Button([html.Img(src=f'assets/{train.image_path}', style={d: s for d, s in zip(['width', 'height'], train.fit_image_size(60, 20))}), train.name], id=f'switch-to-{train.name}', disabled=True) for train in trains.TRAINS],
+    *[html.Button([html.Img(src=f'assets/{train.image_path}', style={d: s for d, s in zip(['width', 'height'], fit_image_size(train.img_size, 60, 20))}), train.name], id=f'switch-to-{train.name}', disabled=True) for train in trains.TRAINS],
     html.Div([], style={'display': 'inline-block', 'width': 10, 'height': 10}),
     html.Button("🚪⬏", id='release-train', disabled=True)  # Aussteigen
 ])
@@ -242,7 +251,7 @@ def main_update(user_id, *args):
     elif trigger_id.startswith('switch-to-'):
         if client.train is None or client.train.is_parked:
             new_train_name = trigger_id[len('switch-to-'):]
-            new_train = trains.get_by_name(new_train_name)
+            new_train = trains.TRAINS_BY_NAME[new_train_name]
             if all([c.train != new_train for c in CLIENTS.values()]):  # train not in use
                 if client.train is not None:
                     client.train.set_target_speed(0)  # Stop the train we're exiting
@@ -427,7 +436,7 @@ def admin_update(_n, checklist, *args):
     elif trigger_id == 'power-on-admin':
         trains.power_on()
     elif trigger_id.startswith('admin-stop-'):
-        train = trains.get_by_name(trigger_id[len('admin-stop-'):])
+        train = trains.TRAINS_BY_NAME[trigger_id[len('admin-stop-'):]]
         train.emergency_stop()
     elif trigger_id == 'admin-checklist':
         switches.set_all_locked('lock-all-switches' in checklist)
@@ -437,7 +446,7 @@ def admin_update(_n, checklist, *args):
         trains.set_lights_on('lights-on' in checklist)
 
     elif trigger_id.startswith('admin-kick-'):
-        train = trains.get_by_name(trigger_id[len('admin-kick-'):])
+        train = trains.TRAINS_BY_NAME[trigger_id[len('admin-kick-'):]]
         for client in CLIENTS.values():
             if client.train == train:
                 train.set_target_speed(0)

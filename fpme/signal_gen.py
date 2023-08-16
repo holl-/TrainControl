@@ -141,8 +141,15 @@ class ProcessSpawningGenerator:
         self._error_message = None
         self._process = None
         self._queue = Queue()
+        self._last_stopped = 0
+        self._states = {}  # address to state
 
     def setup(self, serial_port: str):
+        def async_setup():
+            self._start_process_and_wait(serial_port)
+        threading.Thread(target=async_setup).start()
+
+    def _start_process_and_wait(self, serial_port: str):
         with Manager() as manager:
             self._error_message = manager.Value(c_char_p, "")
             self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited, self._error_message))
@@ -151,6 +158,8 @@ class ProcessSpawningGenerator:
             print("Child process terminated.")
 
     def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
+        if address in self._states and (speed, reverse, functions, protocol) == self._states[address]:
+            return  # already has this state
         assert isinstance(address, int)
         assert isinstance(speed, int) or speed is None
         assert isinstance(reverse, bool)
@@ -158,12 +167,14 @@ class ProcessSpawningGenerator:
         assert all(isinstance(f, int) for f in functions.keys()), "functions must be a Dict[int, bool]"
         assert all(isinstance(v, bool) for v in functions.values()), "functions must be a Dict[int, bool]"
         self._queue.put(('set', address, speed, reverse, functions, protocol))
+        self._states[address] = (speed, reverse, functions, protocol)
 
     def start(self):
         self._queue.put(('start',))
 
     def stop(self):
         self._active.value = False
+        self._last_stopped = time.perf_counter()
 
     @property
     def is_sending(self):
@@ -189,6 +200,13 @@ class ProcessSpawningGenerator:
         if self._error_message is None:
             return False
         return bool(self._error_message.value)
+
+    @property
+    def time_since_last_stopped(self):
+        if not self._last_stopped:
+            return float('-inf')
+        else:
+            return time.perf_counter() - self._last_stopped
 
 
 def setup_generator(serial_port: str, queue: Queue, active: Value, short_circuited: Value, error_message: Value):
