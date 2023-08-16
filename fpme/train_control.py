@@ -116,7 +116,7 @@ class TrainControl:
     def update_trains(self, dt):  # repeatedly called from setup()
         try:
             for train in TRAINS:
-                self._update_train(train)
+                self._update_train(train, dt)
         except Exception as exc:
             warnings.warn(f"Exception in update_trains(): {exc}")
 

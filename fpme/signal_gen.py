@@ -170,7 +170,8 @@ class ProcessSpawningGenerator:
     def open_port(self, serial_port: str, addresses: Tuple[int] = None):
         state = GeneratorState(serial_port, addresses, active=Value('b', False), short_circuited=Value('b', False), error_message=self._manager.Value(c_char_p, ""))
         self._generator_states[serial_port] = state
-        self._subprocess_run.put(('open_port', serial_port, addresses, state.active, state.short_circuited, state.error_message))
+        print("Sending command open_port")
+        self._subprocess_run.put(('open_port', serial_port, addresses, state.active, state.short_circuited, state.error_message))  # ToDo cannot send Values in queue
 
     def get_open_ports(self) -> Tuple[str]:
         return tuple(self._generator_states.keys())
@@ -188,6 +189,7 @@ class ProcessSpawningGenerator:
         self._subprocess_run.put(('set', address, speed, reverse, functions, protocol))
 
     def start(self, serial_port: str):
+        print("Sending command start")
         self._subprocess_run.put(('start', serial_port))
 
     def stop(self, serial_port: str):
@@ -231,6 +233,7 @@ def subprocess_main(queue: Queue):
     main = SignalGenProcessInterface()
     while True:
         cmd = queue.get(block=True)
+        print(f"Received command {cmd}")
         getattr(main, cmd[0])(*cmd[1:])
 
 
