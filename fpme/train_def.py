@@ -1,3 +1,4 @@
+import os
 from typing import Tuple, Sequence
 
 import numpy as np
@@ -20,7 +21,7 @@ INSTANT_ACCELERATION = TrainFunction("Instantane Beschleunigung", 4, True, False
 
 class Train:
 
-    def __init__(self, name: str, icon: str, address: int, speeds: Sequence, acceleration: float, has_built_in_acceleration: bool = True, supports_mm2: bool = True, stop_by_mm1_reverse=True, functions: Tuple[TrainFunction, ...] = (LIGHT,), img_path: str = None):
+    def __init__(self, name: str, icon: str, address: int, speeds: Sequence, acceleration: float, deceleration: float = None, has_built_in_acceleration: bool = True, supports_mm2: bool = True, stop_by_mm1_reverse=True, functions: Tuple[TrainFunction, ...] = (LIGHT,), img_path: str = None):
         assert len(speeds) == 15, len(speeds)
         self.name: str = name
         self.address: int = address
@@ -31,9 +32,10 @@ class Train:
         self.locomotive_speeds = speeds  # unencumbered by cars
         self.has_built_in_acceleration: bool = has_built_in_acceleration
         self.acceleration: float = acceleration
+        self.deceleration: float = deceleration if deceleration else 2 * acceleration
         self.stop_by_mm1_reverse = stop_by_mm1_reverse
         self.img_path = img_path
-        self.image = Image.open(img_path) if img_path else None
+        self.image = Image.open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', img_path)) if img_path else None
         self.functions = functions
 
     def __repr__(self):
@@ -45,6 +47,10 @@ class Train:
             return self.image.size
         else:
             return -1, -1
+
+    @property
+    def max_speed(self):
+        return self.speeds[-1]
 
 
 ICE = Train('ICE', "🚅", 3, acceleration=25., img_path="ICE.png",

@@ -1,9 +1,10 @@
 import os
 import threading
 import time
+from dataclasses import dataclass
 from multiprocessing import Value, Process, Queue, Manager
 from ctypes import c_char_p
-from typing import List, Dict
+from typing import List, Dict, Tuple, Callable
 
 import serial
 from serial import SerialException
@@ -133,93 +134,173 @@ class Motorola2(RS232Protocol):
         return None
 
 
+MM1 = Motorola1()
+MM2 = Motorola2()
+
+
+@dataclass
+class GeneratorState:
+    serial_port: str
+    addresses: Tuple[int]
+    active: Value
+    short_circuited: Value
+    error_message: Value
+    last_stopped: float = None  # mutable
+
+
 class ProcessSpawningGenerator:
 
     def __init__(self):
-        self._active = Value('b', False)
-        self._short_circuited = Value('b', False)
-        self._error_message = None
+        self._subprocess_run = Queue()
         self._process = None
-        self._queue = Queue()
-        self._last_stopped = 0
-        self._states = {}  # address to state
+        self._manager = None
+        self._generator_states: Dict[str, GeneratorState] = {}  # serial port -> state
+        self._address_states: Dict[int, tuple] = {}  # address -> state
+        self._manager = Manager()
 
-    def setup(self, serial_port: str):
+    def setup(self):
         def async_setup():
-            self._start_process_and_wait(serial_port)
+            with self._manager:
+                self._process = Process(target=subprocess_main, args=(self._subprocess_run,))
+                self._process.start()
+                self._process.join()
+                print("Child process terminated.")
         threading.Thread(target=async_setup).start()
 
-    def _start_process_and_wait(self, serial_port: str):
-        with Manager() as manager:
-            self._error_message = manager.Value(c_char_p, "")
-            self._process = Process(target=setup_generator, args=(serial_port, self._queue, self._active, self._short_circuited, self._error_message))
-            self._process.start()
-            self._process.join()
-            print("Child process terminated.")
+    def open_port(self, serial_port: str, addresses: Tuple[int] = None):
+        state = GeneratorState(serial_port, addresses, active=Value('b', False), short_circuited=Value('b', False), error_message=self._manager.Value(c_char_p, ""))
+        self._generator_states[serial_port] = state
+        self._subprocess_run.put(('open_port', serial_port, addresses, state.active, state.short_circuited, state.error_message))
+
+    def get_open_ports(self) -> Tuple[str]:
+        return tuple(self._generator_states.keys())
 
     def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
-        if address in self._states and (speed, reverse, functions, protocol) == self._states[address]:
-            return  # already has this state
+        if address in self._address_states and self._address_states[address] == (speed, reverse, functions, protocol):
+            return  # already set
         assert isinstance(address, int)
         assert isinstance(speed, int) or speed is None
         assert isinstance(reverse, bool)
         assert isinstance(functions, dict), "functions must be a Dict[int, bool]"
         assert all(isinstance(f, int) for f in functions.keys()), "functions must be a Dict[int, bool]"
         assert all(isinstance(v, bool) for v in functions.values()), "functions must be a Dict[int, bool]"
-        self._queue.put(('set', address, speed, reverse, functions, protocol))
-        self._states[address] = (speed, reverse, functions, protocol)
+        self._address_states[address] = (speed, reverse, functions, protocol)
+        self._subprocess_run.put(('set', address, speed, reverse, functions, protocol))
 
-    def start(self):
-        self._queue.put(('start',))
+    def start(self, serial_port: str):
+        self._subprocess_run.put(('start', serial_port))
 
-    def stop(self):
-        self._active.value = False
-        self._last_stopped = time.perf_counter()
+    def stop(self, serial_port: str):
+        state = self._generator_states[serial_port]
+        state.active.value = False
+        state._last_stopped = time.perf_counter()
 
-    @property
-    def is_sending(self):
-        return bool(self._active.value) and not bool(self._short_circuited.value)
+    def is_sending_on(self, serial_port: str):
+        state = self._generator_states[serial_port]
+        return bool(state.active.value) and not bool(state.short_circuited.value)
 
     def terminate(self):
-        self._queue.put(('terminate',))
+        self._subprocess_run.put(('terminate',))
         time.sleep(.1)
         self._process.terminate()
+        # self._process_manager.close()
 
-    @property
-    def is_short_circuited(self):
-        return bool(self._short_circuited.value)
+    def is_short_circuited(self, serial_port: str):
+        state = self._generator_states[serial_port]
+        return bool(state.short_circuited.value)
 
-    @property
-    def error_message(self) -> str:
-        if self._error_message is None:
-            return ""
-        return self._error_message.value
+    def get_error(self, serial_port: str) -> str:
+        """Empty string means no error"""
+        state = self._generator_states[serial_port]
+        return state.error_message.value
 
-    @property
-    def has_error(self):
-        if self._error_message is None:
-            return False
-        return bool(self._error_message.value)
-
-    @property
-    def time_since_last_stopped(self):
-        if not self._last_stopped:
+    def time_since_last_stopped(self, serial_port: str):
+        state = self._generator_states[serial_port]
+        if state.last_stopped is None:
             return float('-inf')
         else:
-            return time.perf_counter() - self._last_stopped
+            return time.perf_counter() - state.last_stopped
+
+    def is_in_reverse(self, address: int):
+        return self._address_states[address][1]
 
 
-def setup_generator(serial_port: str, queue: Queue, active: Value, short_circuited: Value, error_message: Value):
-    gen = SignalGenerator(serial_port, active, short_circuited, error_message)
+# ------------------ Executed in subprocess from here on --------------------
+
+def subprocess_main(queue: Queue):
+    main = SignalGenProcessInterface()
     while True:
         cmd = queue.get(block=True)
-        getattr(gen, cmd[0])(*cmd[1:])
+        getattr(main, cmd[0])(*cmd[1:])
+
+
+class SignalGenProcessInterface:
+
+    def __init__(self):
+        self.generators: Dict[str, SignalGenerator] = {}
+        self.addresses: Dict[str, Tuple[int]] = {}
+        self.state: Dict[int, tuple] = {}
+        self.sleeper = Sleeper()
+
+    def open_port(self, serial_port: str, addresses, active: Value, short_circuited: Value, error_message: Value):
+        assert serial_port not in self.generators
+        gen = SignalGenerator(serial_port, self.sleeper, active, short_circuited, error_message)
+        for address, (speed, reverse, functions, protocol) in self.state.items():
+            if addresses is None or address in addresses:
+                gen.set(address, speed, reverse, functions, protocol)
+        self.generators[serial_port] = gen
+        self.addresses[serial_port] = addresses
+
+    def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
+        self.state[address] = (speed, reverse, functions, protocol)
+        for serial_port, generator in self.generators.items():
+            addresses = self.addresses[serial_port]
+            if addresses is None or address in addresses:
+                generator.set(address, speed, reverse, functions, protocol)
+
+    def start(self, serial_port: str):
+        self.generators[serial_port].start()
+
+    def terminate(self):
+        os._exit(0)
+
+
+class Sleeper:
+    """Sleep with sub-millisecond precision"""
+
+    def __init__(self):
+        self.events = {}
+        self.event_queue = []
+        def work_loop():
+            while True:
+                if not self.event_queue:
+                    time.sleep(0)
+                    continue
+                event, at_time = self.event_queue.pop(0)
+                while time.perf_counter() < at_time:
+                    pass
+                event.set()
+        threading.Thread(target=work_loop, name='RS_232_Signal_Generator_Worker').start()
+
+    def sleep(self, source, for_time: float):
+        """Blocks until task is done"""
+        now = time.perf_counter()
+        if source in self.events:
+            event = self.events[source]
+        else:
+            event = threading.Event()
+            self.events[source] = event
+        self.event_queue.append((event, now + for_time))
+        event.wait()
+        event.clear()
 
 
 class SignalGenerator:
 
-    def __init__(self, serial_port: str, active: Value, short_circuited: Value, error_message: Value):
+    def __init__(self, serial_port: str, sleeper: Sleeper, active: Value, short_circuited: Value, error_message: Value):
+        self.serial_port = serial_port
         self.protocol = Motorola2()
+        self.sleeper = sleeper
         self._active = active
         self._data = {}  # address -> (speed, reverse, func)
         self._packets = {}
@@ -233,6 +314,7 @@ class SignalGenerator:
         self.on_short_circuit = lambda: print("Short circuit detected")  # function without parameters
         self._time_started_sending = None  # wait a bit before detecting short circuits
         self._ser = None
+        self._time_created = time.perf_counter()
         if serial_port:
             try:
                 print(f"Opening serial port {serial_port}...")
@@ -280,9 +362,6 @@ class SignalGenerator:
         # assert not self._active.value  # ToDo this breaks the app sometimes
         threading.Thread(target=self.run, name='RS_232_Signal_Generator').start()
 
-    def terminate(self):
-        os._exit(0)
-
     def run(self):
         assert not self._active.value
         self._active.value = True
@@ -292,34 +371,31 @@ class SignalGenerator:
                 # print(f"Here be signal: {self._packets}")
                 time.sleep(0.5)
                 continue
-            short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
-            self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
-            if self._short_circuited.value:
-                if newly_short_circuited and self.on_short_circuit is not None:
-                    self.on_short_circuit()
-                if self.stop_on_short_circuit:
-                    self._active.value = False
-                    return
-            # Send data on serial port
-            if not self._data:
-                self._send(self._idle_packet)
-            for address, status_packets in dict(self._packets).items():
-                if address in self._turn_addresses:
-                    self._turn_addresses.remove(address)
-                    if self._turn_packets[address] is not None:
-                        for _rep in range(2):
-                            self._send(self._turn_packets[address])
-                for packet in status_packets:
-                    # print(' '.join('{:02x}'.format(x) for x in packet))
-                    for _rep in range(2):  # Send each packet twice, else trains will ignore it
-                        self._send(packet)
+        short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
+        self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
+        if self._short_circuited.value:
+            if newly_short_circuited and self.on_short_circuit is not None:
+                self.on_short_circuit()
+            if self.stop_on_short_circuit:
+                self._active.value = False
+                return
+        # Send data on serial port
+        if not self._data:
+            self._send(self._idle_packet, times=1)
+        for address, status_packets in dict(self._packets).items():
+            if address in self._turn_addresses:
+                self._turn_addresses.remove(address)
+                if self._turn_packets[address] is not None:
+                    self._send(self._turn_packets[address], times=2)
+            for packet in status_packets:
+                # print(' '.join('{:02x}'.format(x) for x in packet))
+                self._send(packet, times=2)  # Send each packet twice, else trains will ignore it
 
-    def _send(self, packet):
-        self._ser.write(packet)
-        t = time.perf_counter()
-        while time.perf_counter() < t + 5.944e-3:
-            pass  # manual sleep, time.sleep() is not precise enough
-        # Measured: 1.7 ms between equal packets in pair, 6 ms between different pairs
+    def _send(self, packet, times=1, time_between_packages=5.944e-3):
+        for i in range(times):
+            self._ser.write(packet)
+            self.sleeper.sleep(self, time_between_packages)  # custom sleep, time.sleep() is not precise enough
+            # Measured: 1.7 ms between equal packets in pair, 6 ms between different pairs
 
 
 if __name__ == '__main__':
