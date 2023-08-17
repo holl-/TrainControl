@@ -148,30 +148,34 @@ class GeneratorState:
     last_stopped: float = None  # mutable
 
 
-class ProcessSpawningGenerator:
+class SubprocessGenerator:
 
-    def __init__(self):
+    def __init__(self, max_generators=1):
+        self.max_generators = max_generators
         self._subprocess_run = Queue()
         self._process = None
         self._manager = None
         self._generator_states: Dict[str, GeneratorState] = {}  # serial port -> state
         self._address_states: Dict[int, tuple] = {}  # address -> state
         self._manager = Manager()
+        self._all_active = [Value('b', False) for _ in range(max_generators)]
+        self._all_short_circuited = [Value('b', False) for _ in range(max_generators)]
+        self._all_error = [self._manager.Value(c_char_p, "") for _ in range(max_generators)]
 
     def setup(self):
         def async_setup():
             with self._manager:
-                self._process = Process(target=subprocess_main, args=(self._subprocess_run,))
+                self._process = Process(target=subprocess_main, args=(self._subprocess_run, self._all_active, self._all_short_circuited, self._all_error))
                 self._process.start()
                 self._process.join()
                 print("Child process terminated.")
         threading.Thread(target=async_setup).start()
 
     def open_port(self, serial_port: str, addresses: Tuple[int] = None):
-        state = GeneratorState(serial_port, addresses, active=Value('b', False), short_circuited=Value('b', False), error_message=self._manager.Value(c_char_p, ""))
+        i = len(self._generator_states)
+        state = GeneratorState(serial_port, addresses, active=self._all_active[i], short_circuited=self._all_short_circuited[i], error_message=self._all_error[i])
         self._generator_states[serial_port] = state
-        print("Sending command open_port")
-        self._subprocess_run.put(('open_port', serial_port, addresses, state.active, state.short_circuited, state.error_message))  # ToDo cannot send Values in queue
+        self._subprocess_run.put(('open_port', serial_port, addresses))
 
     def get_open_ports(self) -> Tuple[str]:
         return tuple(self._generator_states.keys())
@@ -189,7 +193,6 @@ class ProcessSpawningGenerator:
         self._subprocess_run.put(('set', address, speed, reverse, functions, protocol))
 
     def start(self, serial_port: str):
-        print("Sending command start")
         self._subprocess_run.put(('start', serial_port))
 
     def stop(self, serial_port: str):
@@ -229,25 +232,28 @@ class ProcessSpawningGenerator:
 
 # ------------------ Executed in subprocess from here on --------------------
 
-def subprocess_main(queue: Queue):
-    main = SignalGenProcessInterface()
+def subprocess_main(queue: Queue, active, short_circuited, error):
+    main = SignalGenProcessInterface(active, short_circuited, error)
     while True:
         cmd = queue.get(block=True)
-        print(f"Received command {cmd}")
+        print(f"Subprocess received: {cmd}")
         getattr(main, cmd[0])(*cmd[1:])
 
 
 class SignalGenProcessInterface:
 
-    def __init__(self):
+    def __init__(self, all_active, all_short_circuited, all_error):
+        self.all_active = list(all_active)
+        self.all_short_circuited = list(all_short_circuited)
+        self.all_error = list(all_error)
         self.generators: Dict[str, SignalGenerator] = {}
         self.addresses: Dict[str, Tuple[int]] = {}
         self.state: Dict[int, tuple] = {}
-        self.sleeper = Sleeper()
+        self.scheduler = ThreadScheduler()
 
-    def open_port(self, serial_port: str, addresses, active: Value, short_circuited: Value, error_message: Value):
+    def open_port(self, serial_port: str, addresses):
         assert serial_port not in self.generators
-        gen = SignalGenerator(serial_port, self.sleeper, active, short_circuited, error_message)
+        gen = SignalGenerator(serial_port, self.scheduler, self.all_active.pop(0), self.all_short_circuited.pop(0), self.all_error.pop(0))
         for address, (speed, reverse, functions, protocol) in self.state.items():
             if addresses is None or address in addresses:
                 gen.set(address, speed, reverse, functions, protocol)
@@ -268,10 +274,11 @@ class SignalGenProcessInterface:
         os._exit(0)
 
 
-class Sleeper:
+class ThreadScheduler:
     """Sleep with sub-millisecond precision"""
 
     def __init__(self):
+        self.scheduler_event = threading.Event()
         self.events = {}
         self.event_queue = []
         def work_loop():
@@ -283,7 +290,15 @@ class Sleeper:
                 while time.perf_counter() < at_time:
                     pass
                 event.set()
+                self.scheduler_event.wait()
+                self.scheduler_event.clear()
         threading.Thread(target=work_loop, name='RS_232_Signal_Generator_Worker').start()
+
+    def start_thread(self, target: Callable, name: str):
+        def thread_fun():
+            target()
+            self.scheduler_event.set()
+        threading.Thread(target=thread_fun, name=name).start()
 
     def sleep(self, source, for_time: float):
         """Blocks until task is done"""
@@ -294,16 +309,17 @@ class Sleeper:
             event = threading.Event()
             self.events[source] = event
         self.event_queue.append((event, now + for_time))
+        self.scheduler_event.set()
         event.wait()
         event.clear()
 
 
 class SignalGenerator:
 
-    def __init__(self, serial_port: str, sleeper: Sleeper, active: Value, short_circuited: Value, error_message: Value):
+    def __init__(self, serial_port: str, scheduler: ThreadScheduler, active: Value, short_circuited: Value, error_message: Value):
         self.serial_port = serial_port
         self.protocol = Motorola2()
-        self.sleeper = sleeper
+        self.scheduler = scheduler
         self._active = active
         self._data = {}  # address -> (speed, reverse, func)
         self._packets = {}
@@ -363,49 +379,50 @@ class SignalGenerator:
 
     def start(self):
         # assert not self._active.value  # ToDo this breaks the app sometimes
-        threading.Thread(target=self.run, name='RS_232_Signal_Generator').start()
+        self.scheduler.start_thread(target=self.run, name='RS_232_Signal_Generator')
 
     def run(self):
         assert not self._active.value
         self._active.value = True
         self._time_started_sending = time.perf_counter()
         while self._active.value:
-            if self._ser is None:
-                # print(f"Here be signal: {self._packets}")
-                time.sleep(0.5)
-                continue
-        short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
-        self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
-        if self._short_circuited.value:
-            if newly_short_circuited and self.on_short_circuit is not None:
-                self.on_short_circuit()
-            if self.stop_on_short_circuit:
-                self._active.value = False
-                return
-        # Send data on serial port
-        if not self._data:
-            self._send(self._idle_packet, times=1)
-        for address, status_packets in dict(self._packets).items():
-            if address in self._turn_addresses:
-                self._turn_addresses.remove(address)
-                if self._turn_packets[address] is not None:
-                    self._send(self._turn_packets[address], times=2)
-            for packet in status_packets:
-                # print(' '.join('{:02x}'.format(x) for x in packet))
-                self._send(packet, times=2)  # Send each packet twice, else trains will ignore it
+            if self._ser is not None:
+                short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
+            else:
+                time.sleep(1)
+                short_circuited = False
+                print(f"Here be signal: {self._packets}")
+            self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
+            if self._short_circuited.value:
+                if newly_short_circuited and self.on_short_circuit is not None:
+                    self.on_short_circuit()
+                if self.stop_on_short_circuit:
+                    self._active.value = False
+                    return
+            # Send data on serial port
+            if not self._data:
+                self._send(self._idle_packet, times=1)
+            for address, status_packets in dict(self._packets).items():
+                if address in self._turn_addresses:
+                    self._turn_addresses.remove(address)
+                    if self._turn_packets[address] is not None:
+                        self._send(self._turn_packets[address], times=2)
+                for packet in status_packets:
+                    # print(' '.join('{:02x}'.format(x) for x in packet))
+                    self._send(packet, times=2)  # Send each packet twice, else trains will ignore it
 
     def _send(self, packet, times=1, time_between_packages=5.944e-3):
         for i in range(times):
-            self._ser.write(packet)
-            self.sleeper.sleep(self, time_between_packages)  # custom sleep, time.sleep() is not precise enough
+            self._ser is not None and self._ser.write(packet)
+            self.scheduler.sleep(self, time_between_packages)  # custom sleep, time.sleep() is not precise enough
             # Measured: 1.7 ms between equal packets in pair, 6 ms between different pairs
 
 
 if __name__ == '__main__':
-    gen = ProcessSpawningGenerator()
-    threading.Thread(target=lambda: gen.setup('COM4')).start()
-    time.sleep(.5)
-    gen.start()
+    gen = SubprocessGenerator()
+    gen.setup()
+    gen.open_port('COM4')
+    gen.start('COM4')
     # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
     # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
 

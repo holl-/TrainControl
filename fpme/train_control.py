@@ -1,17 +1,12 @@
 import math
-import time
 import warnings
-from dataclasses import dataclass
-from threading import Thread
-from typing import Tuple, Sequence
+from typing import Sequence
 
 import numpy
 
-from winrawin import RawInputEvent, Mouse
-
 from .helper import schedule_at_fixed_rate
-from .signal_gen import ProcessSpawningGenerator, MM1, MM2
-from .train_def import TRAINS, Train, CONTROLS
+from .signal_gen import SubprocessGenerator, MM1, MM2
+from .train_def import TRAINS, Train
 
 
 def get_preferred_protocol(train: Train):
@@ -26,12 +21,14 @@ class TrainControl:
     def __init__(self, trains=TRAINS):
         self.trains = trains
         self.ports_by_train = {train: [] for train in trains}
-        self.generator = ProcessSpawningGenerator()
+        self.generator = SubprocessGenerator()
         self.speed_limit = None
         self.locked_trains = []
         self.target_speeds = {train: 0. for train in trains}  # signed speed in kmh, -0 means parked in reverse
         self.speeds = {train: 0. for train in trains}  # signed speed in kmh, set to EMERGENCY_STOP while train is braking
         self.active_functions = {train: set() for train in trains}  # which functions are active by their TrainFunction handle
+        for train in trains:
+            self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
         schedule_at_fixed_rate(self.update_trains, period=.1)
         self.generator.setup()
 
