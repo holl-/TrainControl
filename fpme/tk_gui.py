@@ -14,7 +14,7 @@ from .train_control import TrainControl
 
 class TKGUI:
 
-    def __init__(self, control: TrainControl):
+    def __init__(self, control: TrainControl, info=None):
         self.control = control
         self.window = tk.Tk()
         self.last_events = {}  # device_path -> RawInputEvent
@@ -24,7 +24,8 @@ class TKGUI:
         self.missing_devices = []  # device_path
         self.speed_bars = {}  # train -> ProgressBar
 
-        tk.Label(text="Press F11 to enter fullscreen mode").pack()
+        if info:
+            tk.Label(text=info, font='Helvetica 12').pack()
         tk.Label(text="Signal generators", font='Helvetica 14 bold').pack()
 
         status_pane = tk.Frame(self.window)
@@ -75,6 +76,8 @@ class TKGUI:
                 tk.Label(controls_pane, text=train.name).grid(row=row, column=2)
                 add_progress_bar(train)
                 row += 1
+
+        tk.Label(text="Press F11 to enter fullscreen mode").pack()
 
         # fullscreen_button = tk.Button(text='Fullscreen', command=lambda: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
         # fullscreen_button.pack()

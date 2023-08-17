@@ -11,6 +11,7 @@ if __name__ == '__main__':
     control.add_rs232_generator('debug1', [train for train in train_def.TRAINS if train != train_def.ICE])
     control.add_rs232_generator('debug2', [train_def.ICE])
     control.power_on(train_def.ICE)
-    Thread(target=lambda: dash_app.Server(control).launch(port=80)).start()
-    tk_gui.TKGUI(control).launch()
+    PORT = 80
+    Thread(target=lambda: dash_app.Server(control).launch(port=PORT)).start()
+    tk_gui.TKGUI(control, info=f"http://{dash_app.LOCAL_IP}{'' if PORT == 80 else f':{PORT}'}/").launch()
 
