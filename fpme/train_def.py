@@ -84,5 +84,7 @@ TRAINS = [ICE, RE, RB, S, DAMPF, DIESEL_218, DIESEL, E40, BUS]  # available trai
 TRAINS_BY_NAME = {train.name: train for train in TRAINS}
 
 CONTROLS = {
-    'device_name': ICE
+    '\\\\?\\HID#VID_046D&PID_C336&MI_00#8&178e0225&0&0000#{884b96c3-56ef-11d1-bc8c-00a0c91405dd}': ICE,
+    '\\\\?\\HID#VID_09DA&PID_9090&MI_01#8&36ff0fee&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': RB,
+    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_3675eb0ae2f9&Col01#a&2892c10d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': S,
 }
