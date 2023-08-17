@@ -3,6 +3,7 @@ import time
 
 import tkinter as tk
 import tkinter.ttk as ttk
+from threading import Thread
 
 from winrawin import hook_raw_input_for_window, RawInputEvent, list_devices, Mouse, Keyboard
 from . import hid
@@ -109,7 +110,7 @@ class TKGUI:
                 fac = 1 - math.exp(-last)
                 label.config(text=event_summary(event), bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
         for train in self.control.trains:
-            self.speed_bars[train].config(value=abs(100 * self.control.get_speed(train) / train.max_speed))
+            self.speed_bars[train].config(value=abs(100 * (self.control.get_speed(train) or 0.) / train.max_speed))
         for port in self.control.generator.get_open_ports():
             error = self.control.generator.get_error(port)
             if port is None:

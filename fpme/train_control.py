@@ -1,6 +1,6 @@
 import math
 import warnings
-from typing import Sequence
+from typing import Sequence, Optional
 
 import numpy
 
@@ -21,9 +21,9 @@ class TrainControl:
     def __init__(self, trains=TRAINS):
         self.trains = trains
         self.ports_by_train = {train: [] for train in trains}
-        self.generator = SubprocessGenerator()
+        self.generator = SubprocessGenerator(max_generators=2)
         self.speed_limit = None
-        self.locked_trains = []
+        self.locked_trains = set()
         self.target_speeds = {train: 0. for train in trains}  # signed speed in kmh, -0 means parked in reverse
         self.speeds = {train: 0. for train in trains}  # signed speed in kmh, set to EMERGENCY_STOP while train is braking
         self.active_functions = {train: set() for train in trains}  # which functions are active by their TrainFunction handle
@@ -39,19 +39,28 @@ class TrainControl:
         for train in trains or self.trains:
             self.ports_by_train[train].append(serial_port)
 
-    def power_on(self, train: Train):
-        for port in self.ports_by_train[train]:
+    def power_on(self, train: Optional[Train]):
+        for port in (self.ports_by_train[train] if train else self.generator.get_open_ports()):
             self.generator.start(port)
 
-    def power_off(self, train: Train):
-        for port in self.ports_by_train[train]:
+    def power_off(self, train: Optional[Train]):
+        for port in (self.ports_by_train[train] if train else self.generator.get_open_ports()):
             self.generator.stop(port)
 
-    def is_power_on(self, train: Train):
-        return all([self.generator.is_sending_on(port) for port in self.ports_by_train[train]])
+    def is_power_on(self, train: Optional[Train]):
+        return all([self.generator.is_sending_on(port) for port in (self.ports_by_train[train] if train else self.generator.get_open_ports())])
 
     def terminate(self):
         self.generator.terminate()
+
+    def is_locked(self, train: Train):
+        return train in self.locked_trains
+
+    def set_locked(self, train: Train, locked: bool):
+        if locked:
+            self.locked_trains.add(train)
+        elif train in self.locked_trains:
+            self.locked_trains.remove(train)
 
     def get_target_speed(self, train: Train) -> float:
         """Signed target speed"""
@@ -116,11 +125,11 @@ class TrainControl:
             train._update_signal()
 
     def update_trains(self, dt):  # repeatedly called from setup()
-        try:
+        # try:
             for train in TRAINS:
                 self._update_train(train, dt)
-        except Exception as exc:
-            warnings.warn(f"Exception in update_trains(): {exc}")
+        # except Exception as exc:
+        #     warnings.warn(f"Exception in update_trains(): {exc}")
 
     def _update_train(self, train: Train, dt: float):  # called by update_trains()
         if not self.is_power_on(train):
@@ -130,25 +139,28 @@ class TrainControl:
             self.target_speeds[train] = self.speeds[train] + dt * train.acceleration * self.controls[train]
         if self.target_speeds[train] == self.speeds[train]:
             return
-        acc = train.acceleration if abs(self.target_speeds[train]) > abs(self.speeds[train]) else train.deceleration
-        if self.target_speeds[train] > self.speeds[train]:
-            self.speeds[train] = min(self.speeds[train] + acc * dt, self.target_speeds[train])
+        speed = self.speeds[train]
+        if speed is None:
+            return  # emergency brake
+        acc = train.acceleration if abs(self.target_speeds[train]) > abs(speed) else train.deceleration
+        if self.target_speeds[train] > speed:
+            self.speeds[train] = min(speed + acc * dt, self.target_speeds[train])
         else:
-            self.speeds[train] = max(self.speeds[train] - acc * dt, self.target_speeds[train])
+            self.speeds[train] = max(speed - acc * dt, self.target_speeds[train])
         self._update_signal(train)
 
     def _update_signal(self, train: Train):
         speed = self.speeds[train]
         target_speed = self.target_speeds[train]
-        target_idx = int(numpy.argmin([abs(s - abs(target_speed)) for s in self.speeds]))  # ≥ 0
+        target_idx = int(numpy.argmin([abs(s - abs(target_speed)) for s in train.speeds]))  # ≥ 0
         if False:  # self.use_built_in_acceleration:
             speed_idx = target_idx
         else:
             if abs(target_speed) > abs(speed):  # ceil level
-                speed_idx = [i for i, s in enumerate(self.speeds) if s >= abs(speed)][0] + 1
+                speed_idx = [i for i, s in enumerate(train.speeds) if s >= abs(speed)][0] + 1
                 speed_idx = min(speed_idx, target_idx)
             elif abs(target_speed) < abs(speed):  # floor level
-                speed_idx = [i for i, s in enumerate(self.speeds) if s <= abs(speed)][-1] - 1
+                speed_idx = [i for i, s in enumerate(train.speeds) if s <= abs(speed)][-1] - 1
                 speed_idx = max(speed_idx, target_idx)
             else:  # Equal
                 speed_idx = target_idx

@@ -97,6 +97,7 @@ class Motorola2(RS232Protocol):
         return tuple(0 if b else 63 for b in bits)
 
     def function_bytes(self, speed: int, function: int, status: bool):
+        speed = speed or 0
         if function == 1:
             if speed == 3 and not status:
                 b2, b4, b6, b8 = 1, 0, 1, 0
@@ -334,7 +335,7 @@ class SignalGenerator:
         self._time_started_sending = None  # wait a bit before detecting short circuits
         self._ser = None
         self._time_created = time.perf_counter()
-        if serial_port:
+        if not serial_port.startswith('debug'):
             try:
                 print(f"Opening serial port {serial_port}...")
                 ser = serial.Serial(port=serial_port, baudrate=38400, parity=serial.PARITY_NONE,

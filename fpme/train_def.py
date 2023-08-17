@@ -13,6 +13,12 @@ class TrainFunction:
     default_status: bool
     switch_on_at_night: bool
 
+    def __hash__(self):
+        return hash(id)
+
+    def __eq__(self, other):
+        return isinstance(other, TrainFunction) and self.name == other.name and self.id == other.id
+
 
 LIGHT = TrainFunction('Licht', 0, False, True)
 SLOW_MODE = TrainFunction("Langsam-Modus", 3, False, False)
