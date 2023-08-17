@@ -2,6 +2,7 @@ import math
 import time
 
 import tkinter as tk
+import tkinter.ttk as ttk
 
 from winrawin import hook_raw_input_for_window, RawInputEvent, list_devices, Mouse, Keyboard
 from . import hid
@@ -19,7 +20,8 @@ class TKGUI:
         self.device_labels = {}  # device_path -> (label, ...)
         self.window.title("Device Monitoring")
         self.window.geometry('640x600')
-        self.missing_devices = []
+        self.missing_devices = []  # device_path
+        self.speed_bars = {}  # train -> ProgressBar
 
         tk.Label(text="Press F11 to enter fullscreen mode").pack()
         tk.Label(text="Signal generators", font='Helvetica 14 bold').pack()
@@ -39,6 +41,10 @@ class TKGUI:
         controls_pane.pack()
         self.last_action_labels = {}
         row = 0
+        def add_progress_bar(train: Train):
+            progress_bar = ttk.Progressbar(controls_pane, value=50, length=100)
+            progress_bar.grid(row=row, column=3)
+            self.speed_bars[train] = progress_bar
         for device_path, train in CONTROLS.items():
             try:
                 hid_device = hid.Device(path=bytes(device_path, 'ascii'))
@@ -53,15 +59,20 @@ class TKGUI:
             device_label = tk.Label(controls_pane, text=device_name)
             device_label.grid(row=row, column=1)
             self.device_labels[device_path] = (manufacturer_label, device_label)
-            tk.Label(controls_pane, text=train.name if train in control.trains else train.name + " (unavailable)").grid(row=row, column=2)
+            tk.Label(controls_pane, text=train.name).grid(row=row, column=2)
+            if train in control.trains:
+                add_progress_bar(train)
+            else:
+                tk.Label(controls_pane, text="not managed").grid(row=row, column=3)
             last_action_label = tk.Label(controls_pane, text='nothing')
-            last_action_label.grid(row=row, column=3)
-            last_action_label.config(width=8, height=2)
+            last_action_label.grid(row=row, column=4)
+            last_action_label.config(width=9, height=2)
             self.last_action_labels[device_path] = last_action_label
             row += 1
         for train in control.trains:
             if train not in CONTROLS.values():
                 tk.Label(controls_pane, text=train.name).grid(row=row, column=2)
+                add_progress_bar(train)
                 row += 1
 
         # fullscreen_button = tk.Button(text='Fullscreen', command=lambda: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
@@ -85,6 +96,8 @@ class TKGUI:
             except:
                 pass
         self.last_events[e.device.name] = e
+        train = CONTROLS[e.device.name]
+        control_train(self.control, train, e)
 
     def update_ui(self):
         for device, event in self.last_events.items():
@@ -95,6 +108,8 @@ class TKGUI:
                 last = time.perf_counter() - event.time
                 fac = 1 - math.exp(-last)
                 label.config(text=event_summary(event), bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
+        for train in self.control.trains:
+            self.speed_bars[train].config(value=abs(100 * self.control.get_speed(train) / train.max_speed))
         self.window.after(10, self.update_ui)
 
 
@@ -109,3 +124,14 @@ def event_summary(e: RawInputEvent):
         return f"({e.delta_x}, {e.delta_y})"
     else:
         return e.event_type
+
+
+def control_train(control: TrainControl, train: Train, event: RawInputEvent):
+    if event.device_type == 'keyboard':
+        if event.event_type == 'down' and event.name == 'up':
+            control.set_acceleration_control(train, 1.)
+        elif event.event_type == 'down' and event.name == 'down':
+            control.set_acceleration_control(train, -1.)
+        elif event.event_type == 'up':
+            control.set_acceleration_control(train, 0)
+        # ToDo double-click to instantly stop

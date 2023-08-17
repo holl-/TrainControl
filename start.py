@@ -12,7 +12,7 @@ if __name__ == '__main__':
 
     control = train_control.TrainControl()
     control.add_rs232_generator(None)
-    # control.power_on(train_def.ICE)
+    control.power_on(train_def.ICE)
 
     tk_gui.TKGUI(control).launch()
 

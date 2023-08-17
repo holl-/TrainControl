@@ -27,6 +27,7 @@ class TrainControl:
         self.target_speeds = {train: 0. for train in trains}  # signed speed in kmh, -0 means parked in reverse
         self.speeds = {train: 0. for train in trains}  # signed speed in kmh, set to EMERGENCY_STOP while train is braking
         self.active_functions = {train: set() for train in trains}  # which functions are active by their TrainFunction handle
+        self.controls = {train: 0. for train in trains}
         for train in trains:
             self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
         schedule_at_fixed_rate(self.update_trains, period=.1)
@@ -56,7 +57,8 @@ class TrainControl:
         """Signed target speed"""
         return self.target_speeds[train]
 
-    def signed_actual_speed(self, train: Train):
+    def get_speed(self, train: Train):
+        """Signed current speed"""
         return self.speeds[train]
 
     def is_emergency_stopping(self, train: Train):
@@ -89,6 +91,9 @@ class TrainControl:
         new_target_speed = train.speeds[new_target_level]
         self.set_target_speed(train, -new_target_speed if in_reverse else new_target_speed)
 
+    def set_acceleration_control(self, train: Train, signed_factor: float):
+        self.controls[train] = signed_factor
+
     def emergency_stop(self, train: Train):
         self.target_speeds[train] *= 0.
         self.speeds[train] = None
@@ -114,6 +119,7 @@ class TrainControl:
         try:
             for train in TRAINS:
                 self._update_train(train, dt)
+            print(self.speeds, self.target_speeds)
         except Exception as exc:
             warnings.warn(f"Exception in update_trains(): {exc}")
 
@@ -121,6 +127,8 @@ class TrainControl:
         if not self.is_power_on(train):
             self.speeds[train] = 0
             return
+        if self.controls[train] != 0:
+            self.target_speeds[train] = self.speeds[train] + dt * train.acceleration * self.controls[train]
         if self.target_speeds[train] == self.speeds[train]:
             return
         acc = train.acceleration if abs(self.target_speeds[train]) > abs(self.speeds[train]) else train.deceleration
