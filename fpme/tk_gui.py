@@ -28,7 +28,7 @@ class TKGUI:
 
         status_pane = tk.Frame(self.window)
         status_pane.pack()
-        self.status_labels = {}
+        self.status_labels = {}  # port -> Label
         for i, port in enumerate(control.generator.get_open_ports()):
             port_label = tk.Label(status_pane, text=port or '<Debug>')
             port_label.grid(row=i, column=0)
@@ -110,6 +110,19 @@ class TKGUI:
                 label.config(text=event_summary(event), bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
         for train in self.control.trains:
             self.speed_bars[train].config(value=abs(100 * self.control.get_speed(train) / train.max_speed))
+        for port in self.control.generator.get_open_ports():
+            error = self.control.generator.get_error(port)
+            if port is None:
+                signal_status = "⛔ No signal on debug port"
+            elif error:
+                signal_status = f"⛔ {error}"
+            elif self.control.generator.is_short_circuited(port):
+                signal_status = '⚠ short-circuited or no power'
+            elif self.control.generator.is_sending_on(port):
+                signal_status = '✅'
+            else:
+                signal_status = '⚠'
+            self.status_labels[port].config(text=signal_status)
         self.window.after(10, self.update_ui)
 
 

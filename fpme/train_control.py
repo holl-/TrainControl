@@ -119,7 +119,6 @@ class TrainControl:
         try:
             for train in TRAINS:
                 self._update_train(train, dt)
-            print(self.speeds, self.target_speeds)
         except Exception as exc:
             warnings.warn(f"Exception in update_trains(): {exc}")
 
