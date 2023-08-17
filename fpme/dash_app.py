@@ -240,9 +240,9 @@ class Server:
 
             # Button actions
             if trigger_id == 'power-off':
-                control.power_off(None)
+                control.power_off(client.train)
             elif trigger_id == 'power-on':
-                control.power_on(None)
+                control.power_on(client.train)
                 time.sleep(0.2)
             elif trigger_id.startswith('switch-to-'):
                 if client.train is None or control.is_parked(client.train):

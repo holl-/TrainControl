@@ -87,6 +87,8 @@ class TKGUI:
         self.window.mainloop()
 
     def process_event(self, e: RawInputEvent):
+        if e.device.name not in CONTROLS:
+            return
         if e.device.name in self.missing_devices:
             self.missing_devices.remove(e.device.name)
             manufacturer_label, device_label = self.device_labels[e.device.name]
