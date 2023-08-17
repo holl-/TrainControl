@@ -51,7 +51,10 @@ class TrainControl:
         return all([self.generator.is_sending_on(port) for port in (self.ports_by_train[train] if train else self.generator.get_open_ports())])
 
     def terminate(self):
+        import time, os
         self.generator.terminate()
+        time.sleep(.5)
+        os._exit(0)
 
     def is_locked(self, train: Train):
         return train in self.locked_trains

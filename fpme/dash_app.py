@@ -423,8 +423,6 @@ class Server:
             trigger_id, trigger_prop = trigger["prop_id"].split(".")
             if trigger_id == 'admin-kill':
                 control.terminate()
-                time.sleep(.5)
-                os._exit(0)
             elif trigger_id == 'power-off-admin':
                 control.power_off(None)
             elif trigger_id == 'power-on-admin':
