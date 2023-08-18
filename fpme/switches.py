@@ -1,39 +1,8 @@
-"""
-                   3
-A ============================= Blue
-   \\             //
-    \\   2       //
-     ========================== Yellow
-       //
-B ==================|
-    // 1
-C //
-"""
 import time
+from threading import Thread
+from typing import Dict, Optional, Tuple
 
-
-CONFIGURATIONS = {  # Driving leftwards
-    'Yellow': {
-        'A': {2: False},
-        'B': {2: True, 1: True},
-        'C': {2: True, 1: False},
-    },
-    'Blue': {
-        'A': {3: False},
-        'B': {3: True, 2: True, 1: True},
-        'C': {3: True, 2: True, 1: False},
-    },
-    'Any': {
-        'A': {3: False, 2: False},
-        'B': {3: True, 2: True, 1: True},
-        'C': {3: True, 2: True, 1: False},
-    }
-}
-
-STATES = {switch: None for switch in [1, 2, 3]}  # key = platform number,  False=straight, True=curved, None=unknown
-LOCK_RELEASE_TIME = {switch: 0. for switch in STATES.keys()}
-ALL_LOCKED = False
-LOCK_TIME_SEC = 8.5  # switches are locked in position for this long after being operated
+from .relay8 import list_devices, open_device, Relay8
 
 
 RELAY_CHANNEL_BY_SWITCH_STATE = {
@@ -43,46 +12,41 @@ RELAY_CHANNEL_BY_SWITCH_STATE = {
 }
 
 
-def can_set(incoming: str, track: str, ignore_lock=False) -> float:
-    if ignore_lock:
-        return True
-    if ALL_LOCKED:
-        return False
-    config = CONFIGURATIONS[incoming][track]
-    for switch, target_state in config.items():
-        if STATES[switch] != target_state:
-            if time.time() < LOCK_RELEASE_TIME[switch]:
-                return False
-    return True
+class SwitchManager:
 
+    def __init__(self):
+        self._error = ""
+        self._device: Optional[Relay8] = None
+        self._states: Dict[int, bool] = {}  # switch -> curved
+        Thread(target=self._connect_continuously).start()
 
-def set_switches(incoming: str, track: str):
-    config = CONFIGURATIONS[incoming][track]
-    for switch, target_state in config.items():
-        LOCK_RELEASE_TIME[switch] = time.time() + LOCK_TIME_SEC
-        current_state = STATES[switch]
-        if current_state != target_state:
-            _operate_switch(switch, target_state)
+    def get_devices(self) -> Tuple[str]:
+        return 'Relay8',
 
+    def get_error(self, device):
+        return self._error
 
-def set_all_locked(locked: bool):
-    global ALL_LOCKED
-    ALL_LOCKED = locked
-    if locked:
-        target = {1: True, 2: True, 3: False}
-        for switch, target_state in target.items():
-            current_state = STATES[switch]
-            if current_state != target_state:
-                _operate_switch(switch, target_state)
+    def _connect_continuously(self):
+        while self._device is None:
+            try:
+                devices = list_devices()
+                if len(devices) == 0:
+                    self._error = "No USB Relay found"
+                elif len(devices) > 1:
+                    self._error = f"Multiple USB relays found: {devices}"
+                else:
+                    self._device = open_device(devices[0])
+                    self._error = ""
+            except Exception as exc:
+                self._error = str(exc)
+            time.sleep(2.)
 
-
-def _operate_switch(switch: int, curved: bool):
-    """ Sends a signal to the specified track switch. """
-    STATES[switch] = curved
-    try:
-        from .relay8 import pulse
-        channel = RELAY_CHANNEL_BY_SWITCH_STATE[switch][curved]
-        if not pulse(channel):
-            print(f"Failed to operate switch {switch} to state curved={curved}")
-    except BaseException as exc:
-        print(f"Failed to operate switch {switch}: {exc}")
+    def _operate_switch(self, switch: int, curved: bool):
+        """ Sends a signal to the specified track switch. """
+        self._states[switch] = curved
+        try:
+            channel = RELAY_CHANNEL_BY_SWITCH_STATE[switch][curved]
+            if not self._device.pulse(channel):
+                print(f"Failed to operate switch {switch} to state curved={curved}")
+        except BaseException as exc:
+            print(f"Failed to operate switch {switch}: {exc}")

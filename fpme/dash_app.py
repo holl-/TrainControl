@@ -12,6 +12,7 @@ from dash.exceptions import PreventUpdate
 from dash import callback_context
 
 from . import train_control, switches, signal_gen, train_def
+from .helper import fit_image_size
 
 
 class Client:
@@ -58,15 +59,6 @@ def get_client(user_id: str or None, admin=None, local=None, register_heartbeat=
         print(f"Registered client {client}")
         CLIENTS[client.user_id] = client
         return client
-
-
-def fit_image_size(img_res, max_width, max_height):
-    image_aspect = img_res[0] / img_res[1]
-    max_aspect = max_width / max_height
-    if image_aspect > max_aspect:  # wide image: fit width
-        return max_width, img_res[1] * max_width / img_res[0]
-    else:  # narrow image: fit height
-        return img_res[0] * max_height / img_res[1], max_height
 
 
 class Server:

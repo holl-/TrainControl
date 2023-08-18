@@ -5,43 +5,59 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from threading import Thread
 
+from PIL import ImageTk
 from winrawin import hook_raw_input_for_window, RawInputEvent, list_devices, Mouse, Keyboard
 from . import hid
+from .helper import fit_image_size
 
 from .train_def import Train, CONTROLS
 from .train_control import TrainControl
+from .switches import SwitchManager
 
 
 class TKGUI:
 
-    def __init__(self, control: TrainControl, info=None):
+    def __init__(self, control: TrainControl, switches: SwitchManager, infos=(), fullscreen=False):
         self.control = control
+        self.switches = switches
         self.window = tk.Tk()
         self.last_events = {}  # device_path -> RawInputEvent
         self.device_labels = {}  # device_path -> (label, ...)
-        self.window.title("Device Monitoring")
-        self.window.geometry('640x600')
         self.missing_devices = []  # device_path
         self.speed_bars = {}  # train -> ProgressBar
 
-        if info:
-            tk.Label(text=info, font='Helvetica 12').pack()
-        tk.Label(text="Signal generators", font='Helvetica 14 bold').pack()
+        self.window.title("Device Monitoring")
+        self.window.geometry('640x600')
+        if fullscreen:
+            self.window.attributes("-fullscreen", True)
+
+        for info in infos:
+            tk.Label(text=info).pack()
+        tk.Label(text="Hardware", font='Helvetica 14 bold').pack()
 
         status_pane = tk.Frame(self.window)
         status_pane.pack()
         self.status_labels = {}  # port -> Label
-        for i, port in enumerate(control.generator.get_open_ports()):
-            port_label = tk.Label(status_pane, text=port or '<Debug>')
-            port_label.grid(row=i, column=0)
+        row = 0
+        for port in control.generator.get_open_ports():
+            tk.Label(status_pane, text=port).grid(row=row, column=0)
             status_label = tk.Label(status_pane, text="unknown")
-            status_label.grid(row=i, column=1)
+            status_label.grid(row=row, column=1)
             self.status_labels[port] = status_label
+            row += 1
+        for device in switches.get_devices():
+            tk.Label(status_pane, text=device).grid(row=row, column=0)
+            status_label = tk.Label(status_pane, text="unknown")
+            status_label.grid(row=row, column=1)
+            self.status_labels[device] = status_label
+            row += 1
+
 
         tk.Label(text="Controls", font='Helvetica 14 bold').pack()
         controls_pane = tk.Frame(self.window)
         controls_pane.pack()
         self.last_action_labels = {}
+        self.photos = []
         row = 0
         def add_progress_bar(train: Train):
             progress_bar = ttk.Progressbar(controls_pane, value=50, length=100)
@@ -61,7 +77,9 @@ class TKGUI:
             device_label = tk.Label(controls_pane, text=device_name)
             device_label.grid(row=row, column=1)
             self.device_labels[device_path] = (manufacturer_label, device_label)
-            tk.Label(controls_pane, text=train.name).grid(row=row, column=2)
+            photo = ImageTk.PhotoImage(train.image.resize(fit_image_size(train.img_res, 80, 30)))
+            self.photos.append(photo)
+            tk.Label(controls_pane, text=train.name, image=photo, compound=tk.LEFT).grid(row=row, column=2)
             if train in control.trains:
                 add_progress_bar(train)
             else:
@@ -120,9 +138,7 @@ class TKGUI:
             self.speed_bars[train].config(value=abs(100 * (self.control.get_speed(train) or 0.) / train.max_speed))
         for port in self.control.generator.get_open_ports():
             error = self.control.generator.get_error(port)
-            if port is None:
-                signal_status = "⛔ No signal on debug port"
-            elif error:
+            if error:
                 signal_status = f"⛔ {error}"
             elif self.control.generator.is_short_circuited(port):
                 signal_status = '⚠ short-circuited or no power'
@@ -130,7 +146,13 @@ class TKGUI:
                 signal_status = '✅'
             else:
                 signal_status = '⚠'
+            if port.startswith('debug'):
+                signal_status += " (No signal on debug port)"
             self.status_labels[port].config(text=signal_status)
+        for device in self.switches.get_devices():
+            error = self.switches.get_error(device)
+            switch_status = f"⛔ {error}" if error else '✅'
+            self.status_labels[device].config(text=switch_status)
         self.window.after(10, self.update_ui)
 
 
