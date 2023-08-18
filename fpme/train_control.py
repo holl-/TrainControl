@@ -71,13 +71,14 @@ class TrainControl:
 
     def get_speed(self, train: Train):
         """Signed current speed"""
+        # ToDo integrate train to time.perf_counter()
         return self.speeds[train]
 
     def is_emergency_stopping(self, train: Train):
         return self.speeds[train] is None
 
     def is_parked(self, train: Train):
-        return self.speeds[train] == 0 and self.target_speeds[train] == 0
+        return self.speeds[train] is None or (self.speeds[train] == 0 and self.target_speeds[train] == 0)
 
     def is_in_reverse(self, train: Train):
         direction = math.copysign(1, self.target_speeds[train])
@@ -139,12 +140,16 @@ class TrainControl:
             self.speeds[train] = 0
             return
         if self.controls[train] != 0:
-            self.target_speeds[train] = self.speeds[train] + dt * train.acceleration * self.controls[train]
+            abs_target = max(0, abs(self.speeds[train] or 0.) + dt * train.acceleration * self.controls[train])
+            self.target_speeds[train] = abs_target * (-1. if self.is_in_reverse(train) else 1.)
         if self.target_speeds[train] == self.speeds[train]:
             return
         speed = self.speeds[train]
         if speed is None:
-            return  # emergency brake
+            if self.controls[train] == 0:
+                return  # emergency brake
+            else:
+                speed = 0. * self.target_speeds[train]
         acc = train.acceleration if abs(self.target_speeds[train]) > abs(speed) else train.deceleration
         if self.target_speeds[train] > speed:
             self.speeds[train] = min(speed + acc * dt, self.target_speeds[train])
