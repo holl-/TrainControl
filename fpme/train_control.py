@@ -30,7 +30,7 @@ class TrainControl:
         self.controls = {train: 0. for train in trains}
         for train in trains:
             self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
-        schedule_at_fixed_rate(self.update_trains, period=.1)
+        schedule_at_fixed_rate(self.update_trains, period=.03)
         self.generator.setup()
 
     def add_rs232_generator(self, serial_port: str or None, trains: Sequence[Train] = None):

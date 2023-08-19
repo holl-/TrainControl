@@ -187,15 +187,15 @@ def control_train(control: TrainControl, train: Train, event: RawInputEvent):
             control.emergency_stop(train)
         elif event.event_type == 'down' and event.name == 'right':
             control.reverse(train)
-    elif isinstance(event.device, Mouse) and event.device.num_buttons == 5:  # VR-Park
+    elif 'VID&0205ac' in event.device.name:  # VR-Park
         if event.event_type == 'move':
-            acc = train.acceleration if event.delta_y < 0 else train.deceleration
-            event_period = 0.1
-            target_speed = max(0, abs(control.get_speed(train) or 0.) + event_period * acc)
+            acc = 0 if event.delta_y == 0 else train.acceleration if event.delta_y < 0 else -train.deceleration
+            event_period = 0.03
+            target_speed = max(0, abs(control.get_speed(train) or 0.) + (event_period * 2.1) * acc)
             control.set_target_speed(train, target_speed * (-1 if control.is_in_reverse(train) else 1))
         elif event.event_type == 'down' and event.name == 'left':
             control.reverse(train)
-        elif event.event_type == 'down' and event.name == 'thumb2':
+        elif event.event_type == 'down' and event.name == 'thumb1':
             control.emergency_stop(train)
     elif isinstance(event.device, Mouse):
         if event.event_type == 'down' and event.name == 'left':
