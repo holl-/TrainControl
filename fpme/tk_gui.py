@@ -115,7 +115,12 @@ class TKGUI:
         self.window.mainloop()
 
     def process_event(self, e: RawInputEvent):
-        if e.device.name not in CONTROLS:
+        if e.device.name == 'unknown' and e.event_type == 'down' and e.name.startswith('volume'):  # VR-Park volume
+            if e.name == 'volume up':
+                self.control.power_off(None)
+            elif e.name == 'volume down':
+                self.control.power_on(None)
+        elif e.device.name not in CONTROLS:
             return
         if e.device.name in self.missing_devices:
             self.missing_devices.remove(e.device.name)
@@ -126,9 +131,10 @@ class TKGUI:
                 device_label.config(text=hid_device.product)
             except:
                 pass
-        self.last_events[e.device.name] = e
-        train = CONTROLS[e.device.name]
-        control_train(self.control, train, e)
+        if e.device.name in CONTROLS:
+            self.last_events[e.device.name] = e
+            train = CONTROLS[e.device.name]
+            control_train(self.control, train, e)
 
     def update_ui(self):
         for device, event in self.last_events.items():
