@@ -213,8 +213,7 @@ class Server:
                        Output('speed-control', 'max'), Output('speed-control', 'marks'),  # Speedometer settings
                        Output('power-status-store', 'data'),
                        Output('acceleration-store', 'data'),
-                       Output('train-image', 'src'), Output('train-image', 'style'),
-                       Output('set-switches-C', 'disabled'), Output('set-switches-B', 'disabled'), Output('set-switches-A', 'disabled'), ],
+                       Output('train-image', 'src'), Output('train-image', 'style')],
                       [Input('user-id', 'children'), Input('main-update', 'n_intervals'),
                        Input('power-off', 'n_clicks'), Input('power-on', 'n_clicks'),
                        Input('reverse', 'n_clicks'),
@@ -307,8 +306,7 @@ class Server:
                 marks,
                 control.is_power_on(client.train),
                 client.train.acceleration if client.train else -1.,
-                image, image_style,
-                not (switches.can_set(incoming, 'C') or is_admin), not (switches.can_set(incoming, 'B') or is_admin), not (switches.can_set(incoming, 'A') or is_admin)
+                image, image_style
             ]
 
 
