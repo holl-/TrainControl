@@ -379,6 +379,8 @@ class SignalGenerator:
         self._turn_packets[address] = (protocol or self.protocol).turn_packet(address, functions)
 
     def start(self):
+        if self._active.value:
+            return  # already running
         # assert not self._active.value  # ToDo this breaks the app sometimes
         self.scheduler.start_thread(target=self.run, name='RS_232_Signal_Generator')
 
