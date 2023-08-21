@@ -338,6 +338,8 @@ class SignalGenerator:
         if not serial_port.startswith('debug'):
             try:
                 print(f"Opening serial port {serial_port}...")
+                # ser = serial.Serial(port=serial_port, baudrate=9600)
+                # ser.close()  # AKYGA adapter does not like being opened twice with the same config
                 ser = serial.Serial(port=serial_port, baudrate=38400, parity=serial.PARITY_NONE,
                                     stopbits=serial.STOPBITS_ONE, bytesize=serial.SIXBITS,
                                     write_timeout=None,  # non-blocking write
@@ -424,16 +426,16 @@ class SignalGenerator:
 if __name__ == '__main__':
     gen = SubprocessGenerator()
     gen.setup()
-    gen.open_port('COM4')
-    gen.start('COM4')
+    gen.open_port('COM8')
+    gen.start('COM8')
     # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
     # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
 
-    for i in range(3, 4):
-        gen.set(3, 6, False, {0: False})
+    gen.set(24, 0, True, {0: False})
     while True:
-        print(gen.is_short_circuited)
+        print(gen.is_short_circuited('COM8'), gen.is_sending_on('COM8'))
         time.sleep(.1)
+
     # for i in range(10):
     #     for f in [0, 1, 2, 3, 4]:
     #         gen.set(1, 5, False, {i: i == f for i in range(5)})
