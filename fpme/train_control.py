@@ -105,6 +105,11 @@ class TrainControl:
         self.set_target_speed(train, -new_target_speed if in_reverse else new_target_speed)
 
     def set_acceleration_control(self, train: Train, signed_factor: float):
+        if signed_factor != 0 and self.controls[train] * signed_factor <= 0:
+            speed_idx = self._get_speed_index(train, signed_factor, False)
+            abs_speed = train.speeds[speed_idx]
+            print(self.speeds[train], speed_idx, abs_speed, signed_factor)
+            self.speeds[train] = math.copysign(abs_speed + signed_factor * 1e-3, self.target_speeds[train])
         self.controls[train] = signed_factor
 
     def emergency_stop(self, train: Train):
@@ -159,24 +164,29 @@ class TrainControl:
 
     def _update_signal(self, train: Train):
         speed = self.speeds[train]
-        target_speed = self.target_speeds[train]
-        target_idx = int(numpy.argmin([abs(s - abs(target_speed)) for s in train.speeds]))  # ≥ 0
-        if False:  # self.use_built_in_acceleration:
-            speed_idx = target_idx
-        else:
-            if abs(target_speed) > abs(speed):  # ceil level
-                speed_idx = [i for i, s in enumerate(train.speeds) if s >= abs(speed)][0] + 1
-                speed_idx = min(speed_idx, target_idx)
-            elif abs(target_speed) < abs(speed):  # floor level
-                speed_idx = [i for i, s in enumerate(train.speeds) if s <= abs(speed)][-1] - 1
-                speed_idx = max(speed_idx, target_idx)
-            else:  # Equal
-                speed_idx = target_idx
+        speed_idx = self._get_speed_index(train, abs(self.target_speeds[train]) - abs(speed), True)
+        # if train.has_built_in_acceleration:
         speed_code = train.speed_codes[speed_idx]
         functions = {f.id: f in self.active_functions[train] for f in train.functions}
         direction = math.copysign(1, speed if speed != 0 else self.target_speeds[train])
         currently_in_reverse = direction < 0
         self.generator.set(train.address, speed_code, currently_in_reverse, functions, get_preferred_protocol(train))
+
+    def _get_speed_index(self, train: Train, abs_acceleration, limit_by_target: bool):
+        speed = self.speeds[train]
+        target_idx = int(numpy.argmin([abs(s - abs(self.target_speeds[train])) for s in train.speeds]))  # ≥ 0
+        if abs_acceleration > 0:  # ceil level
+            greater = [i for i, s in enumerate(train.speeds) if s >= abs(speed)]
+            speed_idx = greater[0] if greater else len(train.speeds) - 1
+            if limit_by_target:
+                speed_idx = min(speed_idx, target_idx)
+        elif abs_acceleration < 0:  # floor level
+            speed_idx = [i for i, s in enumerate(train.speeds) if s <= abs(speed)][-1]
+            if limit_by_target:
+                speed_idx = max(speed_idx, target_idx)
+        else:  # Equal
+            speed_idx = target_idx
+        return speed_idx
 
 
 # def handle_event(e: RawInputEvent):
