@@ -15,17 +15,17 @@ def open_window():
     window.title("Device Monitoring")
     window.geometry('640x600')
 
-    def create_copiable_label(parent, text, **kwargs):
+    def create_copiable_label(parent, text, copy_str: str, **kwargs):
         def copy(_event):
             window.clipboard_clear()
             window.clipboard_append(text)
-            print(f"Copied to clipboard: {text}")
+            print(f"Copied to clipboard: {copy_str}")
 
-        label = tk.Label(parent, text=text[:8] + "..." + text[-24:], **kwargs)
+        label = tk.Label(parent, text=text[:30], **kwargs)
         label.bind("<Button-1>", copy)
         return label
 
-    label_info = tk.Label(text="Click on an entry to copy it to the clipboard.")
+    label_info = tk.Label(text="Click on an entry to copy the hardware ID to the clipboard.")
     label_info.pack()
 
     table = tk.Frame(window)
@@ -43,7 +43,7 @@ def open_window():
     n_keyboards = 0
     n_hid = 0
     for device in list_devices():
-        label = create_copiable_label(table, text=device.name, bg=tk_rgb(0, 0, 0))
+        label = create_copiable_label(table, text=(device.product_name or device.vendor_name or device.path), copy_str=device.path.replace('\\', '\\\\') if device.path else '', bg=tk_rgb(0, 0, 0))
         labels[device] = label
         if isinstance(device, Mouse):
             n_mice += 1
@@ -78,3 +78,6 @@ def open_window():
 
 if __name__ == '__main__':
     open_window()
+
+
+# \\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}&Dev&VID_045e&PID_0b13&REV_0509&0c352633ee04&IG_00#a&3724ae32&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}', vendor_id=1118, product_id=2835, version_number=1289, usage_page=1, usage_page_name='Generic Desktop Controls', usage=5, usage_name='Game Pad')

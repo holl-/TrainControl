@@ -115,25 +115,25 @@ class TKGUI:
         self.window.mainloop()
 
     def process_event(self, e: RawInputEvent):
-        if e.device.name == 'unknown' and e.event_type == 'down' and e.name.startswith('volume'):  # VR-Park volume
+        if e.device.path is None and e.event_type == 'down' and e.name.startswith('volume'):  # VR-Park volume
             if e.name == 'volume up':
                 self.control.power_off(None)
             elif e.name == 'volume down':
                 self.control.power_on(None)
-        elif e.device.name not in CONTROLS:
+        elif e.device.path not in CONTROLS:
             return
-        if e.device.name in self.missing_devices:
-            self.missing_devices.remove(e.device.name)
-            manufacturer_label, device_label = self.device_labels[e.device.name]
+        if e.device.path in self.missing_devices:
+            self.missing_devices.remove(e.device.path)
+            manufacturer_label, device_label = self.device_labels[e.device.path]
             try:
-                hid_device = hid.Device(path=bytes(e.device.name, 'ascii'))
+                hid_device = hid.Device(path=bytes(e.device.path, 'ascii'))
                 manufacturer_label.config(text=hid_device.manufacturer)
                 device_label.config(text=hid_device.product)
             except:
                 pass
-        if e.device.name in CONTROLS:
-            self.last_events[e.device.name] = e
-            train = CONTROLS[e.device.name]
+        if e.device.path in CONTROLS:
+            self.last_events[e.device.path] = e
+            train = CONTROLS[e.device.path]
             control_train(self.control, train, e)
 
     def update_ui(self):
@@ -193,7 +193,7 @@ def control_train(control: TrainControl, train: Train, event: RawInputEvent):
             control.emergency_stop(train)
         elif event.event_type == 'down' and event.name == 'right':
             control.reverse(train)
-    elif 'VID&0205ac' in event.device.name:  # VR-Park
+    elif 'VID&0205ac' in event.device.path:  # VR-Park
         if event.event_type == 'move':
             acc = 0 if event.delta_y == 0 else train.acceleration if event.delta_y < 0 else -train.deceleration
             event_period = 0.03
