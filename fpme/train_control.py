@@ -1,4 +1,5 @@
 import math
+import time
 import warnings
 from typing import Sequence, Optional
 
@@ -28,6 +29,7 @@ class TrainControl:
         self.speeds = {train: 0. for train in trains}  # signed speed in kmh, set to EMERGENCY_STOP while train is braking
         self.active_functions = {train: set() for train in trains}  # which functions are active by their TrainFunction handle
         self.controls = {train: 0. for train in trains}
+        self.last_emergency_break = {train: 0. for train in trains}
         for train in trains:
             self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
         schedule_at_fixed_rate(self.update_trains, period=.03)
@@ -117,6 +119,7 @@ class TrainControl:
         self.speeds[train] = None
         currently_in_reverse = self.generator.is_in_reverse(train.address)
         functions = {f.id: f in self.active_functions[train] for f in train.functions}
+        self.last_emergency_break[train] = time.perf_counter()
         if train.stop_by_mm1_reverse:
             self.generator.set(train.address, None, False, functions, get_preferred_protocol(train))
         else:
@@ -135,7 +138,7 @@ class TrainControl:
 
     def update_trains(self, dt):  # repeatedly called from setup()
         # try:
-            for train in TRAINS:
+            for train in self.trains:
                 self._update_train(train, dt)
         # except Exception as exc:
         #     warnings.warn(f"Exception in update_trains(): {exc}")
@@ -147,14 +150,13 @@ class TrainControl:
         if self.controls[train] != 0:
             abs_target = max(0, abs(self.speeds[train] or 0.) + dt * train.acceleration * self.controls[train])
             self.target_speeds[train] = abs_target * (-1. if self.is_in_reverse(train) else 1.)
-        if self.target_speeds[train] == self.speeds[train]:
-            return
         speed = self.speeds[train]
         if speed is None:
-            if self.controls[train] == 0:
-                return  # emergency brake
+            speed = 0. * self.target_speeds[train]  # update next time
+            if self.controls[train] > 0 or time.perf_counter() > self.last_emergency_break[train] + .5:
+                self.speeds[train] = speed
             else:
-                speed = 0. * self.target_speeds[train]
+                return  # emergency brake, don't update signal
         acc = train.acceleration if abs(self.target_speeds[train]) > abs(speed) else train.deceleration
         if self.target_speeds[train] > speed:
             self.speeds[train] = min(speed + acc * dt, self.target_speeds[train])
