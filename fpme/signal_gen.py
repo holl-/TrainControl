@@ -324,8 +324,7 @@ class SignalGenerator:
         self._active = active
         self._data = {}  # address -> (speed, reverse, func)
         self._packets = {}
-        self._turn_packets = {}
-        self._turn_addresses = []
+        self._priority_packets = []
         self._idle_packet = self.protocol.status_packets(80, 0, False, {0: False})[0]
         self._override_protocols = {}
         self._short_circuited = short_circuited
@@ -374,11 +373,14 @@ class SignalGenerator:
             del self._override_protocols[address]
         elif protocol is not None:
             self._override_protocols[address] = protocol
-        if address in self._data and self._data[address][1] != reverse:
-            self._turn_addresses.append(address)
         self._data[address] = (speed, reverse, functions)
-        self._packets[address] = (protocol or self.protocol).status_packets(address, speed, reverse, functions)
-        self._turn_packets[address] = (protocol or self.protocol).turn_packet(address, functions)
+        # --- create signal packets ---
+        packets = self._packets[address] = (protocol or self.protocol).status_packets(address, speed, reverse, functions)
+        if address in self._data and self._data[address][1] != reverse:
+            turn_packet = (protocol or self.protocol).turn_packet(address, functions)
+            if turn_packet:
+                self._priority_packets.append(turn_packet)
+        self._priority_packets.extend(packets)
 
     def start(self):
         if self._active.value:
@@ -404,22 +406,23 @@ class SignalGenerator:
                 if self.stop_on_short_circuit:
                     self._active.value = False
                     return
-            # Send data on serial port
+            # --- Send data on serial port ---
             if not self._data:
-                self._send(self._idle_packet, times=1)
+                self._send(self._idle_packet)
             for address, status_packets in dict(self._packets).items():
-                if address in self._turn_addresses:
-                    self._turn_addresses.remove(address)
-                    if self._turn_packets[address] is not None:
-                        self._send(self._turn_packets[address], times=2)
                 for packet in status_packets:
+                    self._send(packet)  # Sends each packet twice, else trains will ignore it
                     # print(' '.join('{:02x}'.format(x) for x in packet))
-                    self._send(packet, times=2)  # Send each packet twice, else trains will ignore it
 
-    def _send(self, packet, times=1, time_between_packages=5.944e-3):
-        for i in range(times):
+    def _send(self, packet):
+        while self._priority_packets:
+            packet = self._priority_packets.pop(0)
+            for i in range(2):
+                self._ser is not None and self._ser.write(packet)
+                self.scheduler.sleep(self, 5.944e-3)
+        for i in range(2):
             self._ser is not None and self._ser.write(packet)
-            self.scheduler.sleep(self, time_between_packages)  # custom sleep, time.sleep() is not precise enough
+            self.scheduler.sleep(self, 5.944e-3)  # custom sleep, time.sleep() is not precise enough
             # Measured: 1.7 ms between equal packets in pair, 6 ms between different pairs
 
 
