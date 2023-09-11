@@ -7,7 +7,7 @@ import numpy
 
 from .helper import schedule_at_fixed_rate
 from .signal_gen import SubprocessGenerator, MM1, MM2
-from .train_def import TRAINS, Train
+from .train_def import TRAINS, Train, DEFAULT_LIGHT, DEFAULT_SOUND
 
 
 def get_preferred_protocol(train: Train):
@@ -27,7 +27,7 @@ class TrainControl:
         self.locked_trains = set()
         self.target_speeds = {train: 0. for train in trains}  # signed speed in kmh, -0 means parked in reverse
         self.speeds = {train: 0. for train in trains}  # signed speed in kmh, set to EMERGENCY_STOP while train is braking
-        self.active_functions = {train: set() for train in trains}  # which functions are active by their TrainFunction handle
+        self.active_functions = {train: {} for train in trains}  # which functions are active by their TrainFunction handle
         self.controls = {train: 0. for train in trains}
         self.last_emergency_break = {train: 0. for train in trains}
         for train in trains:
@@ -118,7 +118,7 @@ class TrainControl:
         self.target_speeds[train] *= 0.
         self.speeds[train] = None
         currently_in_reverse = self.generator.is_in_reverse(train.address)
-        functions = {f.id: f in self.active_functions[train] for f in train.functions}
+        functions = {f.id: on for f, on in self.active_functions[train].items()}
         self.last_emergency_break[train] = time.perf_counter()
         if train.stop_by_mm1_reverse:
             self.generator.set(train.address, None, False, functions, get_preferred_protocol(train))
@@ -132,9 +132,16 @@ class TrainControl:
                 self.target_speeds[train] = limit
 
     def set_lights_on(self, on: bool):
+        self.set_functions_by_tag(DEFAULT_LIGHT, on)
+
+    def set_sound_on(self, on: bool):
+        self.set_functions_by_tag(DEFAULT_SOUND, on)
+
+    def set_functions_by_tag(self, tag: str, on: bool):
         for train in self.trains:
-            train._func_active = on
-            train._update_signal()
+            for func in train.functions:
+                if tag in func.tags:
+                    self.active_functions[train][func] = on
 
     def update_trains(self, dt):  # repeatedly called from setup()
         # try:
@@ -169,7 +176,7 @@ class TrainControl:
         speed_idx = self._get_speed_index(train, abs(self.target_speeds[train]) - abs(speed), True)
         # if train.has_built_in_acceleration:
         speed_code = train.speed_codes[speed_idx]
-        functions = {f.id: f in self.active_functions[train] for f in train.functions}
+        functions = {f.id: on for f, on in self.active_functions[train].items()}
         direction = math.copysign(1, speed if speed != 0 else self.target_speeds[train])
         currently_in_reverse = direction < 0
         self.generator.set(train.address, speed_code, currently_in_reverse, functions, get_preferred_protocol(train))
