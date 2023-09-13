@@ -8,6 +8,7 @@ from typing import List, Dict, Tuple, Callable
 
 import serial
 from serial import SerialException
+import serial.tools.list_ports
 
 
 T = TERNARY_BITS = [(63, 63), (0, 0), (0, 63)]  # 416 ms per bit
@@ -149,6 +150,14 @@ class GeneratorState:
     last_stopped: float = None  # mutable
 
 
+def list_com_ports(include_bluetooth=False):
+    ports = serial.tools.list_ports.comports()
+    for port, desc, hwid in sorted(ports):
+        is_bluetooth = 'bluetooth' in desc.lower() or '00001101-0000-1000-8000-00805F9B34FB' in hwid.upper()
+        if not is_bluetooth or include_bluetooth:
+            yield port, desc, hwid
+
+
 class SubprocessGenerator:
 
     def __init__(self, max_generators=1):
@@ -173,6 +182,7 @@ class SubprocessGenerator:
         threading.Thread(target=async_setup).start()
 
     def open_port(self, serial_port: str, addresses: Tuple[int] = None):
+        assert serial_port is not None, f"use the prefix 'debug' for fake ports instead of {serial_port}"
         i = len(self._generator_states)
         state = GeneratorState(serial_port, addresses, active=self._all_active[i], short_circuited=self._all_short_circuited[i], error_message=self._all_error[i])
         self._generator_states[serial_port] = state

@@ -3,13 +3,16 @@ import os
 from threading import Thread
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-from fpme import train_control, train_def, tk_gui, dash_app, switches
+from fpme import train_control, train_def, tk_gui, dash_app, switches, signal_gen
 
 
 if __name__ == '__main__':
     control = train_control.TrainControl()
     switches = switches.SwitchManager()
-    control.add_rs232_generator('COM4')
+    for port, desc, _ in signal_gen.list_com_ports():
+        control.add_rs232_generator(port)
+    else:
+        control.add_rs232_generator('debug')
     # control.add_rs232_generator('debug1', [train for train in train_def.TRAINS if train != train_def.ICE])
     # control.add_rs232_generator('debug2', [train_def.ICE])
     control.power_on(None)

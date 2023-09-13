@@ -8,6 +8,8 @@ from typing import Optional
 
 from PIL import ImageTk
 from winrawin import hook_raw_input_for_window, RawInputEvent, list_devices, Mouse, Keyboard, RawInputDevice
+
+from signal_gen import list_com_ports
 from . import hid
 from .helper import fit_image_size
 
@@ -41,19 +43,21 @@ class TKGUI:
         status_pane.pack()
         self.status_labels = {}  # port -> Label
         row = 0
+        port_descriptions = {port: desc for port, desc, hwid in list_com_ports(include_bluetooth=True)}
         for port in control.generator.get_open_ports():
             tk.Label(status_pane, text=port).grid(row=row, column=0)
+            tk.Label(status_pane, text=port_descriptions.get(port, 'Fake port')).grid(row=row, column=1)
             status_label = tk.Label(status_pane, text="unknown")
-            status_label.grid(row=row, column=1)
+            status_label.grid(row=row, column=2)
             self.status_labels[port] = status_label
             row += 1
         for device in switches.get_devices():
             tk.Label(status_pane, text=device).grid(row=row, column=0)
+            tk.Label(status_pane, text="USB switch control").grid(row=row, column=1)
             status_label = tk.Label(status_pane, text="unknown")
-            status_label.grid(row=row, column=1)
+            status_label.grid(row=row, column=2)
             self.status_labels[device] = status_label
             row += 1
-
 
         tk.Label(text="Controls", font='Helvetica 14 bold').pack()
         controls_pane = tk.Frame(self.window)
@@ -162,8 +166,6 @@ class TKGUI:
                 signal_status = '✅'
             else:
                 signal_status = '⚠'
-            if port.startswith('debug'):
-                signal_status += " (No signal on debug port)"
             self.status_labels[port].config(text=signal_status)
         for device in self.switches.get_devices():
             error = self.switches.get_error(device)

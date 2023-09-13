@@ -35,7 +35,7 @@ class TrainControl:
         schedule_at_fixed_rate(self.update_trains, period=.03)
         self.generator.setup()
 
-    def add_rs232_generator(self, serial_port: str or None, trains: Sequence[Train] = None):
+    def add_rs232_generator(self, serial_port: str, trains: Sequence[Train] = None):
         self.generator.open_port(serial_port, None if trains is None else tuple([train.address for train in trains]))
         # the new generator will automatically send the previously set states of relevant trains, no need to update here
         for train in trains or self.trains:
