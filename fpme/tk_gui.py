@@ -105,6 +105,10 @@ class TKGUI:
         # fullscreen_button = tk.Button(text='Fullscreen', command=lambda: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
         # fullscreen_button.pack()
         self.window.bind("<F11>", lambda e: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
+        self.window.bind("<F2>", lambda e: self.control.set_lights_on(False))
+        self.window.bind("<F3>", lambda e: self.control.set_lights_on(True))
+        self.window.bind("<F7>", lambda e: self.control.set_sound_on(False))
+        self.window.bind("<F8>", lambda e: self.control.set_sound_on(True))
         self.window.bind("<Escape>", lambda e: control.terminate())
         self.window.protocol("WM_DELETE_WINDOW", lambda: control.terminate())
 

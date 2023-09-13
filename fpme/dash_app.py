@@ -141,7 +141,7 @@ class Server:
             dcc.Markdown("# Status", id='admin-status'),
             dcc.Checklist(id='admin-checklist', labelStyle=dict(display='block'), options=[
                 {'label': "Max 100 km/h", 'value': 'global-speed-limit'},
-                {'label': "Weichen sperren", 'value': 'lock-all-switches'},
+                {'label': "Ton an", 'value': 'sound-on'},
                 {'label': "Lichter an", 'value': 'lights-on'},
             ]),
         ]
@@ -421,10 +421,10 @@ class Server:
                 train = train_def.TRAINS_BY_NAME[trigger_id[len('admin-stop-'):]]
                 control.emergency_stop(train)
             elif trigger_id == 'admin-checklist':
-                switches.set_all_locked('lock-all-switches' in checklist)
                 control.set_global_speed_limit(100 if 'global-speed-limit' in checklist else None)
                 # global _SCHEDULE_MODE
                 # _SCHEDULE_MODE = 'schedule-mode' in checklist
+                control.set_sound_on('sound-on' in checklist)
                 control.set_lights_on('lights-on' in checklist)
 
             elif trigger_id.startswith('admin-kick-'):
