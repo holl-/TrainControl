@@ -30,6 +30,9 @@ class TrainControl:
         self.active_functions = {train: {} for train in trains}  # which functions are active by their TrainFunction handle
         self.controls = {train: 0. for train in trains}
         self.last_emergency_break = {train: 0. for train in trains}
+        self.sound = None
+        self.light = None
+        self.paused = False
         for train in trains:
             self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
         schedule_at_fixed_rate(self.update_trains, period=.03)
@@ -42,6 +45,8 @@ class TrainControl:
             self.ports_by_train[train].append(serial_port)
 
     def power_on(self, train: Optional[Train]):
+        if self.paused:
+            return
         for port in (self.ports_by_train[train] if train else self.generator.get_open_ports()):
             self.generator.start(port)
 
@@ -51,6 +56,16 @@ class TrainControl:
 
     def is_power_on(self, train: Optional[Train]):
         return all([self.generator.is_sending_on(port) for port in (self.ports_by_train[train] if train else self.generator.get_open_ports())])
+
+    def pause(self):
+        self.paused = True
+        for port in self.generator.get_open_ports():
+            self.generator.stop(port)
+
+    def resume(self):
+        self.paused = False
+        for port in self.generator.get_open_ports():
+            self.generator.start(port)
 
     def terminate(self):
         import time, os
@@ -132,9 +147,15 @@ class TrainControl:
                 self.target_speeds[train] = limit
 
     def set_lights_on(self, on: bool):
+        if self.light == on:
+            return
+        self.light = on
         self.set_functions_by_tag(DEFAULT_LIGHT, on)
 
     def set_sound_on(self, on: bool):
+        if self.sound == on:
+            return
+        self.sound = on
         self.set_functions_by_tag(DEFAULT_SOUND, on)
 
     def set_functions_by_tag(self, tag: str, on: bool):
@@ -144,11 +165,10 @@ class TrainControl:
                     self.active_functions[train][func] = on
 
     def update_trains(self, dt):  # repeatedly called from setup()
-        # try:
-            for train in self.trains:
-                self._update_train(train, dt)
-        # except Exception as exc:
-        #     warnings.warn(f"Exception in update_trains(): {exc}")
+        if self.paused:
+            return
+        for train in self.trains:
+            self._update_train(train, dt)
 
     def _update_train(self, train: Train, dt: float):  # called by update_trains()
         if not self.is_power_on(train):

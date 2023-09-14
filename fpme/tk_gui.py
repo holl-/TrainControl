@@ -104,6 +104,22 @@ class TKGUI:
                 add_progress_bar(train)
                 row += 1
 
+        tk.Label(text="Status", font='Helvetica 14 bold').pack()
+        status_pane = tk.Frame(self.window)
+        status_pane.pack()
+        tk.Label(status_pane, text="Status").grid(row=0, column=0)
+        self.active_status = tk.Label(status_pane, text="...")
+        self.active_status.grid(row=0, column=1)
+        tk.Label(status_pane, text="Light").grid(row=1, column=0)
+        self.light_status = tk.Label(status_pane, text="...")
+        self.light_status.grid(row=1, column=1)
+        tk.Label(status_pane, text="Sound").grid(row=2, column=0)
+        self.sound_status = tk.Label(status_pane, text="...")
+        self.sound_status.grid(row=2, column=1)
+        tk.Label(status_pane, text="Limit").grid(row=3, column=0)
+        self.speed_limit = tk.Label(status_pane, text="...")
+        self.speed_limit.grid(row=3, column=1)
+
         tk.Label(text="Press F11 to enter fullscreen mode").pack()
 
         # fullscreen_button = tk.Button(text='Fullscreen', command=lambda: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
@@ -113,6 +129,10 @@ class TKGUI:
         self.window.bind("<F3>", lambda e: self.control.set_lights_on(True))
         self.window.bind("<F7>", lambda e: self.control.set_sound_on(False))
         self.window.bind("<F8>", lambda e: self.control.set_sound_on(True))
+        self.window.bind("<p>", lambda e: self.control.pause())
+        self.window.bind("<r>", lambda e: self.control.resume())
+        self.window.bind("<+>", lambda e: self.control.set_global_speed_limit(None if self.control.speed_limit is None else (self.control.speed_limit + 20 if self.control.speed_limit < 240 else None)))
+        self.window.bind("<minus>", lambda e: self.control.set_global_speed_limit(240 if self.control.speed_limit is None else self.control.speed_limit - 20))
         self.window.bind("<Escape>", lambda e: control.terminate())
         self.window.protocol("WM_DELETE_WINDOW", lambda: control.terminate())
 
@@ -161,16 +181,22 @@ class TKGUI:
             if error:
                 signal_status = f"⛔ {error}"
             elif self.control.generator.is_short_circuited(port):
-                signal_status = '⚠ short-circuited or no power'
+                signal_status = "⚠ short-circuited or no power"
             elif self.control.generator.is_sending_on(port):
-                signal_status = '✅'
+                signal_status = "✅"
+            elif self.control.paused:
+                signal_status = "paused"
             else:
-                signal_status = '⚠'
+                signal_status = "⚠"
             self.status_labels[port].config(text=signal_status)
         for device in self.switches.get_devices():
             error = self.switches.get_error(device)
-            switch_status = f"⛔ {error}" if error else '✅'
+            switch_status = f"⛔ {error}" if error else "✅"
             self.status_labels[device].config(text=switch_status)
+        self.active_status.config(text="paused" if self.control.paused else "not paused")
+        self.light_status.config(text="on" if self.control.light else ("?" if self.control.light is None else "off"))
+        self.sound_status.config(text="on" if self.control.sound else ("?" if self.control.sound is None else "off"))
+        self.speed_limit.config(text=str(self.control.speed_limit))
         self.window.after(10, self.update_ui)
 
 
