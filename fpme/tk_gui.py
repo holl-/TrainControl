@@ -9,7 +9,7 @@ from typing import Optional
 from PIL import ImageTk
 from winrawin import hook_raw_input_for_window, RawInputEvent, list_devices, Mouse, Keyboard, RawInputDevice
 
-from signal_gen import list_com_ports
+from .signal_gen import list_com_ports
 from . import hid
 from .helper import fit_image_size
 
@@ -104,19 +104,19 @@ class TKGUI:
                 add_progress_bar(train)
                 row += 1
 
-        tk.Label(text="Status", font='Helvetica 14 bold').pack()
+        tk.Label(text="Status (P/R)", font='Helvetica 14 bold').pack()
         status_pane = tk.Frame(self.window)
         status_pane.pack()
         tk.Label(status_pane, text="Status").grid(row=0, column=0)
         self.active_status = tk.Label(status_pane, text="...")
         self.active_status.grid(row=0, column=1)
-        tk.Label(status_pane, text="Light").grid(row=1, column=0)
+        tk.Label(status_pane, text="Light (F2/F3)").grid(row=1, column=0)
         self.light_status = tk.Label(status_pane, text="...")
         self.light_status.grid(row=1, column=1)
-        tk.Label(status_pane, text="Sound").grid(row=2, column=0)
+        tk.Label(status_pane, text="Sound (F7/F8)").grid(row=2, column=0)
         self.sound_status = tk.Label(status_pane, text="...")
         self.sound_status.grid(row=2, column=1)
-        tk.Label(status_pane, text="Limit").grid(row=3, column=0)
+        tk.Label(status_pane, text="Limit (+/-)").grid(row=3, column=0)
         self.speed_limit = tk.Label(status_pane, text="...")
         self.speed_limit.grid(row=3, column=1)
 

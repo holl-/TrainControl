@@ -9,9 +9,10 @@ from fpme import train_control, train_def, tk_gui, dash_app, switches, signal_ge
 if __name__ == '__main__':
     control = train_control.TrainControl()
     switches = switches.SwitchManager()
-    for port, desc, _ in signal_gen.list_com_ports():
-        control.add_rs232_generator(port)
-    else:
+    for port, desc, _ in signal_gen.list_com_ports(include_bluetooth=False):
+        if 'Prolific' in desc:
+            control.add_rs232_generator(port)
+    if not control.generator.get_open_ports():
         control.add_rs232_generator('debug')
     # control.add_rs232_generator('debug1', [train for train in train_def.TRAINS if train != train_def.ICE])
     # control.add_rs232_generator('debug2', [train_def.ICE])
