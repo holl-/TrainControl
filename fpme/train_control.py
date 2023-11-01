@@ -7,7 +7,7 @@ import numpy
 
 from .helper import schedule_at_fixed_rate
 from .signal_gen import SubprocessGenerator, MM1, MM2
-from .train_def import TRAINS, Train, DEFAULT_LIGHT, DEFAULT_SOUND
+from .train_def import TRAINS, Train, TAG_DEFAULT_LIGHT, TAG_DEFAULT_SOUND
 
 
 def get_preferred_protocol(train: Train):
@@ -150,13 +150,13 @@ class TrainControl:
         if self.light == on:
             return
         self.light = on
-        self.set_functions_by_tag(DEFAULT_LIGHT, on)
+        self.set_functions_by_tag(TAG_DEFAULT_LIGHT, on)
 
     def set_sound_on(self, on: bool):
         if self.sound == on:
             return
         self.sound = on
-        self.set_functions_by_tag(DEFAULT_SOUND, on)
+        self.set_functions_by_tag(TAG_DEFAULT_SOUND, on)
 
     def set_functions_by_tag(self, tag: str, on: bool):
         for train in self.trains:
