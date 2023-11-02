@@ -4,7 +4,7 @@ import time
 import tkinter as tk
 import tkinter.ttk as ttk
 from threading import Thread
-from typing import Optional
+from typing import Optional, Dict, Tuple, List
 
 from PIL import ImageTk
 from winrawin import hook_raw_input_for_window, RawInputEvent, list_devices, Mouse, Keyboard, RawInputDevice
@@ -24,11 +24,13 @@ class TKGUI:
         self.control = control
         self.switches = switches
         self.window = tk.Tk()
-        self.last_events = {}  # device_path -> RawInputEvent
-        self.device_labels = {}  # device_path -> (label, ...)
-        self.missing_devices = []  # device_path
-        self.speed_bars = {}  # train -> ProgressBar
-        self.direction_labels = {}
+        self.last_events: Dict[str, RawInputEvent] = {}
+        self.device_labels: Dict[str, Tuple[str, str]] = {}  # (label, ...)
+        self.missing_devices: List[str] = []  # device_path
+        self.speed_bars: Dict[Train, ttk.Progressbar] = {}
+        self.direction_labels: Dict[Train, tk.Label] = {}
+        self.active_vars: Dict[Train, tk.IntVar] = {}
+        self.shown_trains: List[Train] = []
 
         self.window.title("Device Monitoring")
         self.window.geometry('640x600')
@@ -67,12 +69,13 @@ class TKGUI:
         row = 0
         def add_progress_bar(train: Train):
             progress_bar = ttk.Progressbar(controls_pane, value=50, length=100)
-            progress_bar.grid(row=row, column=3)
+            progress_bar.grid(row=row, column=4)
             self.speed_bars[train] = progress_bar
             direction_label = tk.Label(controls_pane, text='')
-            direction_label.grid(row=row, column=4)
+            direction_label.grid(row=row, column=5)
             self.direction_labels[train] = direction_label
         for device_path, train in CONTROLS.items():
+            self.shown_trains.append(train)
             try:
                 hid_device = hid.Device(path=bytes(device_path, 'ascii'))
                 device_name = hid_device.product
@@ -86,6 +89,9 @@ class TKGUI:
             device_label = tk.Label(controls_pane, text=device_name)
             device_label.grid(row=row, column=1)
             self.device_labels[device_path] = (manufacturer_label, device_label)
+            self.active_vars[train] = is_active = tk.IntVar(value=1)
+            active = tk.Checkbutton(controls_pane, text=f"{row+1}", variable=is_active)
+            active.grid(row=row, column=3)
             photo = ImageTk.PhotoImage(train.image.resize(fit_image_size(train.img_res, 80, 30)))
             self.photos.append(photo)
             tk.Label(controls_pane, text=train.name, image=photo, compound=tk.LEFT).grid(row=row, column=2)
@@ -94,7 +100,7 @@ class TKGUI:
             else:
                 tk.Label(controls_pane, text="not managed").grid(row=row, column=3)
             last_action_label = tk.Label(controls_pane, text='nothing')
-            last_action_label.grid(row=row, column=5)
+            last_action_label.grid(row=row, column=6)
             last_action_label.config(width=9, height=2)
             self.last_action_labels[device_path] = last_action_label
             row += 1
@@ -103,7 +109,8 @@ class TKGUI:
                 tk.Label(controls_pane, text=train.name).grid(row=row, column=2)
                 add_progress_bar(train)
                 row += 1
-
+                self.shown_trains.append(train)
+        # --- Status ---
         tk.Label(text="Status (P/R)", font='Helvetica 14 bold').pack()
         status_pane = tk.Frame(self.window)
         status_pane.pack()
@@ -119,11 +126,8 @@ class TKGUI:
         tk.Label(status_pane, text="Limit (+/-)").grid(row=3, column=0)
         self.speed_limit = tk.Label(status_pane, text="...")
         self.speed_limit.grid(row=3, column=1)
-
+        # --- Hotkeys ---
         tk.Label(text="Press F11 to enter fullscreen mode").pack()
-
-        # fullscreen_button = tk.Button(text='Fullscreen', command=lambda: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
-        # fullscreen_button.pack()
         self.window.bind("<F11>", lambda e: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
         self.window.bind("<F2>", lambda e: self.control.set_lights_on(False))
         self.window.bind("<F3>", lambda e: self.control.set_lights_on(True))
@@ -134,8 +138,18 @@ class TKGUI:
         self.window.bind("<+>", lambda e: self.control.set_global_speed_limit(None if self.control.speed_limit is None else (self.control.speed_limit + 20 if self.control.speed_limit < 240 else None)))
         self.window.bind("<minus>", lambda e: self.control.set_global_speed_limit(240 if self.control.speed_limit is None else self.control.speed_limit - 20))
         self.window.bind("<Escape>", lambda e: control.terminate())
+        self.window.bind("1", lambda e: self.toggle_active(0))
+        self.window.bind("2", lambda e: self.toggle_active(1))
+        self.window.bind("3", lambda e: self.toggle_active(2))
+        self.window.bind("4", lambda e: self.toggle_active(3))
+        self.window.bind("5", lambda e: self.toggle_active(4))
+        self.window.bind("6", lambda e: self.toggle_active(5))
+        self.window.bind("7", lambda e: self.toggle_active(6))
+        self.window.bind("8", lambda e: self.toggle_active(7))
+        self.window.bind("9", lambda e: self.toggle_active(8))
+        self.window.bind("0", lambda e: self.toggle_active(9))
         self.window.protocol("WM_DELETE_WINDOW", lambda: control.terminate())
-
+        # --- Start ---
         hook_raw_input_for_window(self.window.winfo_id(), self.process_event)
 
     def launch(self):
@@ -165,17 +179,25 @@ class TKGUI:
             control_train(self.control, train, e)
 
     def update_ui(self):
+        # --- Highlight recent inputs and detect disconnected devices ---
         for device, event in self.last_events.items():
             label = self.last_action_labels[device]
             if not event.device.is_connected():
                 label.config(text='disconnected', bg=tk_rgb(255, 0, 0))
+                train = CONTROLS[device]
+                self.control.deactivate(train, device)
             else:
                 last = time.perf_counter() - event.time
                 fac = 1 - math.exp(-last)
                 label.config(text=event_summary(event), bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
+        # --- Update train display ---
         for train in self.control.trains:
             self.speed_bars[train].config(value=abs(100 * (self.control.get_speed(train) or 0.) / train.max_speed))
             self.direction_labels[train].config(text='🡄' if self.control.is_in_reverse(train) else '🡆')
+        for train, var in self.active_vars.items():
+            if bool(var.get()) != self.control.is_active(train):
+                var.set(int(self.control.is_active(train)))
+        # --- Update status displays ---
         for port in self.control.generator.get_open_ports():
             error = self.control.generator.get_error(port)
             if error:
@@ -197,7 +219,18 @@ class TKGUI:
         self.light_status.config(text="on" if self.control.light else ("?" if self.control.light is None else "off"))
         self.sound_status.config(text="on" if self.control.sound else ("?" if self.control.sound is None else "off"))
         self.speed_limit.config(text=str(self.control.speed_limit))
+        # --- Schedule next update ---
         self.window.after(10, self.update_ui)
+
+    def toggle_active(self, train_id: int):
+        if train_id >= len(self.shown_trains):
+            return
+        train = self.shown_trains[train_id]
+        is_active = self.control.is_active(train)
+        if is_active:
+            self.control.deactivate(train, None)
+        else:
+            self.control.activate(train, None)
 
 
 def tk_rgb(r, g, b):
@@ -214,6 +247,7 @@ def event_summary(e: RawInputEvent):
 
 
 def control_train(control: TrainControl, train: Train, event: RawInputEvent):
+    control.activate(train, event.device.path)
     if isinstance(event.device, Keyboard):
         if event.event_type == 'down' and event.name == 'up':
             control.set_acceleration_control(train, 1.)

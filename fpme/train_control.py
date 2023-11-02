@@ -1,7 +1,7 @@
 import math
 import time
 import warnings
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Dict, Set
 
 import numpy
 
@@ -30,6 +30,9 @@ class TrainControl:
         self.active_functions = {train: {} for train in trains}  # which functions are active by their TrainFunction handle
         self.controls = {train: 0. for train in trains}
         self.last_emergency_break = {train: 0. for train in trains}
+        self.inactive_time = {train: 0. for train in trains}
+        self.drivers: Dict[Train, Set[str]] = {train: set() for train in trains}
+        self.global_status_by_tag: Dict[str, bool] = {}
         self.sound = None
         self.light = None
         self.paused = False
@@ -159,10 +162,43 @@ class TrainControl:
         self.set_functions_by_tag(TAG_DEFAULT_SOUND, on)
 
     def set_functions_by_tag(self, tag: str, on: bool):
+        self.global_status_by_tag[tag] = on
         for train in self.trains:
-            for func in train.functions:
-                if tag in func.tags:
-                    self.active_functions[train][func] = on
+            self.set_train_functions_by_tag(train, tag, on and self.is_active(train))
+
+    def set_train_functions_by_tag(self, train: Train, tag: str, on: bool):
+        for func in train.functions:
+            if tag in func.tags:
+                self.active_functions[train][func] = on
+
+    def activate(self, train: Train, driver: Optional[str]):
+        """ user: If no user specified, will auto-deactivate again soon. """
+        if driver is None:
+            self.drivers[train].add('default')
+        else:
+            self.drivers[train].add(driver)
+            if 'default' in self.drivers[train]:
+                self.drivers[train].remove('default')
+        self.inactive_time[train] = 0.
+        for tag, on in self.global_status_by_tag.items():
+            self.set_train_functions_by_tag(train, tag, on)
+
+    def deactivate(self, train: Train, driver: Optional[str]):
+        """ user: If `None`, will remove all users. """
+        if driver is None:
+            self.drivers[train].clear()
+        else:
+            if driver in self.drivers[train]:
+                self.drivers[train].remove(driver)
+            elif self.drivers[train]:
+                warnings.warn(f"Trying to remove unregistered driver from {train}: {driver}.\nRegistered: {self.drivers[train]}")
+        if not self.drivers[train]:
+            self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
+            self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
+            self.set_target_speed(train, 0)
+
+    def is_active(self, train: Train):
+        return len(self.drivers[train]) > 0 and self.inactive_time[train] <= 30.
 
     def update_trains(self, dt):  # repeatedly called from setup()
         if self.paused:
@@ -174,6 +210,13 @@ class TrainControl:
         if not self.is_power_on(train):
             self.speeds[train] = 0
             return
+        if self.controls[train] == 0 and self.speeds[train] == 0 and self.is_active(train):
+            self.inactive_time[train] += dt
+            if not self.is_active(train):
+                self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
+                self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
+        elif self.controls[train] != 0 or self.speeds[train] != 0:
+            self.inactive_time[train] = 0
         if self.controls[train] != 0:
             abs_target = max(0, abs(self.speeds[train] or 0.) + dt * train.acceleration * self.controls[train])
             self.target_speeds[train] = abs_target * (-1. if self.is_in_reverse(train) else 1.)
