@@ -79,14 +79,14 @@ S = Train('S', "Ⓢ", 48, acceleration=35., img_path="S-Bahn.png",
           functions=(LIGHT, TrainFunction("Innenbeleuchtung", 1, False, (TAG_DEFAULT_LIGHT,)), SOUND, TrainFunction("Horn", 3, False, (TAG_SPECIAL_SOUND,)), INSTANT_ACCELERATION))
 DAMPF = Train('Dampf', "🚂", 78, acceleration=30., img_path="Dampf.png",
               speeds=(0, 0.1, 0.2, 0.3, 48, 80, 100, 110, 120, 140, 165, 180, 192, 202, 210),
-              functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction("Dampfgeräusche", 1, False, (TAG_DEFAULT_SOUND,)),
-                         TrainFunction("Hupe", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Glocke", 3, False, (TAG_SPECIAL_SOUND,))))
+              functions=(LIGHT, TrainFunction("Dampfgeräusche", 1, False, (TAG_DEFAULT_SOUND,)),
+                         TrainFunction("Hupe", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Glocke", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Kohle schaufeln", 4, False, (TAG_SPECIAL_SOUND,))))
 BEIGE_218 = Train('218 B', "🛲", 73, acceleration=25., img_path="Thumb_BR218_Beige.png",
                    speeds=[0, None, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
                    functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
 ROT_218 = Train('218 R', "🛲", 74, acceleration=25., img_path="Thumb_BR218_Beige.png",
                    speeds=[0, None, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
-                   functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,)), TrainFunction("Hupe 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Hupe 1", 3, False, (TAG_SPECIAL_SOUND,))))
+                   functions=(LIGHT, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,)), TrainFunction("Hupe 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Hupe 1", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Lüfter", 4, False, (TAG_SPECIAL_SOUND,))))
 DIESEL = Train('Diesel', "🛲", 72, acceleration=25., img_path="Diesel.png",
                speeds=np.linspace(0, 217, 15),
                functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))

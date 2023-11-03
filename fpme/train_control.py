@@ -27,7 +27,7 @@ class TrainControl:
         self.locked_trains = set()
         self.target_speeds = {train: 0. for train in trains}  # signed speed in kmh, -0 means parked in reverse
         self.speeds = {train: 0. for train in trains}  # signed speed in kmh, set to EMERGENCY_STOP while train is braking
-        self.active_functions = {train: {} for train in trains}  # which functions are active by their TrainFunction handle
+        self.active_functions = {train: {f: True for f in train.functions if f.default_status} for train in trains}  # which functions are active by their TrainFunction handle
         self.controls = {train: 0. for train in trains}
         self.last_emergency_break = {train: 0. for train in trains}
         self.inactive_time = {train: 0. for train in trains}
