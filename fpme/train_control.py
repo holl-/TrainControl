@@ -21,7 +21,7 @@ class TrainControl:
 
     def __init__(self, trains=TRAINS):
         self.trains = trains
-        self.ports_by_train = {train: [] for train in trains}
+        self.ports_by_train: Dict[Train, Set[str]] = {train: set() for train in trains}
         self.generator = SubprocessGenerator(max_generators=2)
         self.speed_limit = None
         self.locked_trains = set()
@@ -45,7 +45,7 @@ class TrainControl:
         self.generator.open_port(serial_port, None if trains is None else tuple([train.address for train in trains]))
         # the new generator will automatically send the previously set states of relevant trains, no need to update here
         for train in trains or self.trains:
-            self.ports_by_train[train].append(serial_port)
+            self.ports_by_train[train].add(serial_port)
 
     def power_on(self, train: Optional[Train]):
         if self.paused:
@@ -71,7 +71,8 @@ class TrainControl:
             self.generator.start(port)
 
     def terminate(self):
-        import time, os
+        import time
+        import os
         self.generator.terminate()
         time.sleep(.5)
         os._exit(0)
@@ -104,10 +105,15 @@ class TrainControl:
         direction = math.copysign(1, self.target_speeds[train])
         return direction < 0
 
-    def reverse(self, train: Train):
+    def reverse(self, train: Train, driver: Optional[str]):
+        if not self.is_active(train):
+            self.activate(train, driver)
+            return
         self.target_speeds[train] = - math.copysign(0, self.target_speeds[train])
 
-    def set_target_speed(self, train: Train, signed_speed: float):
+    def set_target_speed(self, train: Train, signed_speed: float, driver: Optional[str]):
+        if not self.is_active(train) and signed_speed != 0:
+            self.activate(train, driver)  # accelerate and simultaneously enable sound, so we don't have to wait
         if signed_speed != 0:
             if self.is_emergency_stopping(train):
                 self.speeds[train] = math.copysign(0, self.target_speeds[train])
@@ -117,14 +123,20 @@ class TrainControl:
             max_speed = train.max_speed if self.speed_limit is None else min(train.max_speed, self.speed_limit)
             self.target_speeds[train] = max(-max_speed, min(signed_speed, max_speed))
 
-    def accelerate(self, train: Train, signed_times: int):
+    def accelerate(self, train: Train, signed_times: int, driver: Optional[str]):
         in_reverse = self.is_in_reverse(train)
         target_level = int(numpy.argmin([abs(s - abs(self.target_speeds[train])) for s in train.speeds]))  # ≥ 0
         new_target_level = int(numpy.clip(target_level + signed_times, 0, 14))
         new_target_speed = train.speeds[new_target_level]
-        self.set_target_speed(train, -new_target_speed if in_reverse else new_target_speed)
+        self.set_target_speed(train, -new_target_speed if in_reverse else new_target_speed, driver)
 
-    def set_acceleration_control(self, train: Train, signed_factor: float):
+    def set_acceleration_control(self, train: Train, signed_factor: float, driver: Optional[str]):
+        if not self.is_active(train):
+            if signed_factor <= 0:
+                self.activate(train, driver)
+                return
+            else:
+                self.activate(train, driver)  # accelerate and simultaneously enable sound, so we don't have to wait
         if signed_factor != 0 and self.controls[train] * signed_factor <= 0:
             speed_idx = self._get_speed_index(train, signed_factor, False)
             abs_speed = train.speeds[speed_idx]
@@ -132,7 +144,18 @@ class TrainControl:
             self.speeds[train] = math.copysign(abs_speed + signed_factor * 1e-3, self.target_speeds[train])
         self.controls[train] = signed_factor
 
+    def emergency_stop_all(self, train: Optional[Train]):
+        """Immediately stop all trains on the same track as `train`."""
+        if train is None:
+            trains = self.trains
+        else:
+            ports: Set[str] = self.ports_by_train[train]
+            trains = {t for t in self.trains if self.ports_by_train[t] & ports}
+        for t in trains:
+            self.emergency_stop(t)
+
     def emergency_stop(self, train: Train):
+        """Immediately stop `train`."""
         self.target_speeds[train] *= 0.
         self.speeds[train] = None
         currently_in_reverse = self.generator.is_in_reverse(train.address)
@@ -169,6 +192,7 @@ class TrainControl:
     def set_train_functions_by_tag(self, train: Train, tag: str, on: bool):
         for func in train.functions:
             if tag in func.tags:
+                print(f"setting {train}.{tag} = {on}")
                 self.active_functions[train][func] = on
 
     def activate(self, train: Train, driver: Optional[str]):
@@ -195,7 +219,7 @@ class TrainControl:
         if not self.drivers[train]:
             self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
             self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
-            self.set_target_speed(train, 0)
+            self.set_target_speed(train, 0, driver)
 
     def is_active(self, train: Train):
         return len(self.drivers[train]) > 0 and self.inactive_time[train] <= 30.
@@ -245,19 +269,21 @@ class TrainControl:
         self.generator.set(train.address, speed_code, currently_in_reverse, functions, get_preferred_protocol(train))
 
     def _get_speed_index(self, train: Train, abs_acceleration, limit_by_target: bool):
-        speed = self.speeds[train]
+        abs_speed = abs(self.speeds[train])
         target_idx = int(numpy.argmin([abs(s - abs(self.target_speeds[train])) for s in train.speeds]))  # ≥ 0
         if abs_acceleration > 0:  # ceil level
-            greater = [i for i, s in enumerate(train.speeds) if s >= abs(speed)]
+            greater = [i for i, s in enumerate(train.speeds) if s >= abs_speed]
             speed_idx = greater[0] if greater else len(train.speeds) - 1
             if limit_by_target:
                 speed_idx = min(speed_idx, target_idx)
         elif abs_acceleration < 0:  # floor level
-            speed_idx = [i for i, s in enumerate(train.speeds) if s <= abs(speed)][-1]
+            speed_idx = [i for i, s in enumerate(train.speeds) if s <= abs_speed][-1]
             if limit_by_target:
                 speed_idx = max(speed_idx, target_idx)
         else:  # Equal
             speed_idx = target_idx
+        if abs_speed > 0 and speed_idx == 0:
+            speed_idx = 1  # this ensures we don't wait for startup sound to finish
         return speed_idx
 
 

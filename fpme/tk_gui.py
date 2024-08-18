@@ -1,21 +1,18 @@
 import math
 import time
-
 import tkinter as tk
 import tkinter.ttk as ttk
-from threading import Thread
-from typing import Optional, Dict, Tuple, List
+from typing import Dict, Tuple, List
 
 from PIL import ImageTk
-from winrawin import hook_raw_input_for_window, RawInputEvent, list_devices, Mouse, Keyboard, RawInputDevice
+from winrawin import hook_raw_input_for_window, RawInputEvent, Mouse, Keyboard
 
-from .signal_gen import list_com_ports
 from . import hid
 from .helper import fit_image_size
-
-from .train_def import Train, CONTROLS
-from .train_control import TrainControl
+from .signal_gen import list_com_ports
 from .switches import SwitchManager
+from .train_control import TrainControl
+from .train_def import Train, CONTROLS
 
 
 class TKGUI:
@@ -25,7 +22,7 @@ class TKGUI:
         self.switches = switches
         self.window = tk.Tk()
         self.last_events: Dict[str, RawInputEvent] = {}
-        self.device_labels: Dict[str, Tuple[str, str]] = {}  # (label, ...)
+        self.device_labels: Dict[str, Tuple[tk.Label, tk.Label]] = {}  # (label, ...)
         self.missing_devices: List[str] = []  # device_path
         self.speed_bars: Dict[Train, ttk.Progressbar] = {}
         self.direction_labels: Dict[Train, tk.Label] = {}
@@ -114,7 +111,7 @@ class TKGUI:
         tk.Label(text="Status (P/R)", font='Helvetica 14 bold').pack()
         status_pane = tk.Frame(self.window)
         status_pane.pack()
-        tk.Label(status_pane, text="Status").grid(row=0, column=0)
+        tk.Label(status_pane, text="Status (P/R)").grid(row=0, column=0)
         self.active_status = tk.Label(status_pane, text="...")
         self.active_status.grid(row=0, column=1)
         tk.Label(status_pane, text="Light (F2/F3)").grid(row=1, column=0)
@@ -247,37 +244,36 @@ def event_summary(e: RawInputEvent):
 
 
 def control_train(control: TrainControl, train: Train, event: RawInputEvent):
-    control.activate(train, event.device.path)
     if isinstance(event.device, Keyboard):
         if event.event_type == 'down' and event.name == 'up':
-            control.set_acceleration_control(train, 1.)
+            control.set_acceleration_control(train, 1., driver=event.device.path)
         elif event.event_type == 'down' and event.name == 'down':
-            control.set_acceleration_control(train, -1.)
+            control.set_acceleration_control(train, -1., driver=event.device.path)
         elif event.event_type == 'up':
-            control.set_acceleration_control(train, 0)
+            control.set_acceleration_control(train, 0, driver=event.device.path)
         elif event.event_type == 'down' and event.name == 'left':
-            control.emergency_stop(train)
+            control.emergency_stop_all(train)
         elif event.event_type == 'down' and event.name == 'right':
-            control.reverse(train)
+            control.reverse(train, driver=event.device.path)
     elif 'VID&0205ac' in event.device.path:  # VR-Park
         if event.event_type == 'move':
             acc = 0 if event.delta_y == 0 else train.acceleration if event.delta_y < 0 else -train.deceleration
             event_period = 0.03
             target_speed = max(0, abs(control.get_speed(train) or 0.) + (event_period * 2.1) * acc)
-            control.set_target_speed(train, target_speed * (-1 if control.is_in_reverse(train) else 1))
+            control.set_target_speed(train, target_speed * (-1 if control.is_in_reverse(train) else 1), driver=event.device.path)
         elif event.event_type == 'down' and event.name == 'left':
-            control.reverse(train)
+            control.reverse(train, driver=event.device.path)
         elif event.event_type == 'down' and event.name == 'thumb1':
-            control.emergency_stop(train)
+            control.emergency_stop_all(train)
     elif isinstance(event.device, Mouse):
         if event.event_type == 'down' and event.name == 'left':
-            control.set_acceleration_control(train, 1.)
+            control.set_acceleration_control(train, 1., driver=event.device.path)
         elif event.event_type == 'down' and event.name == 'right':
             if control.is_parked(train):
-                control.reverse(train)
+                control.reverse(train, driver=event.device.path)
             else:
-                control.set_acceleration_control(train, -1.)
+                control.set_acceleration_control(train, -1., driver=event.device.path)
         elif event.event_type == 'down' and event.name == 'middle':
-            control.emergency_stop(train)
+            control.emergency_stop_all(train)
         elif event.event_type == 'up':
-            control.set_acceleration_control(train, 0.)
+            control.set_acceleration_control(train, 0., driver=event.device.path)

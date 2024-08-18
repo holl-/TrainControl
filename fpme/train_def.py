@@ -5,7 +5,6 @@ import numpy as np
 from PIL import Image
 from dataclasses import dataclass
 
-
 TAG_DEFAULT_LIGHT = 'default-light'
 TAG_DEFAULT_SOUND = 'default-sound'
 TAG_SPECIAL_LIGHT = 'special-light'
@@ -18,6 +17,8 @@ class TrainFunction:
     id: int
     default_status: bool
     tags: Tuple[str]
+    warmup_time: float = 0.  # how long until train can move if this function is on.
+    reverse_time: float = 0.  # how long until the train can move backwards if this function is on.
 
     def __hash__(self):
         return hash(id)
@@ -82,11 +83,11 @@ DAMPF = Train('Dampf', "🚂", 78, acceleration=30., img_path="Dampf.png",
               functions=(LIGHT, TrainFunction("Dampfgeräusche", 1, False, (TAG_DEFAULT_SOUND,)),
                          TrainFunction("Hupe", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Glocke", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Kohle schaufeln", 4, False, (TAG_SPECIAL_SOUND,))))
 BEIGE_218 = Train('218 B', "🛲", 73, acceleration=25., img_path="Thumb_BR218_Beige.png",
-                   speeds=[0, None, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
-                   functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
+                  speeds=[0, None, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
+                  functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
 ROT_218 = Train('218 R', "🛲", 74, acceleration=25., img_path="Thumb_BR218_Beige.png",
-                   speeds=[0, None, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
-                   functions=(LIGHT, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,)), TrainFunction("Hupe 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Hupe 1", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Lüfter", 4, False, (TAG_SPECIAL_SOUND,))))
+                speeds=[0, 15, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
+                functions=(LIGHT, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,), warmup_time=19.5, reverse_time=4.), TrainFunction("Hupe 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Hupe 1", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Lüfter", 4, False, (TAG_SPECIAL_SOUND,))))
 DIESEL = Train('Diesel', "🛲", 72, acceleration=25., img_path="Diesel.png",
                speeds=np.linspace(0, 217, 15),
                functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
@@ -102,7 +103,7 @@ TRAINS = [ICE, RE, RB, S, BEIGE_218, ROT_218, DIESEL, E40, BUS, DAMPF]  # availa
 TRAINS_BY_NAME = {train.name: train for train in TRAINS}
 
 CONTROLS = {
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_8fd1f0ddfca6&Col01#a&1145359c&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': ROT_218,
+    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_8fd1f0ddfca6&Col01#a&1145359c&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': BUS,
     '\\\\?\\HID#VID_046D&PID_C336&MI_00#8&178e0225&0&0000#{884b96c3-56ef-11d1-bc8c-00a0c91405dd}': ICE,  # Tastatur
     # '\\\\?\\HID#VID_09DA&PID_9090&MI_01#8&36ff0fee&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': ROT_218,  # Maus
     # '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_3675eb0ae2f9&Col01#a&2892c10d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': DAMPF,
