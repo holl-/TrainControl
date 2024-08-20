@@ -58,7 +58,7 @@ class TrainControl:
             self.generator.stop(port)
 
     def is_power_on(self, train: Optional[Train]):
-        return all([self.generator.is_sending_on(port) for port in (self.ports_by_train[train] if train else self.generator.get_open_ports())])
+        return any([self.generator.is_sending_on(port) for port in (self.ports_by_train[train] if train else self.generator.get_open_ports())])
 
     def pause(self):
         self.paused = True
