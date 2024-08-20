@@ -138,10 +138,11 @@ class TrainControl:
             else:
                 self.activate(train, driver)  # accelerate and simultaneously enable sound, so we don't have to wait
         if signed_factor != 0 and self.controls[train] * signed_factor <= 0:
-            speed_idx = self._get_speed_index(train, signed_factor, False)
+            speed_idx = self._get_speed_index(train, signed_factor, False, False)
             abs_speed = train.speeds[speed_idx]
-            print(self.speeds[train], speed_idx, abs_speed, signed_factor)
-            self.speeds[train] = math.copysign(abs_speed + signed_factor * 1e-3, self.target_speeds[train])
+            prev_speed = self.speeds[train]
+            self.speeds[train] = math.copysign(abs_speed + signed_factor * 1e-2, self.target_speeds[train])
+            print(f"Acceleration {train.name} = {signed_factor} (speed = {prev_speed} ({speed_idx}) -> {self.speeds[train]}, target={self.target_speeds[train]})")
         self.controls[train] = signed_factor
 
     def emergency_stop_all(self, train: Optional[Train]):
@@ -268,7 +269,7 @@ class TrainControl:
         currently_in_reverse = direction < 0
         self.generator.set(train.address, speed_code, currently_in_reverse, functions, get_preferred_protocol(train))
 
-    def _get_speed_index(self, train: Train, abs_acceleration, limit_by_target: bool):
+    def _get_speed_index(self, train: Train, abs_acceleration, limit_by_target: bool, round_up_to_first=True):
         abs_speed = abs(self.speeds[train])
         target_idx = int(numpy.argmin([abs(s - abs(self.target_speeds[train])) for s in train.speeds]))  # ≥ 0
         if abs_acceleration > 0:  # ceil level
@@ -282,7 +283,7 @@ class TrainControl:
                 speed_idx = max(speed_idx, target_idx)
         else:  # Equal
             speed_idx = target_idx
-        if abs_speed > 0 and speed_idx == 0:
+        if round_up_to_first and abs_speed > 0 and speed_idx == 0:
             speed_idx = 1  # this ensures we don't wait for startup sound to finish
         return speed_idx
 
