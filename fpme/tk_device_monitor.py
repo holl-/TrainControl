@@ -18,7 +18,7 @@ def open_window():
     def create_copiable_label(parent, text, copy_str: str, **kwargs):
         def copy(_event):
             window.clipboard_clear()
-            window.clipboard_append(text)
+            window.clipboard_append(text.replace("\\", "\\\\"))
             print(f"Copied to clipboard: {copy_str}")
 
         label = tk.Label(parent, text=text[:30], **kwargs)
