@@ -344,7 +344,10 @@ class SignalGenerator:
         self._time_started_sending = None  # wait a bit before detecting short circuits
         self._ser = None
         self._time_created = time.perf_counter()
-        if not serial_port.startswith('debug'):
+        if serial_port.startswith('debug'):
+            if serial_port.endswith(':off'):
+                self._short_circuited.value = True
+        else:
             try:
                 print(f"Opening serial port {serial_port}...")
                 # ser = serial.Serial(port=serial_port, baudrate=9600)
@@ -407,8 +410,8 @@ class SignalGenerator:
                 short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
             else:
                 time.sleep(1)
-                short_circuited = False
-                print(f"Here be signal: {self._packets}")
+                short_circuited = self._short_circuited.value
+                # print(f"Here be signal: {self._packets}")
             self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
             if self._short_circuited.value:
                 if newly_short_circuited and self.on_short_circuit is not None:

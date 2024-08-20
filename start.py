@@ -13,7 +13,8 @@ if __name__ == '__main__':
         if 'Prolific' in desc:
             control.add_rs232_generator(port)
     if not control.generator.get_open_ports():
-        control.add_rs232_generator('debug')
+        control.add_rs232_generator('debug1:on')
+        control.add_rs232_generator('debug2:off')
     # control.add_rs232_generator('debug1', [train for train in train_def.TRAINS if train != train_def.ICE])
     # control.add_rs232_generator('debug2', [train_def.ICE])
     control.power_on(None)
