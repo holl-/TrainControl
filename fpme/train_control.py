@@ -254,7 +254,8 @@ class TrainControl:
         elif self.controls[train] != 0 or self.speeds[train] != 0:
             self.inactive_time[train] = 0
         if self.controls[train] != 0:
-            abs_target = max(0, abs(self.speeds[train] or 0.) + dt * train.acceleration * self.controls[train])
+            acc = train.acceleration if self.controls[train] > 0 else train.deceleration
+            abs_target = max(0., abs(self.speeds[train] or 0.) + dt * acc * self.controls[train])
             self.target_speeds[train] = abs_target * (-1. if self.is_in_reverse(train) else 1.)
         speed = self.speeds[train]
         if speed is None:
@@ -263,7 +264,10 @@ class TrainControl:
                 self.speeds[train] = speed
             else:
                 return  # emergency brake, don't update signal
-        acc = train.acceleration if abs(self.target_speeds[train]) > abs(speed) else train.deceleration
+        if self.controls[train] != 0:
+            acc = train.deceleration if self.controls[train] < 0 else train.acceleration
+        else:
+            acc = train.acceleration if abs(self.target_speeds[train]) > abs(speed) else train.deceleration
         if self.target_speeds[train] > speed:
             self.speeds[train] = min(speed + acc * dt, self.target_speeds[train])
         else:
