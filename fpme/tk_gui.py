@@ -286,7 +286,7 @@ def control_train(control: TrainControl, train: Train, event: RawInputEvent):
         elif event.event_type == 'down' and event.name == 'left':
             control.reverse(train, driver=event.device.path)
         elif event.event_type == 'down' and event.name == 'thumb1':
-            control.emergency_stop_all(train)
+            control.emergency_stop(train)
     elif isinstance(event.device, Mouse):
         if event.event_type == 'down' and event.name == 'left':
             control.set_acceleration_control(train, 1., driver=event.device.path)
