@@ -70,7 +70,7 @@ class Train:
 ICE = Train('ICE', "🚅", 3, acceleration=25., img_path="ICE.png",
             speeds=np.linspace(0, 310, 15),
             functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
-E_BW_IC = Train('RE', "🚉", 1, acceleration=30., img_path="E-Lok BW.png", stop_by_mm1_reverse=False,
+E_BW_IC = Train('IC', "🚉", 1, acceleration=30., img_path="E-Lok BW.png", stop_by_mm1_reverse=False,
                 speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226),
                 functions=(LIGHT, TrainFunction("Nebelscheinwerfer", 2, False, (TAG_SPECIAL_LIGHT,)), TrainFunction("Fahrtlicht hinten", 3, False, (TAG_SPECIAL_LIGHT,)), INSTANT_ACCELERATION))
 E_RB = Train('RB', "🚉", 24, acceleration=30., supports_mm2=False, stop_by_mm1_reverse=False, img_path="E-Lok DB.png",
@@ -85,13 +85,13 @@ DAMPF = Train('Dampf', "🚂", 78, acceleration=30., img_path="Dampf.png",
 BEIGE_218 = Train('218 B', "🛲", 73, acceleration=25., img_path="Thumb_BR218_Beige.png",
                   speeds=[0, None, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
                   functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
-ROT_218 = Train('218 R', "🛲", 74, acceleration=25., img_path="Thumb_BR218_Beige.png",
+ROT_218 = Train('218 R', "🛲", 74, acceleration=40., img_path="Thumb_BR218_Beige.png",
                 speeds=[0, 15, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
                 functions=(LIGHT, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,), warmup_time=19.5, reverse_time=4.), TrainFunction("Hupe 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Hupe 1", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Lüfter", 4, False, (TAG_SPECIAL_SOUND,))))
 DIESEL = Train('Diesel', "🛲", 72, acceleration=25., img_path="Diesel.png",
-               speeds=np.linspace(0, 217, 15),
+               speeds=np.linspace(0, 180, 15),
                functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
-E40_RE_BLAU = Train('E40', "🚉", 23, acceleration=30., img_path="Thumb_E40.png", stop_by_mm1_reverse=False,
+E40_RE_BLAU = Train('RE', "🚉", 23, acceleration=30., img_path="Thumb_E40.png", stop_by_mm1_reverse=False,
                     speeds=np.linspace(0, 220, 15),
                     functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction('Hupe', -1, False, (TAG_SPECIAL_SOUND,))))
 BUS = Train('Bus', "🚌", 62, acceleration=40., img_path="Thumb_Schienenbus.png", stop_by_mm1_reverse=False,
@@ -102,12 +102,9 @@ TRAINS = [ICE, E_BW_IC, E_RB, S, BEIGE_218, ROT_218, DIESEL, E40_RE_BLAU, BUS, D
 
 TRAINS_BY_NAME = {train.name: train for train in TRAINS}
 
-RAILCARS_TRAINS = [ICE, E_RB, S, E40_RE_BLAU, BUS]
-LOCOMOTIVE_TRAINS = [DAMPF, BEIGE_218, ROT_218, DIESEL, E_BW_IC]  # IC driven by RE (BW)
-
 CONTROLS = {
     '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_fdc80171a4bd&Col01#b&2a97252d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': ICE,
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_588ea725c7a3&Col01#b&13df0efa&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': DAMPF,
+    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_588ea725c7a3&Col01#b&13df0efa&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': BEIGE_218,
     '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_45ee447eb09a&Col01#b&20a8da1a&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': DIESEL,
     '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_e0eebb488ace&Col01#b&316fd37&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': ROT_218,
     '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_1e89fff2c7db&Col01#b&20fc5261&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': BUS,
@@ -116,10 +113,12 @@ CONTROLS = {
     '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_61f5dd3d7341&Col01#b&2c7afc78&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': E40_RE_BLAU,
     '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_9b64950eee81&Col01#b&1cbc610d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': E_BW_IC,
     # Mice
-    '\\\\?\\HID#VID_1EA7&PID_0002&MI_01&Col02#9&2025eeb3&0&0001#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': BEIGE_218,
-    '\\\\?\\HID#VID_093A&PID_2510#7&414c0de&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': ICE,  # USB
+    #'\\\\?\\HID#VID_1EA7&PID_0002&MI_01&Col02#9&2025eeb3&0&0001#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': BEIGE_218,
+    #'\\\\?\\HID#VID_062A&PID_4101&MI_01&Col01#9&bb6e3d2&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}':
+    #'\\\\?\\HID#VID_093A&PID_2510#7&414c0de&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': ICE,  # USB
     # Keyboard
-    '\\\\?\\ACPI#HPQ8001#4&2abdae0d&0#{884b96c3-56ef-11d1-bc8c-00a0c91405dd}': ICE,  # Laptop
+    #'\\\\?\\ACPI#HPQ8001#4&2abdae0d&0#{884b96c3-56ef-11d1-bc8c-00a0c91405dd}': ICE,  # Laptop
+    #'\\\\?\\HID#VID_05B8&PID_3247&MI_00#9&121faa46&0&0000#{884b96c3-56ef-11d1-bc8c-00a0c91405dd}'  # funk
 }
 
 """ VR Park Controllers:
