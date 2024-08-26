@@ -123,6 +123,17 @@ class TKGUI:
         tk.Label(status_pane, text="Limit (+/-)").grid(row=3, column=0)
         self.speed_limit = tk.Label(status_pane, text="...")
         self.speed_limit.grid(row=3, column=1)
+        # --- Status highlights ---
+        event_pane = tk.Frame(self.window)
+        event_pane.pack()
+        self.emergency_break_all_highlight = tk.Label(event_pane, text="")
+        self.emergency_break_all_highlight.grid(row=0, column=0)
+        self.power_off_highlight = tk.Label(event_pane, text="Power off")
+        self.power_off_highlight.grid(row=0, column=1)
+        self.power_on_highlight = tk.Label(event_pane, text="Power on")
+        self.power_on_highlight.grid(row=0, column=2)
+        self.short_circuited_highlight = tk.Label(event_pane, text="Power failure")
+        self.short_circuited_highlight.grid(row=0, column=3)
         # --- Hotkeys ---
         tk.Label(text="Press F11 to enter fullscreen mode").pack()
         self.window.bind("<F11>", lambda e: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
@@ -176,6 +187,7 @@ class TKGUI:
             control_train(self.control, train, e)
 
     def update_ui(self):
+        now = time.perf_counter()
         # --- Highlight recent inputs and detect disconnected devices ---
         for device, event in self.last_events.items():
             label = self.last_action_labels[device]
@@ -184,9 +196,17 @@ class TKGUI:
                 train = CONTROLS[device]
                 self.control.deactivate(train, device)
             else:
-                last = time.perf_counter() - event.time
-                fac = 1 - math.exp(-last)
+                fac = 1 - math.exp(event.time - now)
                 label.config(text=event_summary(event), bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
+        # -- Highlight recent global commands ---
+        fac = 1 - math.exp(self.control.last_emergency_break_all - now)
+        self.emergency_break_all_highlight.config(text=f"Emergency all ({self.control.last_emergency_break_all_cause})", bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
+        fac = 1 - math.exp(self.control.last_power_off - now)
+        fac = 1 - math.exp(self.control.last_power_on - now)
+        self.power_on_highlight.config(bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
+        self.power_off_highlight.config(bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
+        fac = 1 - math.exp(self.control.last_short_circuited - now)
+        self.short_circuited_highlight.config(bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
         # --- Update train display ---
         for train in self.control.trains:
             self.speed_bars[train].config(value=abs(100 * (self.control.get_speed(train) or 0.) / train.max_speed))
@@ -255,6 +275,8 @@ def control_train(control: TrainControl, train: Train, event: RawInputEvent):
             control.emergency_stop_all(train)
         elif event.event_type == 'down' and event.name == 'right':
             control.reverse(train, driver=event.device.path)
+        elif event.event_type == 'down' and event.name == 'delete':
+            control.power_off(train)
     elif 'VID&0205ac' in event.device.path:  # VR-Park
         if event.event_type == 'move':
             acc = 0 if event.delta_y == 0 else train.acceleration if event.delta_y < 0 else -train.deceleration

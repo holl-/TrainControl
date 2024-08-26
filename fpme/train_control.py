@@ -36,6 +36,11 @@ class TrainControl:
         self.sound = None
         self.light = None
         self.paused = False
+        self.last_emergency_break_all = 0.
+        self.last_emergency_break_all_cause = None
+        self.last_power_off = 0.
+        self.last_power_on = 0.
+        self.last_short_circuited = 0.
         for train in trains:
             self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
         schedule_at_fixed_rate(self.update_trains, period=.03)
@@ -52,10 +57,12 @@ class TrainControl:
             return
         for port in (self.ports_by_train[train] if train else self.generator.get_open_ports()):
             self.generator.start(port)
+        self.last_power_on = time.perf_counter()
 
     def power_off(self, train: Optional[Train]):
         for port in (self.ports_by_train[train] if train else self.generator.get_open_ports()):
             self.generator.stop(port)
+        self.last_power_off = time.perf_counter()
 
     def is_power_on(self, train: Optional[Train]):
         return any([self.generator.is_sending_on(port) for port in (self.ports_by_train[train] if train else self.generator.get_open_ports())])
@@ -147,6 +154,8 @@ class TrainControl:
 
     def emergency_stop_all(self, train: Optional[Train]):
         """Immediately stop all trains on the same track as `train`."""
+        self.last_emergency_break_all = time.perf_counter()
+        self.last_emergency_break_all_cause = train
         if train is None:
             trains = self.trains
         else:
@@ -228,6 +237,8 @@ class TrainControl:
     def update_trains(self, dt):  # repeatedly called from setup()
         if self.paused:
             return
+        if any(self.generator.is_short_circuited(port) for port in self.generator.get_open_ports()):
+            self.last_short_circuited = time.perf_counter()
         for train in self.trains:
             self._update_train(train, dt)
 
