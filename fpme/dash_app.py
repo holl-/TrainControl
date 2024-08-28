@@ -231,9 +231,9 @@ class Server:
 
             # Button actions
             if trigger_id == 'power-off':
-                control.power_off(client.train)
+                control.power_off(client.train, client.addr)
             elif trigger_id == 'power-on':
-                control.power_on(client.train)
+                control.power_on(client.train, client.addr)
                 time.sleep(0.2)
             elif trigger_id.startswith('switch-to-'):
                 if client.train is None or control.is_parked(client.train):
@@ -241,15 +241,15 @@ class Server:
                     new_train = train_def.TRAINS_BY_NAME[new_train_name]
                     if all([c.train != new_train for c in CLIENTS.values()]):  # train not in use
                         if client.train is not None:
-                            control.set_target_speed(client.train, 0)  # Stop the train we're exiting
+                            control.set_target_speed(client.train, 0, client.addr)  # Stop the train we're exiting
                         client.train = new_train
             elif trigger_id == 'release-train' and client.train is not None:
                 if client.train:
-                    control.set_target_speed(client.train, 0)
+                    control.set_target_speed(client.train, 0, client.addr)
                     client.train = None
             elif trigger_id == 'reverse':
                 if client.train:
-                    control.reverse(client.train)
+                    control.reverse(client.train, client.addr)
             elif trigger_id.startswith('set-switches-'):
                 raise NotImplementedError
                 # track = trigger_id[len('set-switches-'):]
@@ -366,7 +366,7 @@ class Server:
             trigger_id, trigger_prop = trigger["prop_id"].split(".")
             if trigger_id == 'speed-control':
                 if client.train:
-                    control.set_target_speed(client.train, -target_speed if control.is_in_reverse(client.train) else target_speed)
+                    control.set_target_speed(client.train, -target_speed if control.is_in_reverse(client.train) else target_speed, client.addr)
             if client.train and control.is_emergency_stopping(client.train):
                 return -1, False
             if client.train:
@@ -384,13 +384,13 @@ class Server:
             trigger_id, trigger_prop = trigger["prop_id"].split(".")
             if trigger_id == 'accelerate1':
                 if client.train:
-                    control.accelerate(client.train, 1)
+                    control.accelerate(client.train, 1, client.addr)
             elif trigger_id == 'decelerate1':
                 if client.train:
-                    control.accelerate(client.train, -1)
+                    control.accelerate(client.train, -1, client.addr)
             elif trigger_id == 'stop-train':
                 if client.train:
-                    control.emergency_stop(client.train)
+                    control.emergency_stop(client.train, client.addr)
             return abs(control.get_target_speed(client.train)) if client.train else 0
 
 
@@ -414,12 +414,12 @@ class Server:
             if trigger_id == 'admin-kill':
                 control.terminate()
             elif trigger_id == 'power-off-admin':
-                control.power_off(None)
+                control.power_off(None, 'admin')
             elif trigger_id == 'power-on-admin':
-                control.power_on(None)
+                control.power_on(None, 'admin')
             elif trigger_id.startswith('admin-stop-'):
                 train = train_def.TRAINS_BY_NAME[trigger_id[len('admin-stop-'):]]
-                control.emergency_stop(train)
+                control.emergency_stop(train, 'admin')
             elif trigger_id == 'admin-checklist':
                 control.set_global_speed_limit(100 if 'global-speed-limit' in checklist else None)
                 # global _SCHEDULE_MODE
@@ -431,7 +431,7 @@ class Server:
                 train = train_def.TRAINS_BY_NAME[trigger_id[len('admin-kick-'):]]
                 for client in CLIENTS.values():
                     if client.train == train:
-                        control.set_target_speed(train, 0)
+                        control.set_target_speed(train, 0, 'admin')
                         print("Breaking")
                         client.train = None
                         break
@@ -484,7 +484,7 @@ class Server:
             if client.is_inactive():
                 del CLIENTS[client.user_id]
                 if client.train is not None:
-                    self.control.set_target_speed(client.train, 0)
+                    self.control.set_target_speed(client.train, 0, 'inactivity')
 
 
 def get_ip():

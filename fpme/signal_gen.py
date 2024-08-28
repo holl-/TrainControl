@@ -442,14 +442,15 @@ class SignalGenerator:
 if __name__ == '__main__':
     gen = SubprocessGenerator()
     gen.setup()
-    gen.open_port('COM8')
-    gen.start('COM8')
+    gen.open_port('COM4')
+    gen.start('COM4')
     # S-Bahn: 0=Licht außen, 1=Licht innen, 2=Motor 3=Horn, 4=Sofort auf Geschwindigkeit
     # E-Lok (BW): 0=Licht, 1=- 2=Nebelscheinwerfer, 3: Fahrtlicht hinten, 4: Sofort auf Geschwindigkeit
-
-    gen.set(24, 0, True, {0: False})
+    gen.set(62, 6, False, {0: False, 1: False, 2: False, 3: False, 4: True})
+    # for i in range(1, 80):
+    #     gen.set(i, 10, False, {0: False})
     while True:
-        print(gen.is_short_circuited('COM8'), gen.is_sending_on('COM8'))
+        print(gen.is_short_circuited('COM4'), gen.is_sending_on('COM4'))
         time.sleep(.1)
 
     # for i in range(10):

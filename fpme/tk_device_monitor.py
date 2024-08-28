@@ -3,7 +3,7 @@ import time
 
 import tkinter as tk
 
-from winrawin import hook_raw_input_for_window, RawInputEvent, list_devices, Mouse, Keyboard
+from fpme.hid_input import InputManager
 
 
 def tk_rgb(r, g, b):
@@ -31,52 +31,28 @@ def open_window():
     table = tk.Frame(window)
     table.pack()
 
-    label1 = tk.Label(table, text="Mice")
-    label2 = tk.Label(table, text="Keyboards")
-    label3 = tk.Label(table, text="Other")
-    label1.grid(row=0, column=0)
-    label2.grid(row=0, column=1)
-    label3.grid(row=0, column=2)
+    def update_ui():
+        for widget in table.winfo_children():
+            widget.destroy()
+        for path in inputs.connected:
+            t, text = inputs.last_events[path]
+            fac = 1 - math.exp(t - time.perf_counter())
+            label = create_copiable_label(table, text=path, copy_str=path.replace('\\', '\\\\'), bg=tk_rgb(0, 0, 0))
+            label.config(bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
+            label.pack()
+        for path in inputs.disconnected:
+            label = create_copiable_label(table, text=path, copy_str=path.replace('\\', '\\\\'), bg=tk_rgb(0, 0, 0))
+            label.config(bg=tk_rgb(255, 0, 0))
+            label.pack()
+        window.after(10, update_ui)
 
-    labels = {}
-    n_mice = 0
-    n_keyboards = 0
-    n_hid = 0
-    for device in list_devices():
-        label = create_copiable_label(table, text=(device.product_name or device.vendor_name or device.path), copy_str=device.path.replace('\\', '\\\\') if device.path else '', bg=tk_rgb(0, 0, 0))
-        labels[device] = label
-        if isinstance(device, Mouse):
-            n_mice += 1
-            label.grid(row=n_mice, column=0)
-        elif isinstance(device, Keyboard):
-            n_keyboards += 1
-            label.grid(row=n_keyboards, column=1)
-        else:
-            n_hid += 1
-            label.grid(row=n_hid, column=2)
-
-    last_event_times = {d: -100 for d in list_devices()}
-
-    def update_colors():
-        for device, label in labels.items():
-            if not device.is_connected():
-                label.config(bg=tk_rgb(255, 0, 0))
-            else:
-                last = time.perf_counter() - last_event_times[device]
-                fac = 1 - math.exp(-last)
-                label.config(bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
-        window.after(10, update_colors)
-
-    window.after(10, update_colors)
-
-    def process_event(e: RawInputEvent):
-        last_event_times[e.device] = e.time
-
-    hook_raw_input_for_window(window.winfo_id(), process_event)
+    window.after(10, update_ui)
     window.mainloop()
 
 
 if __name__ == '__main__':
+    inputs = InputManager(None)
+    inputs.start_detection()
     open_window()
 
 

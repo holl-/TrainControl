@@ -2,28 +2,25 @@ import math
 import time
 import tkinter as tk
 import tkinter.ttk as ttk
-from typing import Dict, Tuple, List
+from typing import Dict, List
 
 from PIL import ImageTk
-from winrawin import hook_raw_input_for_window, RawInputEvent, Mouse, Keyboard
 
-from . import hid
 from .helper import fit_image_size
+from .hid_input import InputManager, CONTROLS
 from .signal_gen import list_com_ports
 from .switches import SwitchManager
 from .train_control import TrainControl
-from .train_def import Train, CONTROLS
+from .train_def import Train
 
 
 class TKGUI:
 
-    def __init__(self, control: TrainControl, switches: SwitchManager, infos=(), fullscreen=False):
+    def __init__(self, control: TrainControl, switches: SwitchManager, inputs: InputManager, infos=(), fullscreen=False):
         self.control = control
         self.switches = switches
+        self.inputs = inputs
         self.window = tk.Tk()
-        self.last_events: Dict[str, RawInputEvent] = {}
-        self.device_labels: Dict[str, Tuple[tk.Label, tk.Label]] = {}  # (label, ...)
-        self.missing_devices: List[str] = []  # device_path
         self.speed_bars: Dict[Train, ttk.Progressbar] = {}
         self.direction_labels: Dict[Train, tk.Label] = {}
         self.active_vars: Dict[Train, tk.IntVar] = {}
@@ -73,19 +70,6 @@ class TKGUI:
             self.direction_labels[train] = direction_label
         for device_path, train in CONTROLS.items():
             self.shown_trains.append(train)
-            try:
-                hid_device = hid.Device(path=bytes(device_path, 'ascii'))
-                device_name = hid_device.product
-                manufacturer = hid_device.manufacturer
-            except:
-                device_name = "..." + device_path[-20:]
-                manufacturer = ''
-                self.missing_devices.append(device_path)
-            manufacturer_label = tk.Label(controls_pane, text=manufacturer)
-            manufacturer_label.grid(row=row, column=0)
-            device_label = tk.Label(controls_pane, text=device_name)
-            device_label.grid(row=row, column=1)
-            self.device_labels[device_path] = (manufacturer_label, device_label)
             self.active_vars[train] = is_active = tk.IntVar(value=1)
             active = tk.Checkbutton(controls_pane, text=f"{row+1}", variable=is_active)
             active.grid(row=row, column=3)
@@ -157,56 +141,30 @@ class TKGUI:
         self.window.bind("9", lambda e: self.toggle_active(8))
         self.window.bind("0", lambda e: self.toggle_active(9))
         self.window.protocol("WM_DELETE_WINDOW", lambda: control.terminate())
-        # --- Start ---
-        hook_raw_input_for_window(self.window.winfo_id(), self.process_event)
 
     def launch(self):
         self.window.after(10, self.update_ui)
         self.window.mainloop()
 
-    def process_event(self, e: RawInputEvent):
-        if e.device.path is None and e.event_type == 'down' and e.name.startswith('volume'):  # VR-Park volume
-            if e.name == 'volume up':
-                self.control.power_off(None)
-            elif e.name == 'volume down':
-                self.control.power_on(None)
-        elif e.device.path not in CONTROLS:
-            return
-        if e.device.path in self.missing_devices:
-            self.missing_devices.remove(e.device.path)
-            manufacturer_label, device_label = self.device_labels[e.device.path]
-            try:
-                hid_device = hid.Device(path=bytes(e.device.path, 'ascii'))
-                manufacturer_label.config(text=hid_device.manufacturer)
-                device_label.config(text=hid_device.product)
-            except:
-                pass
-        if e.device.path in CONTROLS:
-            self.last_events[e.device.path] = e
-            train = CONTROLS[e.device.path]
-            control_train(self.control, train, e)
-
     def update_ui(self):
         now = time.perf_counter()
         # --- Highlight recent inputs and detect disconnected devices ---
-        for device, event in self.last_events.items():
+        for device, (t, text) in self.inputs.last_events.items():
             label = self.last_action_labels[device]
-            if not event.device.is_connected():
+            if device in self.inputs.disconnected:
                 label.config(text='disconnected', bg=tk_rgb(255, 0, 0))
                 train = CONTROLS[device]
                 self.control.deactivate(train, device)
             else:
-                fac = 1 - math.exp(event.time - now)
-                label.config(text=event_summary(event), bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
+                fac = 1 - math.exp(t - now)
+                label.config(text=text, bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
         # -- Highlight recent global commands ---
-        fac = 1 - math.exp(self.control.last_emergency_break_all - now)
-        self.emergency_break_all_highlight.config(text=f"Emergency all ({self.control.last_emergency_break_all_cause})", bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
-        fac = 1 - math.exp(self.control.last_power_off - now)
-        fac = 1 - math.exp(self.control.last_power_on - now)
-        self.power_on_highlight.config(bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
-        self.power_off_highlight.config(bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
-        fac = 1 - math.exp(self.control.last_short_circuited - now)
-        self.short_circuited_highlight.config(bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
+        fac = 1 - math.exp(self.control.last_emergency_break_all[0] - now)
+        self.emergency_break_all_highlight.config(text=f"Emergency all: {self.control.last_emergency_break_all[1]}", bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
+        fac = 1 - math.exp(self.control.last_power_off[0] - now)
+        self.power_off_highlight.config(text=f"Power off: {self.control.last_power_off[1]}", bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
+        fac = 1 - math.exp(self.control.last_power_on[0] - now)
+        self.power_on_highlight.config(text=f"Power on: {self.control.last_power_on[1]}", bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
         # --- Update train display ---
         for train in self.control.trains:
             self.speed_bars[train].config(value=abs(100 * (self.control.get_speed(train) or 0.) / train.max_speed))
@@ -252,50 +210,3 @@ class TKGUI:
 
 def tk_rgb(r, g, b):
     return "#%02x%02x%02x" % (r, g, b)
-
-
-def event_summary(e: RawInputEvent):
-    if e.event_type in ('up', 'down'):
-        return f"{e.name} {e.event_type}"
-    elif e.event_type == 'move':
-        return f"({e.delta_x}, {e.delta_y})"
-    else:
-        return e.event_type
-
-
-def control_train(control: TrainControl, train: Train, event: RawInputEvent):
-    if isinstance(event.device, Keyboard):
-        if event.event_type == 'down' and event.name == 'up':
-            control.set_acceleration_control(train, 1., driver=event.device.path)
-        elif event.event_type == 'down' and event.name == 'down':
-            control.set_acceleration_control(train, -1., driver=event.device.path)
-        elif event.event_type == 'up':
-            control.set_acceleration_control(train, 0, driver=event.device.path)
-        elif event.event_type == 'down' and event.name == 'left':
-            control.emergency_stop_all(train)
-        elif event.event_type == 'down' and event.name == 'right':
-            control.reverse(train, driver=event.device.path)
-        elif event.event_type == 'down' and event.name == 'delete':
-            control.power_off(train)
-    elif 'VID&0205ac' in event.device.path:  # VR-Park
-        if event.event_type == 'move':
-            acc = 0 if event.delta_y == 0 else train.acceleration if event.delta_y < 0 else -train.deceleration
-            event_period = 0.03
-            target_speed = max(0, abs(control.get_speed(train) or 0.) + (event_period * 2.1) * acc)
-            control.set_target_speed(train, target_speed * (-1 if control.is_in_reverse(train) else 1), driver=event.device.path)
-        elif event.event_type == 'down' and event.name == 'left':
-            control.reverse(train, driver=event.device.path)
-        elif event.event_type == 'down' and event.name == 'thumb1':
-            control.emergency_stop(train)
-    elif isinstance(event.device, Mouse):
-        if event.event_type == 'down' and event.name == 'left':
-            control.set_acceleration_control(train, 1., driver=event.device.path)
-        elif event.event_type == 'down' and event.name == 'right':
-            if control.is_parked(train):
-                control.reverse(train, driver=event.device.path)
-            else:
-                control.set_acceleration_control(train, -1., driver=event.device.path)
-        elif event.event_type == 'down' and event.name == 'middle':
-            control.emergency_stop_all(train)
-        elif event.event_type == 'up':
-            control.set_acceleration_control(train, 0., driver=event.device.path)

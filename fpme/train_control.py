@@ -29,18 +29,16 @@ class TrainControl:
         self.speeds = {train: 0. for train in trains}  # signed speed in kmh, set to EMERGENCY_STOP while train is braking
         self.active_functions = {train: {f: True for f in train.functions if f.default_status} for train in trains}  # which functions are active by their TrainFunction handle
         self.controls = {train: 0. for train in trains}
-        self.last_emergency_break = {train: 0. for train in trains}
         self.inactive_time = {train: 0. for train in trains}
-        self.drivers: Dict[Train, Set[str]] = {train: set() for train in trains}
+        self.causes: Dict[Train, Set[str]] = {train: set() for train in trains}
         self.global_status_by_tag: Dict[str, bool] = {}
         self.sound = None
         self.light = None
         self.paused = False
-        self.last_emergency_break_all = 0.
-        self.last_emergency_break_all_cause = None
-        self.last_power_off = 0.
-        self.last_power_on = 0.
-        self.last_short_circuited = 0.
+        self.last_emergency_break = {train: (0., "") for train in trains}
+        self.last_emergency_break_all = (0., "")
+        self.last_power_off = (0., "")
+        self.last_power_on = (0., "")
         for train in trains:
             self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
         schedule_at_fixed_rate(self.update_trains, period=.03)
@@ -52,17 +50,17 @@ class TrainControl:
         for train in trains or self.trains:
             self.ports_by_train[train].add(serial_port)
 
-    def power_on(self, train: Optional[Train]):
+    def power_on(self, train: Optional[Train], cause: str):
         if self.paused:
             return
         for port in (self.ports_by_train[train] if train else self.generator.get_open_ports()):
             self.generator.start(port)
-        self.last_power_on = time.perf_counter()
+        self.last_power_on = (time.perf_counter(), cause)
 
-    def power_off(self, train: Optional[Train]):
+    def power_off(self, train: Optional[Train], cause: str):
         for port in (self.ports_by_train[train] if train else self.generator.get_open_ports()):
             self.generator.stop(port)
-        self.last_power_off = time.perf_counter()
+        self.last_power_off = (time.perf_counter(), cause)
 
     def is_power_on(self, train: Optional[Train]):
         return any([self.generator.is_sending_on(port) for port in (self.ports_by_train[train] if train else self.generator.get_open_ports())])
@@ -112,15 +110,15 @@ class TrainControl:
         direction = math.copysign(1, self.target_speeds[train])
         return direction < 0
 
-    def reverse(self, train: Train, driver: Optional[str]):
+    def reverse(self, train: Train, cause: str):
         if not self.is_active(train):
-            self.activate(train, driver)
+            self.activate(train, cause)
             return
         self.target_speeds[train] = - math.copysign(0, self.target_speeds[train])
 
-    def set_target_speed(self, train: Train, signed_speed: float, driver: Optional[str]):
+    def set_target_speed(self, train: Train, signed_speed: float, cause: str):
         if not self.is_active(train) and signed_speed != 0:
-            self.activate(train, driver)  # accelerate and simultaneously enable sound, so we don't have to wait
+            self.activate(train, cause)  # accelerate and simultaneously enable sound, so we don't have to wait
         if signed_speed != 0:
             if self.is_emergency_stopping(train):
                 self.speeds[train] = math.copysign(0, self.target_speeds[train])
@@ -130,20 +128,20 @@ class TrainControl:
             max_speed = train.max_speed if self.speed_limit is None else min(train.max_speed, self.speed_limit)
             self.target_speeds[train] = max(-max_speed, min(signed_speed, max_speed))
 
-    def accelerate(self, train: Train, signed_times: int, driver: Optional[str]):
+    def accelerate(self, train: Train, signed_times: int, cause: str):
         in_reverse = self.is_in_reverse(train)
         target_level = int(numpy.argmin([abs(s - abs(self.target_speeds[train])) for s in train.speeds]))  # ≥ 0
         new_target_level = int(numpy.clip(target_level + signed_times, 0, 14))
         new_target_speed = train.speeds[new_target_level]
-        self.set_target_speed(train, -new_target_speed if in_reverse else new_target_speed, driver)
+        self.set_target_speed(train, -new_target_speed if in_reverse else new_target_speed, cause)
 
-    def set_acceleration_control(self, train: Train, signed_factor: float, driver: Optional[str]):
+    def set_acceleration_control(self, train: Train, signed_factor: float, cause: str):
         if not self.is_active(train):
             if signed_factor <= 0:
-                self.activate(train, driver)
+                self.activate(train, cause)
                 return
             else:
-                self.activate(train, driver)  # accelerate and simultaneously enable sound, so we don't have to wait
+                self.activate(train, cause)  # accelerate and simultaneously enable sound, so we don't have to wait
         if signed_factor != 0 and self.controls[train] * signed_factor <= 0:
             speed_idx = self._get_speed_index(train, signed_factor, False, False)
             abs_speed = train.speeds[speed_idx]
@@ -152,10 +150,9 @@ class TrainControl:
             print(f"Acceleration {train.name} = {signed_factor} (speed = {prev_speed} ({speed_idx}) -> {self.speeds[train]}, target={self.target_speeds[train]})")
         self.controls[train] = signed_factor
 
-    def emergency_stop_all(self, train: Optional[Train]):
+    def emergency_stop_all(self, train: Optional[Train], cause: str):
         """Immediately stop all trains on the same track as `train`."""
-        self.last_emergency_break_all = time.perf_counter()
-        self.last_emergency_break_all_cause = train
+        self.last_emergency_break_all = (time.perf_counter(), cause)
         if train is None:
             trains = self.trains
         else:
@@ -164,13 +161,13 @@ class TrainControl:
         for t in trains:
             self.emergency_stop(t)
 
-    def emergency_stop(self, train: Train):
+    def emergency_stop(self, train: Train, cause: str):
         """Immediately stop `train`."""
         self.target_speeds[train] *= 0.
         self.speeds[train] = None
         currently_in_reverse = self.generator.is_in_reverse(train.address)
         functions = {f.id: on for f, on in self.active_functions[train].items()}
-        self.last_emergency_break[train] = time.perf_counter()
+        self.last_emergency_break[train] = (time.perf_counter(), cause)
         if train.stop_by_mm1_reverse:
             self.generator.set(train.address, None, False, functions, get_preferred_protocol(train))
         else:
@@ -205,40 +202,41 @@ class TrainControl:
                 print(f"setting {train}.{tag} = {on}")
                 self.active_functions[train][func] = on
 
-    def activate(self, train: Train, driver: Optional[str]):
+    def activate(self, train: Train, cause: str):
         """ user: If no user specified, will auto-deactivate again soon. """
-        if driver is None:
-            self.drivers[train].add('default')
+        if cause is None:
+            self.causes[train].add('default')
         else:
-            self.drivers[train].add(driver)
-            if 'default' in self.drivers[train]:
-                self.drivers[train].remove('default')
+            self.causes[train].add(cause)
+            if 'default' in self.causes[train]:
+                self.causes[train].remove('default')
         self.inactive_time[train] = 0.
         for tag, on in self.global_status_by_tag.items():
             self.set_train_functions_by_tag(train, tag, on)
 
-    def deactivate(self, train: Train, driver: Optional[str]):
+    def deactivate(self, train: Train, cause: str):
         """ user: If `None`, will remove all users. """
-        if driver is None:
-            self.drivers[train].clear()
+        if cause is None:
+            self.causes[train].clear()
         else:
-            if driver in self.drivers[train]:
-                self.drivers[train].remove(driver)
-            elif self.drivers[train]:
-                warnings.warn(f"Trying to remove unregistered driver from {train}: {driver}.\nRegistered: {self.drivers[train]}")
-        if not self.drivers[train]:
+            if cause in self.causes[train]:
+                self.causes[train].remove(cause)
+            elif self.causes[train]:
+                warnings.warn(f"Trying to remove unregistered cause from {train}: {cause}.\nRegistered: {self.causes[train]}")
+        if not self.causes[train]:
             self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
             self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
-            self.set_target_speed(train, 0, driver)
+            self.set_target_speed(train, 0, cause)
 
     def is_active(self, train: Train):
-        return len(self.drivers[train]) > 0 and self.inactive_time[train] <= 30.
+        return len(self.causes[train]) > 0 and self.inactive_time[train] <= 30.
 
     def update_trains(self, dt):  # repeatedly called from setup()
         if self.paused:
             return
-        if any(self.generator.is_short_circuited(port) for port in self.generator.get_open_ports()):
-            self.last_short_circuited = time.perf_counter()
+        failing = [port for port in self.generator.get_open_ports() if self.generator.is_short_circuited(port)]
+        if failing:
+            self.last_power_off = (time.perf_counter(), f"Power failure on {failing}")
         for train in self.trains:
             self._update_train(train, dt)
 
@@ -260,7 +258,7 @@ class TrainControl:
         speed = self.speeds[train]
         if speed is None:
             speed = 0. * self.target_speeds[train]  # update next time
-            if self.controls[train] > 0 or time.perf_counter() > self.last_emergency_break[train] + .5:
+            if self.controls[train] > 0 or time.perf_counter() > self.last_emergency_break[train][0] + .5:
                 self.speeds[train] = speed
             else:
                 return  # emergency brake, don't update signal
@@ -301,11 +299,3 @@ class TrainControl:
         if round_up_to_first and abs_speed > 0 and speed_idx == 0:
             speed_idx = 1  # this ensures we don't wait for startup sound to finish
         return speed_idx
-
-
-# def handle_event(e: RawInputEvent):
-#     if e.device.name not in CONTROLS:
-#         return
-#     train = CONTROLS[e.device.name]
-#     if isinstance(e.device, Mouse) and e.device.num_buttons == 5:  # wireless mouse
-#         pass
