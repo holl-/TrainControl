@@ -22,11 +22,10 @@ class InputManager:
         self.last_events: Dict[str, Tuple[float, str]] = {}  # (time, text)
 
     def check_for_new_devices(self, vid=0x05AC, pid=0x022C):  # 1452, 556
-        print("Checking for controllers")
         devices = hid.find_all_hid_devices()
         controllers = {dev.device_path: dev for dev in devices if dev.product_name == "@input.inf,%hid_device_system_game%;HID-compliant game controller"}
         # --- Remove disconnected controllers ---
-        for path in self.connected:
+        for path in tuple(self.connected):
             if path not in controllers:
                 del self.connected[path]
                 self.disconnected.add(path)
@@ -35,7 +34,12 @@ class InputManager:
             try:
                 device.open()
                 print(f"Opened new controller: {device.device_path}")
+                if device.device_path not in CONTROLS:
+                    print("This controller has not been assigned to any train! Copy the following Python path")
+                    print("'" + device.device_path.replace("\\", "\\\\") + "'")
                 device.set_raw_data_handler(partial(self.process_event, device_path=device.device_path))
+                if device.device_path in self.disconnected:
+                    self.disconnected.remove(device.device_path)
                 self.last_events[device.device_path], self.connected[device.device_path] = (time.perf_counter(), 'connected'), device
             except OSError as e:
                 print(f"Failed to open bluetooth controller: {e}")
@@ -50,10 +54,10 @@ class InputManager:
 
     def process_event(self, data: List, device_path: str):
         # data is always [4, 127, 127, 127, 128, button_id, 0, hat, 0]
-        if self.control is None:
+        train = CONTROLS.get(device_path)
+        if self.control is None or train is None:
             self.last_events[device_path] = (time.perf_counter(), str(data))
             return
-        train = CONTROLS[device_path]
         _, _, _, _, _, pressed, _, hat, _ = data
         hat_pos = VECTOR[hat]
         self.control.set_acceleration_control(train, hat_pos[1], cause=device_path)
@@ -93,28 +97,16 @@ VECTOR = {
 
 from fpme.train_def import *
 CONTROLS = {
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_fdc80171a4bd&Col01#b&2a97252d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': ICE,
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_588ea725c7a3&Col01#b&13df0efa&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': BEIGE_218,
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_45ee447eb09a&Col01#b&20a8da1a&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': DIESEL,
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_e0eebb488ace&Col01#b&316fd37&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': ROT_218,
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_1e89fff2c7db&Col01#b&20fc5261&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': BUS,
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_3675eb0ae2f9&Col01#b&29342c48&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': S,
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_8fd1f0ddfca6&Col01#b&2671a960&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': E_RB,
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_61f5dd3d7341&Col01#b&2c7afc78&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': E40_RE_BLAU,
-    '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_9b64950eee81&Col01#b&1cbc610d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': E_BW_IC,
+    '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_e0eebb488ace&col04#b&316fd37&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': ROT_218,
+    '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_fdc80171a4bd&col04#b&2a97252d&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': ICE,
+    '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_1e89fff2c7db&col04#b&20fc5261&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': BUS,
+    '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_588ea725c7a3&col04#b&13df0efa&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': BEIGE_218,
+    '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_45ee447eb09a&col04#b&20a8da1a&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': DIESEL,
+    '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_3675eb0ae2f9&col04#b&29342c48&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': S,
+    '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_8fd1f0ddfca6&col04#b&2671a960&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': E_RB,
+    '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_61f5dd3d7341&col04#b&2c7afc78&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': E40_RE_BLAU,
+    '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_9b64950eee81&col04#b&1cbc610d&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': E_BW_IC,
 }
-
-""" VR Park Controllers:
-\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_588ea725c7a3&Col01#b&13df0efa&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_9b64950eee81&Col01#b&1cbc610d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_e0eebb488ace&Col01#b&316fd37&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_1e89fff2c7db&Col01#b&20fc5261&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_45ee447eb09a&Col01#b&20a8da1a&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_61f5dd3d7341&Col01#b&2c7afc78&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_8fd1f0ddfca6&Col01#b&2671a960&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_3675eb0ae2f9&Col01#b&29342c48&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_fdc80171a4bd&Col01#b&2a97252d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-"""
 
 if __name__ == '__main__':
     inputs = InputManager(None)

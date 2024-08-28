@@ -5,7 +5,7 @@ from threading import Thread
 from fpme.hid_input import InputManager
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-from fpme import train_control, tk_gui, dash_app, switches, signal_gen
+from fpme import train_control, tk_gui, switches, signal_gen
 
 
 if __name__ == '__main__':
@@ -23,9 +23,9 @@ if __name__ == '__main__':
         # control.add_rs232_generator('debug2:off')
     control.set_lights_on(True)
     control.set_sound_on(True)
-    control.power_on(None)
+    control.power_on(None, 'launch')
     inputs = InputManager(control)
     inputs.start_detection()
     PORT = 80
     # Thread(target=lambda: dash_app.Server(control).launch(port=PORT)).start()
-    tk_gui.TKGUI(control, switches, inputs, infos=[f"http://{dash_app.LOCAL_IP}{'' if PORT == 80 else f':{PORT}'}/"], fullscreen=False).launch()
+    tk_gui.TKGUI(control, switches, inputs, infos=[], fullscreen=False).launch()

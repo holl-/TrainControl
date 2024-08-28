@@ -116,8 +116,6 @@ class TKGUI:
         self.power_off_highlight.grid(row=0, column=1)
         self.power_on_highlight = tk.Label(event_pane, text="Power on")
         self.power_on_highlight.grid(row=0, column=2)
-        self.short_circuited_highlight = tk.Label(event_pane, text="Power failure")
-        self.short_circuited_highlight.grid(row=0, column=3)
         # --- Hotkeys ---
         tk.Label(text="Press F11 to enter fullscreen mode").pack()
         self.window.bind("<F11>", lambda e: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
@@ -150,21 +148,23 @@ class TKGUI:
         now = time.perf_counter()
         # --- Highlight recent inputs and detect disconnected devices ---
         for device, (t, text) in self.inputs.last_events.items():
-            label = self.last_action_labels[device]
-            if device in self.inputs.disconnected:
-                label.config(text='disconnected', bg=tk_rgb(255, 0, 0))
-                train = CONTROLS[device]
-                self.control.deactivate(train, device)
-            else:
-                fac = 1 - math.exp(t - now)
-                label.config(text=text, bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
+            if device in self.last_action_labels:
+                label = self.last_action_labels[device]
+                if device in self.inputs.disconnected:
+                    label.config(text='disconnected', bg=tk_rgb(255, 0, 0))
+                    train = CONTROLS[device]
+                    self.control.deactivate(train, device)
+                else:
+                    fac = 1 - math.exp(t - now)
+                    label.config(text=text, bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
         # -- Highlight recent global commands ---
+        cause_text = lambda x: CONTROLS[x].name if x in CONTROLS else x
         fac = 1 - math.exp(self.control.last_emergency_break_all[0] - now)
-        self.emergency_break_all_highlight.config(text=f"Emergency all: {self.control.last_emergency_break_all[1]}", bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
+        self.emergency_break_all_highlight.config(text=f"Emergency all: {cause_text(self.control.last_emergency_break_all[1])}", bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
         fac = 1 - math.exp(self.control.last_power_off[0] - now)
-        self.power_off_highlight.config(text=f"Power off: {self.control.last_power_off[1]}", bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
+        self.power_off_highlight.config(text=f"Power off: {cause_text(self.control.last_power_off[1])}", bg=tk_rgb(255, int(255 * fac), int(255 * fac)))
         fac = 1 - math.exp(self.control.last_power_on[0] - now)
-        self.power_on_highlight.config(text=f"Power on: {self.control.last_power_on[1]}", bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
+        self.power_on_highlight.config(text=f"Power on: {cause_text(self.control.last_power_on[1])}", bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
         # --- Update train display ---
         for train in self.control.trains:
             self.speed_bars[train].config(value=abs(100 * (self.control.get_speed(train) or 0.) / train.max_speed))

@@ -159,7 +159,7 @@ class TrainControl:
             ports: Set[str] = self.ports_by_train[train]
             trains = {t for t in self.trains if self.ports_by_train[t] & ports}
         for t in trains:
-            self.emergency_stop(t)
+            self.emergency_stop(t, cause)
 
     def emergency_stop(self, train: Train, cause: str):
         """Immediately stop `train`."""
@@ -283,6 +283,8 @@ class TrainControl:
         self.generator.set(train.address, speed_code, currently_in_reverse, functions, get_preferred_protocol(train))
 
     def _get_speed_index(self, train: Train, abs_acceleration, limit_by_target: bool, round_up_to_first=True):
+        if self.speeds[train] is None:
+            return 0
         abs_speed = abs(self.speeds[train])
         target_idx = int(numpy.argmin([abs(s - abs(self.target_speeds[train])) for s in train.speeds]))  # ≥ 0
         if abs_acceleration > 0:  # ceil level
