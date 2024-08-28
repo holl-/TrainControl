@@ -37,7 +37,7 @@ def open_window():
         for path in inputs.connected:
             t, text = inputs.last_events[path]
             fac = 1 - math.exp(t - time.perf_counter())
-            label = create_copiable_label(table, text=path, copy_str=path.replace('\\', '\\\\'), bg=tk_rgb(0, 0, 0))
+            label = create_copiable_label(table, text=text+" "+path, copy_str=path.replace('\\', '\\\\'), bg=tk_rgb(0, 0, 0))
             label.config(bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
             label.pack()
         for path in inputs.disconnected:

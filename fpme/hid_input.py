@@ -3,41 +3,43 @@ Requires VR-Park controllers to be in mode C.
 
 Cross-platform unlike winusb. Both can read messages from VR-Park controllers in mode C.
 """
-import sys
 import time
+from functools import partial
 from threading import Thread
 from typing import List, Dict, Optional, Set
 
-import hid  # pip install hidapi
+import pywinusb.hid as hid
 
-from .train_control import TrainControl
+from fpme.train_control import TrainControl
 
 
 class InputManager:
 
     def __init__(self, control: Optional[TrainControl]):
         self.control = control
-        self.connected: Dict[str, Optional[hid.device]] = {}
+        self.connected: Dict[str, Optional[hid.HidDevice]] = {}
         self.disconnected: Set[str] = set()
         self.last_events: Dict[str, Tuple[float, str]] = {}  # (time, text)
 
     def check_for_new_devices(self, vid=0x05AC, pid=0x022C):  # 1452, 556
-        devices = hid.enumerate()
-        controllers = {dev['path']: dev for dev in devices if dev['vendor_id'] == vid and dev['product_id'] == pid}
+        print("Checking for controllers")
+        devices = hid.find_all_hid_devices()
+        controllers = {dev.device_path: dev for dev in devices if dev.product_name == "@input.inf,%hid_device_system_game%;HID-compliant game controller"}
         # --- Remove disconnected controllers ---
         for path in self.connected:
             if path not in controllers:
                 del self.connected[path]
                 self.disconnected.add(path)
         # --- Add new controllers ---
-        for info in [dev for path, dev in controllers if path not in self.connected]:
+        for device in [dev for path, dev in controllers.items() if path not in self.connected]:
             try:
-                device_handle = hid.device(info['vendor_id'], info['product_id'], info['serial_number'])
-                Thread(target=self.process_controller_events, args=(device_handle, info)).start()
-                self.connected[info['path']] = device_handle
+                device.open()
+                print(f"Opened new controller: {device.device_path}")
+                device.set_raw_data_handler(partial(self.process_event, device_path=device.device_path))
+                self.last_events[device.device_path], self.connected[device.device_path] = (time.perf_counter(), 'connected'), device
             except OSError as e:
                 print(f"Failed to open bluetooth controller: {e}")
-                self.connected[info['path']] = None
+                self.connected[device.device_path] = None
 
     def start_detection(self, interval_sec=1.):
         def detection_loop():
@@ -45,20 +47,6 @@ class InputManager:
                 self.check_for_new_devices()
                 time.sleep(interval_sec)
         Thread(target=detection_loop).start()
-
-    def process_controller_events(self, device, device_info: dict):
-        """Read and print input events from the specified device."""
-        try:
-            while True:
-                try:
-                    data = device.read(16, timeout=1000)  # adjust size to fit messages
-                    if data:
-                        self.process_event(data, device_info['path'])
-                except Exception as e:
-                    print(f"Error reading from device {device_info['product_string']} {device_info['path']}: {e}", file=sys.stderr)
-                    break
-        finally:
-            device.close()
 
     def process_event(self, data: List, device_path: str):
         if self.control is None:
@@ -90,7 +78,40 @@ class InputManager:
         self.last_events[device_path] = (time.perf_counter(), event_text)
 
 
-from .train_def import *
+"""
+A
+Raw data: [4, 127, 127, 127, 128, 16, 0, 0, 0]
+B
+Raw data: [4, 127, 127, 127, 128, 1, 0, 0, 0]
+C
+Raw data: [4, 127, 127, 127, 128, 8, 0, 0, 0]
+D
+Raw data: [4, 127, 127, 127, 128, 2, 0, 0, 0]
+Trigger 1
+Raw data: [4, 127, 127, 127, 128, 1, 0, 0, 0]
+Trigger 2
+Raw data: [4, 127, 127, 127, 128, 16, 0, 0, 0]
+Up
+[4, 127, 127, 127, 128, 0, 0, 7, 0]
+Down
+[4, 127, 127, 127, 128, 0, 0, 3, 0]
+Right
+[4, 127, 127, 127, 128, 0, 0, 1, 0]
+Left
+[4, 127, 127, 127, 128, 0, 0, 5, 0]
+UP right
+[4, 127, 127, 127, 128, 0, 0, 8, 0]
+Down right
+[4, 127, 127, 127, 128, 0, 0, 2, 0]
+Down left
+[4, 127, 127, 127, 128, 0, 0, 4, 0]
+Up left
+[4, 127, 127, 127, 128, 0, 0, 6, 0]
+Nothing
+[4, 127, 127, 127, 128, 0, 0, 0, 0]
+"""
+
+from fpme.train_def import *
 CONTROLS = {
     '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_fdc80171a4bd&Col01#b&2a97252d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': ICE,
     '\\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_588ea725c7a3&Col01#b&13df0efa&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}': BEIGE_218,
@@ -114,3 +135,7 @@ CONTROLS = {
 \\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_3675eb0ae2f9&Col01#b&29342c48&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
 \\\\?\\HID#{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&0205ac_PID&022c_REV&011b_fdc80171a4bd&Col01#b&2a97252d&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
 """
+
+if __name__ == '__main__':
+    inputs = InputManager(None)
+    inputs.start_detection()
