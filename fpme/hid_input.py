@@ -49,67 +49,47 @@ class InputManager:
         Thread(target=detection_loop).start()
 
     def process_event(self, data: List, device_path: str):
+        # data is always [4, 127, 127, 127, 128, button_id, 0, hat, 0]
         if self.control is None:
             self.last_events[device_path] = (time.perf_counter(), str(data))
             return
         train = CONTROLS[device_path]
-        event_text = None
-        hat_pos_x = data[5]
-        hat_pos_y = data[6]
-        self.control.set_acceleration_control(train, hat_pos_y, cause=device_path)
+        _, _, _, _, _, pressed, _, hat, _ = data
+        hat_pos = VECTOR[hat]
+        self.control.set_acceleration_control(train, hat_pos[1], cause=device_path)
         # acc = 0 if event.delta_y == 0 else train.acceleration if event.delta_y < 0 else -train.deceleration
         # event_period = 0.03
         # target_speed = max(0, abs(control.get_speed(train) or 0.) + (event_period * 2.1) * acc)
         # control.set_target_speed(train, target_speed * (-1 if control.is_in_reverse(train) else 1), cause=event.device.path)
-        if data:  # Button A
-            self.control.reverse(train, cause=device_path)
-            event_text = "A (reverse)"
-        elif data:  # Button B
-            self.control.emergency_stop_all(train, cause=device_path)
-            event_text = "B (stop all)"
-        elif data:  # Button C
+        if pressed == 16:  # Button A / Trigger 2
             self.control.emergency_stop(train, cause=device_path)
-            event_text = "C (stop)"
-        elif data:  # Button D
+            event_text = "A (stop)"
+        elif pressed == 1:  # Button B / Trigger 1
+            self.control.reverse(train, cause=device_path)
+            event_text = "B (reverse)"
+        elif pressed == 8:  # Button C
+            self.control.emergency_stop_all(train, cause=device_path)
+            event_text = "C (stop all)"
+        elif pressed == 2:  # Button D
             self.control.power_on(None, cause=device_path)
             event_text = "D (Power)"
         else:
-            event_text = f"({hat_pos_x}, {hat_pos_y})"
+            event_text = str(hat_pos)
         self.last_events[device_path] = (time.perf_counter(), event_text)
 
 
-"""
-A
-Raw data: [4, 127, 127, 127, 128, 16, 0, 0, 0]
-B
-Raw data: [4, 127, 127, 127, 128, 1, 0, 0, 0]
-C
-Raw data: [4, 127, 127, 127, 128, 8, 0, 0, 0]
-D
-Raw data: [4, 127, 127, 127, 128, 2, 0, 0, 0]
-Trigger 1
-Raw data: [4, 127, 127, 127, 128, 1, 0, 0, 0]
-Trigger 2
-Raw data: [4, 127, 127, 127, 128, 16, 0, 0, 0]
-Up
-[4, 127, 127, 127, 128, 0, 0, 7, 0]
-Down
-[4, 127, 127, 127, 128, 0, 0, 3, 0]
-Right
-[4, 127, 127, 127, 128, 0, 0, 1, 0]
-Left
-[4, 127, 127, 127, 128, 0, 0, 5, 0]
-UP right
-[4, 127, 127, 127, 128, 0, 0, 8, 0]
-Down right
-[4, 127, 127, 127, 128, 0, 0, 2, 0]
-Down left
-[4, 127, 127, 127, 128, 0, 0, 4, 0]
-Up left
-[4, 127, 127, 127, 128, 0, 0, 6, 0]
-Nothing
-[4, 127, 127, 127, 128, 0, 0, 0, 0]
-"""
+VECTOR = {
+    0: (0, 0),
+    7: (0, 1),
+    3: (0, -1),
+    1: (1, 0),
+    5: (-1, 0),
+    8: (1, 1),
+    2: (1, -1),
+    4: (-1, -1),
+    6: (-1, 1),
+}
+
 
 from fpme.train_def import *
 CONTROLS = {
