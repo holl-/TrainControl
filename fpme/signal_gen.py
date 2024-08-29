@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 from multiprocessing import Value, Process, Queue, Manager
 from ctypes import c_char_p
-from typing import List, Dict, Tuple, Callable
+from typing import List, Dict, Tuple, Callable, Sequence
 
 import serial
 from serial import SerialException
@@ -147,6 +147,7 @@ class GeneratorState:
     active: Value
     short_circuited: Value
     error_message: Value
+    contacts: Tuple[Value, ...]  # 3 entries
     last_stopped: float = None  # mutable
 
 
@@ -171,11 +172,14 @@ class SubprocessGenerator:
         self._all_active = [Value('b', False) for _ in range(max_generators)]
         self._all_short_circuited = [Value('b', False) for _ in range(max_generators)]
         self._all_error = [self._manager.Value(c_char_p, "") for _ in range(max_generators)]
+        self._all_contact1 = [Value('b', False) for _ in range(max_generators)]
+        self._all_contact2 = [Value('b', False) for _ in range(max_generators)]
+        self._all_contact3 = [Value('b', False) for _ in range(max_generators)]
 
     def setup(self):
         def async_setup():
             with self._manager:
-                self._process = Process(target=subprocess_main, args=(self._subprocess_run, self._all_active, self._all_short_circuited, self._all_error))
+                self._process = Process(target=subprocess_main, args=(self._subprocess_run, self._all_active, self._all_short_circuited, self._all_error, (self._all_contact1, self._all_contact2, self._all_contact3)))
                 self._process.start()
                 self._process.join()
                 print("Child process terminated.")
@@ -184,7 +188,7 @@ class SubprocessGenerator:
     def open_port(self, serial_port: str, addresses: Tuple[int] = None):
         assert serial_port is not None, f"use the prefix 'debug' for fake ports instead of {serial_port}"
         i = len(self._generator_states)
-        state = GeneratorState(serial_port, addresses, active=self._all_active[i], short_circuited=self._all_short_circuited[i], error_message=self._all_error[i])
+        state = GeneratorState(serial_port, addresses, active=self._all_active[i], short_circuited=self._all_short_circuited[i], error_message=self._all_error[i], contacts=(self._all_contact1[i], self._all_contact2[i], self._all_contact3[i]))
         self._generator_states[serial_port] = state
         self._subprocess_run.put(('open_port', serial_port, addresses))
 
@@ -215,6 +219,10 @@ class SubprocessGenerator:
         state = self._generator_states[serial_port]
         return bool(state.active.value) and not bool(state.short_circuited.value)
 
+    def contact_status(self, serial_port: str) -> Sequence[bool]:
+        state = self._generator_states[serial_port]
+        return [bool(c.value) for c in state.contacts]
+
     def terminate(self):
         self._subprocess_run.put(('terminate',))
         time.sleep(.1)
@@ -243,8 +251,8 @@ class SubprocessGenerator:
 
 # ------------------ Executed in subprocess from here on --------------------
 
-def subprocess_main(queue: Queue, active, short_circuited, error):
-    main = SignalGenProcessInterface(active, short_circuited, error)
+def subprocess_main(queue: Queue, active, short_circuited, error, contacts):
+    main = SignalGenProcessInterface(active, short_circuited, error, *contacts)
     while True:
         cmd = queue.get(block=True)
         print(f"Subprocess received: {cmd}")
@@ -253,10 +261,13 @@ def subprocess_main(queue: Queue, active, short_circuited, error):
 
 class SignalGenProcessInterface:
 
-    def __init__(self, all_active, all_short_circuited, all_error):
+    def __init__(self, all_active, all_short_circuited, all_error, all_contact1, all_contact2, all_contact3):
         self.all_active = list(all_active)
         self.all_short_circuited = list(all_short_circuited)
         self.all_error = list(all_error)
+        self.all_contact1 = list(all_contact1)
+        self.all_contact2 = list(all_contact2)
+        self.all_contact3 = list(all_contact3)
         self.generators: Dict[str, SignalGenerator] = {}
         self.addresses: Dict[str, Tuple[int]] = {}
         self.state: Dict[int, tuple] = {}
@@ -264,7 +275,7 @@ class SignalGenProcessInterface:
 
     def open_port(self, serial_port: str, addresses):
         assert serial_port not in self.generators
-        gen = SignalGenerator(serial_port, self.scheduler, self.all_active.pop(0), self.all_short_circuited.pop(0), self.all_error.pop(0))
+        gen = SignalGenerator(serial_port, self.scheduler, self.all_active.pop(0), self.all_short_circuited.pop(0), self.all_error.pop(0), self.all_contact1.pop(0), self.all_contact2.pop(0), self.all_contact3.pop(0))
         for address, (speed, reverse, functions, protocol) in self.state.items():
             if addresses is None or address in addresses:
                 gen.set(address, speed, reverse, functions, protocol)
@@ -327,7 +338,7 @@ class ThreadScheduler:
 
 class SignalGenerator:
 
-    def __init__(self, serial_port: str, scheduler: ThreadScheduler, active: Value, short_circuited: Value, error_message: Value):
+    def __init__(self, serial_port: str, scheduler: ThreadScheduler, active: Value, short_circuited: Value, error_message: Value, contact1: Value, contact2: Value, contact3: Value):
         self.serial_port = serial_port
         self.protocol = Motorola2()
         self.scheduler = scheduler
@@ -339,6 +350,9 @@ class SignalGenerator:
         self._override_protocols = {}
         self._short_circuited = short_circuited
         self._error_message = error_message
+        self._contact1 = contact1
+        self._contact2 = contact2
+        self._contact3 = contact3
         self.stop_on_short_circuit = True
         self.on_short_circuit = lambda: print("Short circuit detected")  # function without parameters
         self._time_started_sending = None  # wait a bit before detecting short circuits
@@ -407,12 +421,15 @@ class SignalGenerator:
         self._active.value = True
         self._time_started_sending = time.perf_counter()
         while self._active.value:
-            if self._ser is not None:
-                short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
-            else:
+            if self._ser is None:
+                # print(f"Here be signal: {self._packets}")
                 time.sleep(1)
                 short_circuited = self._short_circuited.value
-                # print(f"Here be signal: {self._packets}")
+            else:
+                short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
+                self._contact1.value = self._ser.getCD()
+                self._contact2.value = self._ser.getRI()
+                self._contact3.value = self._ser.getDSR()
             self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
             if self._short_circuited.value:
                 if newly_short_circuited and self.on_short_circuit is not None:
