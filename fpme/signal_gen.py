@@ -386,10 +386,11 @@ class SignalGenerator:
             del self._override_protocols[address]
         elif protocol is not None:
             self._override_protocols[address] = protocol
+        prev_reverse = self._data[address][1] if address in self._data else False
         self._data[address] = (speed, reverse, functions)
         # --- create signal packets ---
         packets = self._packets[address] = (protocol or self.protocol).status_packets(address, speed, reverse, functions)
-        if address in self._data and self._data[address][1] != reverse:
+        if address in self._data and reverse != prev_reverse:
             turn_packet = (protocol or self.protocol).turn_packet(address, functions)
             if turn_packet:
                 self._priority_packets.append(turn_packet)
