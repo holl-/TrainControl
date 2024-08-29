@@ -26,15 +26,14 @@ class TKGUI:
         self.active_vars: Dict[Train, tk.IntVar] = {}
         self.shown_trains: List[Train] = []
 
-        self.window.title("Device Monitoring")
+        self.window.title("Modellbahn Steuerung")
         self.window.geometry('640x600')
         if fullscreen:
             self.window.attributes("-fullscreen", True)
-
         for info in infos:
             tk.Label(text=info).pack()
+        # --- Hardware ---
         tk.Label(text="Hardware", font='Helvetica 14 bold').pack()
-
         status_pane = tk.Frame(self.window)
         status_pane.pack()
         self.status_labels = {}  # port -> Label
@@ -54,7 +53,16 @@ class TKGUI:
             status_label.grid(row=row, column=2)
             self.status_labels[device] = status_label
             row += 1
-
+        # --- Status highlights ---
+        event_pane = tk.Frame(self.window)
+        event_pane.pack()
+        self.emergency_break_all_highlight = tk.Label(event_pane, text="")
+        self.emergency_break_all_highlight.grid(row=0, column=0)
+        self.power_off_highlight = tk.Label(event_pane, text="Power off")
+        self.power_off_highlight.grid(row=0, column=1)
+        self.power_on_highlight = tk.Label(event_pane, text="Power on")
+        self.power_on_highlight.grid(row=0, column=2)
+        # --- Trains ---
         tk.Label(text="Controls", font='Helvetica 14 bold').pack()
         controls_pane = tk.Frame(self.window)
         controls_pane.pack()
@@ -107,15 +115,6 @@ class TKGUI:
         tk.Label(status_pane, text="Limit (+/-)").grid(row=3, column=0)
         self.speed_limit = tk.Label(status_pane, text="...")
         self.speed_limit.grid(row=3, column=1)
-        # --- Status highlights ---
-        event_pane = tk.Frame(self.window)
-        event_pane.pack()
-        self.emergency_break_all_highlight = tk.Label(event_pane, text="")
-        self.emergency_break_all_highlight.grid(row=0, column=0)
-        self.power_off_highlight = tk.Label(event_pane, text="Power off")
-        self.power_off_highlight.grid(row=0, column=1)
-        self.power_on_highlight = tk.Label(event_pane, text="Power on")
-        self.power_on_highlight.grid(row=0, column=2)
         # --- Hotkeys ---
         tk.Label(text="Press F11 to enter fullscreen mode").pack()
         self.window.bind("<F11>", lambda e: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
