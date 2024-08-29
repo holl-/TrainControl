@@ -219,6 +219,9 @@ class SubprocessGenerator:
         state = self._generator_states[serial_port]
         return bool(state.active.value) and not bool(state.short_circuited.value)
 
+    def is_open(self, serial_port: str):
+        return serial_port in self._generator_states
+
     def contact_status(self, serial_port: str) -> Sequence[bool]:
         state = self._generator_states[serial_port]
         return [bool(c.value) for c in state.contacts]

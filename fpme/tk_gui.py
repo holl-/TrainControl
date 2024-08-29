@@ -9,14 +9,14 @@ from PIL import ImageTk
 from .helper import fit_image_size
 from .hid_input import InputManager, CONTROLS
 from .signal_gen import list_com_ports
-from .switches import SwitchManager
+from .switches import StationSwitchesController
 from .train_control import TrainControl
 from .train_def import Train
 
 
 class TKGUI:
 
-    def __init__(self, control: TrainControl, switches: SwitchManager, inputs: InputManager, infos=(), fullscreen=False):
+    def __init__(self, control: TrainControl, switches: StationSwitchesController, inputs: InputManager, infos=(), fullscreen=False):
         self.control = control
         self.switches = switches
         self.inputs = inputs
@@ -46,7 +46,7 @@ class TKGUI:
             status_label.grid(row=row, column=2)
             self.status_labels[port] = status_label
             row += 1
-        for device in switches.get_devices():
+        for device in switches.switches.get_devices():
             tk.Label(status_pane, text=device).grid(row=row, column=0)
             tk.Label(status_pane, text="USB switch control").grid(row=row, column=1)
             status_label = tk.Label(status_pane, text="unknown")
@@ -185,8 +185,10 @@ class TKGUI:
             else:
                 signal_status = "⚠"
             self.status_labels[port].config(text=signal_status)
-        for device in self.switches.get_devices():
-            error = self.switches.get_error(device)
+        for device in self.switches.switches.get_devices():
+            error = self.switches.switches.get_error(device)
+            if self.switches.error:
+                error += " ⛔ " + self.switches.error
             switch_status = f"⛔ {error}" if error else "✅"
             self.status_labels[device].config(text=switch_status)
         self.active_status.config(text="paused" if self.control.paused else "not paused")
