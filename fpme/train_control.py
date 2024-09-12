@@ -69,11 +69,13 @@ class TrainControl:
         self.paused = True
         for port in self.generator.get_open_ports():
             self.generator.stop(port)
+        self.last_power_off = (time.perf_counter(), "master pause")
 
     def resume(self):
         self.paused = False
         for port in self.generator.get_open_ports():
             self.generator.start(port)
+        self.last_power_on = (time.perf_counter(), "master resume")
 
     def terminate(self):
         import time

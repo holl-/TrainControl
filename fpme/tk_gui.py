@@ -9,14 +9,14 @@ from PIL import ImageTk
 from .helper import fit_image_size
 from .hid_input import InputManager, CONTROLS
 from .signal_gen import list_com_ports
-from .switches import SwitchManager
+from .switches import StationSwitchesController
 from .train_control import TrainControl
 from .train_def import Train
 
 
 class TKGUI:
 
-    def __init__(self, control: TrainControl, switches: SwitchManager, inputs: InputManager, infos=(), fullscreen=False):
+    def __init__(self, control: TrainControl, switches: StationSwitchesController, inputs: InputManager, infos=(), fullscreen=False):
         self.control = control
         self.switches = switches
         self.inputs = inputs
@@ -26,15 +26,14 @@ class TKGUI:
         self.active_vars: Dict[Train, tk.IntVar] = {}
         self.shown_trains: List[Train] = []
 
-        self.window.title("Device Monitoring")
+        self.window.title("Modellbahn Steuerung")
         self.window.geometry('640x600')
         if fullscreen:
             self.window.attributes("-fullscreen", True)
-
         for info in infos:
             tk.Label(text=info).pack()
+        # --- Hardware ---
         tk.Label(text="Hardware", font='Helvetica 14 bold').pack()
-
         status_pane = tk.Frame(self.window)
         status_pane.pack()
         self.status_labels = {}  # port -> Label
@@ -47,14 +46,23 @@ class TKGUI:
             status_label.grid(row=row, column=2)
             self.status_labels[port] = status_label
             row += 1
-        for device in switches.get_devices():
+        for device in switches.switches.get_devices():
             tk.Label(status_pane, text=device).grid(row=row, column=0)
             tk.Label(status_pane, text="USB switch control").grid(row=row, column=1)
             status_label = tk.Label(status_pane, text="unknown")
             status_label.grid(row=row, column=2)
             self.status_labels[device] = status_label
             row += 1
-
+        # --- Status highlights ---
+        event_pane = tk.Frame(self.window)
+        event_pane.pack()
+        self.emergency_break_all_highlight = tk.Label(event_pane, text="")
+        self.emergency_break_all_highlight.grid(row=0, column=0)
+        self.power_off_highlight = tk.Label(event_pane, text="Power off")
+        self.power_off_highlight.grid(row=0, column=1)
+        self.power_on_highlight = tk.Label(event_pane, text="Power on")
+        self.power_on_highlight.grid(row=0, column=2)
+        # --- Trains ---
         tk.Label(text="Controls", font='Helvetica 14 bold').pack()
         controls_pane = tk.Frame(self.window)
         controls_pane.pack()
@@ -107,15 +115,6 @@ class TKGUI:
         tk.Label(status_pane, text="Limit (+/-)").grid(row=3, column=0)
         self.speed_limit = tk.Label(status_pane, text="...")
         self.speed_limit.grid(row=3, column=1)
-        # --- Status highlights ---
-        event_pane = tk.Frame(self.window)
-        event_pane.pack()
-        self.emergency_break_all_highlight = tk.Label(event_pane, text="")
-        self.emergency_break_all_highlight.grid(row=0, column=0)
-        self.power_off_highlight = tk.Label(event_pane, text="Power off")
-        self.power_off_highlight.grid(row=0, column=1)
-        self.power_on_highlight = tk.Label(event_pane, text="Power on")
-        self.power_on_highlight.grid(row=0, column=2)
         # --- Hotkeys ---
         tk.Label(text="Press F11 to enter fullscreen mode").pack()
         self.window.bind("<F11>", lambda e: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
@@ -186,8 +185,10 @@ class TKGUI:
             else:
                 signal_status = "⚠"
             self.status_labels[port].config(text=signal_status)
-        for device in self.switches.get_devices():
-            error = self.switches.get_error(device)
+        for device in self.switches.switches.get_devices():
+            error = self.switches.switches.get_error(device)
+            if self.switches.error:
+                error += " ⛔ " + self.switches.error
             switch_status = f"⛔ {error}" if error else "✅"
             self.status_labels[device].config(text=switch_status)
         self.active_status.config(text="paused" if self.control.paused else "not paused")
