@@ -12,8 +12,8 @@ if __name__ == '__main__':
     control = train_control.TrainControl()
     switches = switches.SwitchManager()
     groups = {
-        'COM3': [],
-        'COM6': []
+        'COM3': None,
+        'COM6': None,
     }
     for port, desc, _ in signal_gen.list_com_ports(include_bluetooth=False):
         if 'Prolific' in desc:
