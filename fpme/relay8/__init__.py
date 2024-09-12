@@ -2,10 +2,11 @@
 
 """
 import platform
+import time
 from ctypes import CDLL, sizeof, c_void_p, c_char_p, string_at, c_int
 import os
-from threading import Timer
-from typing import Sequence
+from threading import Timer, Thread
+from typing import Sequence, Optional
 
 if platform.system() == 'Linux':
     assert sizeof(c_void_p) == 8, "Only Linux 64 bit supported"
@@ -94,6 +95,33 @@ def open_device(name: str) -> Relay8:
 
 def destroy():
     NATIVE.usb_relay_exit()
+
+
+class RelayManager:
+
+    def __init__(self):
+        self.device: Optional[Relay8] = None
+        self.status = ""
+        Thread(target=self._connect_continuously).start()
+
+    def _connect_continuously(self, interval=2.):
+        while self.device is None:
+            try:
+                devices = list_devices()
+                if len(devices) == 0:
+                    self.status = "No USB Relay found"
+                elif len(devices) > 1:
+                    self.status = f"Multiple USB relays found: {devices}"
+                else:
+                    self.device = open_device(devices[0])
+                    self.status = ""
+            except Exception as exc:
+                self.status = str(exc)
+            time.sleep(interval)
+
+    @property
+    def is_connected(self):
+        return self.device is not None
 
 
 if __name__ == '__main__':

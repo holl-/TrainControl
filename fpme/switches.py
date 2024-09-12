@@ -3,56 +3,49 @@ import time
 from threading import Thread
 from typing import Dict, Optional, Tuple, Sequence
 
-from .relay8 import list_devices, open_device, Relay8
+from .relay8 import list_devices, open_device, Relay8, RelayManager
 from .signal_gen import SignalGenerator, SubprocessGenerator
+from .train_def import Train
 
-RELAY_CHANNEL_BY_SWITCH_STATE = {
-    1: {False: 1, True: 2},
-    2: {False: 3, True: 4},
-    3: {False: 8, True: 7},
+
+SWITCH_POWER_CHANNEL = 1
+RELAY_STATE_BY_SWITCH_STATE = {
+    (1, True): (2, 'open'),
+    (1, False): (2, 'closed'),
+    (2, True): (3, 'open'),
+    (2, False): (3, 'closed'),
+    (3, True): (4, 'open'),
+    (3, False): (4, 'closed'),
+    (4, True): (4, 'open'),
+    (4, False): (4, 'closed'),
+}
+
+SIGNALS = {  # Gleis -> Channels to switch
+    'in': [5, 8],
+    2: [6],
+    3: [6],
+    4: [7],
 }
 
 
 class SwitchManager:
 
-    def __init__(self):
-        self._error = ""
-        self._device: Optional[Relay8] = None
+    def __init__(self, relays: RelayManager):
+        self.relays = relays
         self._states: Dict[int, bool] = {}  # switch -> curved
-        Thread(target=self._connect_continuously).start()
-
-    def get_devices(self) -> Tuple[str]:
-        return 'Relay8',
-
-    def get_error(self, device):
-        return self._error
-
-    @property
-    def is_connected(self):
-        return self._device is not None
-
-    def _connect_continuously(self):
-        while self._device is None:
-            try:
-                devices = list_devices()
-                if len(devices) == 0:
-                    self._error = "No USB Relay found"
-                elif len(devices) > 1:
-                    self._error = f"Multiple USB relays found: {devices}"
-                else:
-                    self._device = open_device(devices[0])
-                    self._error = ""
-            except Exception as exc:
-                self._error = str(exc)
-            time.sleep(2.)
 
     def _operate_switch(self, switch: int, curved: bool):
         """ Sends a signal to the specified track switch. """
-        self._states[switch] = curved
+        if not self.relays.is_connected:
+            return False
         try:
-            channel = RELAY_CHANNEL_BY_SWITCH_STATE[switch][curved]
-            if not self._device.pulse(channel):
-                print(f"Failed to operate switch {switch} to state curved={curved}")
+            channel, state = RELAY_STATE_BY_SWITCH_STATE[(switch, curved)]
+            if state == 'open':
+                self.relays.device.open_channel(channel)
+            else:
+                self.relays.device.close_channel(channel)
+            self.relays.device.pulse(SWITCH_POWER_CHANNEL)
+            self._states[switch] = curved
         except BaseException as exc:
             print(f"Failed to operate switch {switch}: {exc}")
 
@@ -66,10 +59,11 @@ class SwitchManager:
 class StationSwitchesController:
 
     CONFIGS = {
-        0: {1: False},
-        1: {1: True, 2: True},
-        2: {1: True, 2: False, 3: True},
-        3: {1: True, 2: False, 3: False},
+        1: {1: False},
+        2: {1: True, 2: True},
+        3: {1: True, 2: False, 3: True},
+        4: {1: True, 2: False, 3: False},
+        5: {1: True, 2: False, 3: False},
     }
 
     def __init__(self, switches: SwitchManager, generator: SubprocessGenerator, port: str, max_train_count: int):
@@ -113,3 +107,40 @@ class StationSwitchesController:
         config = StationSwitchesController.CONFIGS[target_track]
         self.last_occupancy = state
         self.switches.set_switches(config, refresh=True)
+
+    def select_track(self, train: Train):
+        state = {}  # empty, parked, entering, exiting
+        can_enter = {
+            1: state[1] == 'empty' and state[2] != 'exiting' and state[3] != 'exiting',
+            2: state[2] == 'empty' and state[3] != 'exiting',
+            3: state[3] == 'empty',
+            4: state[4] == 'empty',
+            5: state[5] == 'empty' and state[4] != 'exiting',
+        }
+        future_collision_cost = .1
+        cost_regional = 1 - train.regional_fac
+        cost_far_distance = train.regional_fac
+        base_cost = {
+            1: cost_regional,
+            2: cost_regional + future_collision_cost,
+            3: cost_regional + 2 * future_collision_cost,
+            4: cost_far_distance + future_collision_cost,
+            5: cost_far_distance,
+        }
+        prevent_exit = {  # when entering platform x, train on platforms y must wait
+            1: [2, 3],
+            2: [3],
+            5: [4],
+        }
+        cost = {}
+        for track in [t for t, c in can_enter.items() if c]:
+            wait_cost = 0
+            for waiting_track in prevent_exit[track]:
+                if state[waiting_track] == 'parked':
+                    controlled = get_train(waiting_track).has_driver()
+                    if controlled:
+                        parking_duration = time.perf_counter() - parking_time[waiting_track]
+                        wait_cost += ...  # ToDo maximum cost at 5-10 seconds after parking
+            # ToDo check that trains currently on the track (not in terminus) can be assigned a proper track (e.g. keep 4/5 open for ICE) Weighted by expected arrival time.
+            cost[track] = base_cost[track] + wait_cost
+        return min(cost, key=cost.get)
