@@ -1,4 +1,5 @@
 import math
+import os
 import time
 import tkinter as tk
 import tkinter.ttk as ttk
@@ -8,17 +9,19 @@ from PIL import ImageTk
 
 from .helper import fit_image_size
 from .hid_input import InputManager, CONTROLS
+from .relay8 import RelayManager
 from .signal_gen import list_com_ports
-from .switches import StationSwitchesController
+from .terminus import Terminus
 from .train_control import TrainControl
 from .train_def import Train
 
 
 class TKGUI:
 
-    def __init__(self, control: TrainControl, switches: StationSwitchesController, inputs: InputManager, infos=(), fullscreen=False):
+    def __init__(self, control: TrainControl, relays: RelayManager, inputs: InputManager, infos=(), fullscreen=False):
         self.control = control
-        self.switches = switches
+        self.relays = relays
+        self.terminus = None
         self.inputs = inputs
         self.window = tk.Tk()
         self.speed_bars: Dict[Train, ttk.Progressbar] = {}
@@ -46,13 +49,13 @@ class TKGUI:
             status_label.grid(row=row, column=2)
             self.status_labels[port] = status_label
             row += 1
-        for device in switches.switches.get_devices():
-            tk.Label(status_pane, text=device).grid(row=row, column=0)
-            tk.Label(status_pane, text="USB switch control").grid(row=row, column=1)
-            status_label = tk.Label(status_pane, text="unknown")
-            status_label.grid(row=row, column=2)
-            self.status_labels[device] = status_label
-            row += 1
+        # --- Terminus ---
+        tk.Label(status_pane, text="Terminus Relay").grid(row=row, column=0)
+        tk.Label(status_pane, text="USB switch control").grid(row=row, column=1)
+        status_label = tk.Label(status_pane, text="unknown")
+        status_label.grid(row=row, column=2)
+        self.status_labels['terminus'] = status_label
+        row += 1
         # --- Status highlights ---
         event_pane = tk.Frame(self.window)
         event_pane.pack()
@@ -126,7 +129,7 @@ class TKGUI:
         self.window.bind("<r>", lambda e: self.control.resume())
         self.window.bind("<+>", lambda e: self.control.set_global_speed_limit(None if self.control.speed_limit is None else (self.control.speed_limit + 20 if self.control.speed_limit < 240 else None)))
         self.window.bind("<minus>", lambda e: self.control.set_global_speed_limit(240 if self.control.speed_limit is None else self.control.speed_limit - 20))
-        self.window.bind("<Escape>", lambda e: control.terminate())
+        self.window.bind("<Escape>", lambda e: self.terminate())
         self.window.bind("1", lambda e: self.toggle_active(0))
         self.window.bind("2", lambda e: self.toggle_active(1))
         self.window.bind("3", lambda e: self.toggle_active(2))
@@ -137,11 +140,14 @@ class TKGUI:
         self.window.bind("8", lambda e: self.toggle_active(7))
         self.window.bind("9", lambda e: self.toggle_active(8))
         self.window.bind("0", lambda e: self.toggle_active(9))
-        self.window.protocol("WM_DELETE_WINDOW", lambda: control.terminate())
+        self.window.protocol("WM_DELETE_WINDOW", lambda: self.terminate())
 
     def launch(self):
         self.window.after(10, self.update_ui)
         self.window.mainloop()
+
+    def set_terminus(self, terminus: Terminus):
+        self.terminus = terminus
 
     def update_ui(self):
         now = time.perf_counter()
@@ -167,10 +173,10 @@ class TKGUI:
         # --- Update train display ---
         for train in self.control.trains:
             self.speed_bars[train].config(value=abs(100 * (self.control[train].speed or 0.) / train.max_speed))
-            self.direction_labels[train].config(text='🡄' if self.control.is_in_reverse(train) else '🡆')
+            self.direction_labels[train].config(text='🡄' if self.control[train].is_in_reverse else '🡆')
         for train, var in self.active_vars.items():
-            if bool(var.get()) != self.control.is_active(train):
-                var.set(int(self.control.is_active(train)))
+            if bool(var.get()) != self.control[train].is_active:
+                var.set(int(self.control[train].is_active))
         # --- Update status displays ---
         for port in self.control.generator.get_open_ports():
             error = self.control.generator.get_error(port)
@@ -185,12 +191,10 @@ class TKGUI:
             else:
                 signal_status = "⚠"
             self.status_labels[port].config(text=signal_status)
-        for device in self.switches.switches.get_devices():
-            error = self.switches.switches.get_error(device)
-            if self.switches.error:
-                error += " ⛔ " + self.switches.error
-            switch_status = f"⛔ {error}" if error else "✅"
-            self.status_labels[device].config(text=switch_status)
+        # --- Relay ---
+        terminus_status = "✅" if self.relays.is_connected else " ⛔ " + self.relays.status
+        self.status_labels['terminus'].config(text=terminus_status)
+        # --- State ---
         self.active_status.config(text="paused" if self.control.paused else "not paused")
         self.light_status.config(text="on" if self.control.light else ("?" if self.control.light is None else "off"))
         self.sound_status.config(text="on" if self.control.sound else ("?" if self.control.sound is None else "off"))
@@ -202,11 +206,16 @@ class TKGUI:
         if train_id >= len(self.shown_trains):
             return
         train = self.shown_trains[train_id]
-        is_active = self.control.is_active(train)
+        is_active = self.control[train].is_active
         if is_active:
-            self.control.deactivate(train, None)
+            self.control.deactivate(train, "UI")
         else:
-            self.control.activate(train, None)
+            self.control.activate(train, "UI")
+
+    def terminate(self):
+        if self.terminus:
+            self.terminus.save_state()
+        os._exit(0)
 
 
 def tk_rgb(r, g, b):

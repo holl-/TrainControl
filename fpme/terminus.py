@@ -72,6 +72,7 @@ class Terminus:
         self.entering: Optional[ParkedTrain] = None
         self.load_state()
         schedule_at_fixed_rate(self.save_state, 5.)
+        schedule_at_fixed_rate(self.check_exited, 1.)
 
     def save_state(self):
         data = {
@@ -164,6 +165,13 @@ class Terminus:
             self.control.force_stop(train, "train did not enter terminus")
         Thread(target=process_entry, args=(entering,)).start()
 
+    def check_exited(self):
+        for t in tuple(self.trains):
+            d = self.control[t.train].signed_distance
+            exited = (d - t.dist_trip) != t.entered_forward
+            if exited:
+                self.trains.remove(t)
+
     def set_switches_for(self, platform: int):
         for channel, req_open in SWITCH_STATE[platform].items():
             self.relay.set_channel_open(channel, req_open)
@@ -224,17 +232,18 @@ class Terminus:
             4: cost_far_distance + future_collision_cost,
             5: cost_far_distance,
         }
-        cost = {}
-        for track in [t for t, c in can_enter.items() if c]:
-            wait_cost = 0
-            for waiting_track in PREVENT_EXIT[track]:
-                if state[waiting_track] == 'parked':
-                    controlled = get_train(waiting_track).has_driver()
-                    if controlled:
-                        parking_duration = time.perf_counter() - parking_time[waiting_track]
-                        wait_cost += ...  # ToDo maximum cost at 5-10 seconds after parking
-            # ToDo check that trains currently on the track (not in terminus) can be assigned a proper track (e.g. keep 4/5 open for ICE) Weighted by expected arrival time.
-            cost[track] = base_cost[track] + wait_cost
+        cost = base_cost
+        # cost = {}
+        # for track in [t for t, c in can_enter.items() if c]:
+        #     wait_cost = 0
+        #     for waiting_track in PREVENT_EXIT[track]:
+        #         if state[waiting_track] == 'parked':
+        #             controlled = get_train(waiting_track).has_driver()
+        #             if controlled:
+        #                 parking_duration = time.perf_counter() - parking_time[waiting_track]
+        #                 wait_cost += ...  # ToDo maximum cost at 5-10 seconds after parking
+        #     # ToDo check that trains currently on the track (not in terminus) can be assigned a proper track (e.g. keep 4/5 open for ICE) Weighted by expected arrival time.
+        #     cost[track] = base_cost[track] + wait_cost
         return min(cost, key=cost.get)
 
     def play_announcement(self, train: Train, platform: int):
