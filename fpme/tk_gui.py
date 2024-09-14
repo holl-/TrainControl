@@ -166,7 +166,7 @@ class TKGUI:
         self.power_on_highlight.config(text=f"Power on: {cause_text(self.control.last_power_on[1])}", bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
         # --- Update train display ---
         for train in self.control.trains:
-            self.speed_bars[train].config(value=abs(100 * (self.control.get_speed(train) or 0.) / train.max_speed))
+            self.speed_bars[train].config(value=abs(100 * (self.control[train].speed or 0.) / train.max_speed))
             self.direction_labels[train].config(text='🡄' if self.control.is_in_reverse(train) else '🡆')
         for train, var in self.active_vars.items():
             if bool(var.get()) != self.control.is_active(train):
