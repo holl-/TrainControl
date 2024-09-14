@@ -3,10 +3,11 @@
 """
 import platform
 import time
+import warnings
 from ctypes import CDLL, sizeof, c_void_p, c_char_p, string_at, c_int
 import os
 from threading import Timer, Thread
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Callable
 
 if platform.system() == 'Linux':
     assert sizeof(c_void_p) == 8, "Only Linux 64 bit supported"
@@ -49,15 +50,17 @@ class Relay8:
             NATIVE.usb_relay_device_close(self.handle)
 
     def open_channel(self, channel):
-        assert NATIVE.usb_relay_device_open_one_relay_channel(self.handle, channel) == 0
+        if NATIVE.usb_relay_device_open_one_relay_channel(self.handle, channel) != 0:
+            warnings.warn(f"Relay8 {self.name}: open_channel({channel}) returned an error")
 
     def close_channel(self, channel):
-        assert NATIVE.usb_relay_device_close_one_relay_channel(self.handle, channel) == 0
+        if NATIVE.usb_relay_device_close_one_relay_channel(self.handle, channel) != 0:
+            warnings.warn(f"Relay8 {self.name}: close_channel({channel}) returned an error")
 
     def close_all_channels(self):
         NATIVE.usb_relay_device_close_all_relay_channel(self.handle)
 
-    def pulse(self, channel: int, duration=0.2):
+    def pulse(self, channel: int, duration=0.1):
         """
         Args:
             channel: Between 1 and 8
@@ -102,26 +105,40 @@ class RelayManager:
     def __init__(self):
         self.device: Optional[Relay8] = None
         self.status = ""
-        Thread(target=self._connect_continuously).start()
+        self._on_connected = None
+        if not self._connect_now():
+            Thread(target=self._connect_continuously).start()
+
+    def _connect_now(self) -> bool:
+        try:
+            devices = list_devices()
+            if len(devices) == 0:
+                self.status = "No USB Relay found"
+            elif len(devices) > 1:
+                self.status = f"Multiple USB relays found: {devices}"
+            else:
+                self.device = open_device(devices[0])
+                self.status = ""
+                return True
+        except Exception as exc:
+            self.status = str(exc)
+        return False
 
     def _connect_continuously(self, interval=2.):
         while self.device is None:
-            try:
-                devices = list_devices()
-                if len(devices) == 0:
-                    self.status = "No USB Relay found"
-                elif len(devices) > 1:
-                    self.status = f"Multiple USB relays found: {devices}"
-                else:
-                    self.device = open_device(devices[0])
-                    self.status = ""
-            except Exception as exc:
-                self.status = str(exc)
             time.sleep(interval)
+            if self._connect_now():
+                self._on_connected(self.device)
 
     @property
     def is_connected(self):
         return self.device is not None
+
+    def on_connected(self, function: Callable[[Relay8], None]):
+        if self.device:
+            function(self.device)
+        else:
+            self._on_connected = function
 
 
 if __name__ == '__main__':

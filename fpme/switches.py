@@ -3,21 +3,17 @@ import time
 from threading import Thread
 from typing import Dict, Optional, Tuple, Sequence
 
-from .relay8 import list_devices, open_device, Relay8, RelayManager
-from .signal_gen import SignalGenerator, SubprocessGenerator
-from .train_def import Train
+from fpme.relay8 import Relay8, RelayManager
+from fpme.signal_gen import SignalGenerator, SubprocessGenerator
+from fpme.train_def import Train
 
 
-SWITCH_POWER_CHANNEL = 1
-RELAY_STATE_BY_SWITCH_STATE = {
-    (1, True): (2, 'open'),
-    (1, False): (2, 'closed'),
-    (2, True): (3, 'open'),
-    (2, False): (3, 'closed'),
-    (3, True): (4, 'open'),
-    (3, False): (4, 'closed'),
-    (4, True): (4, 'open'),
-    (4, False): (4, 'closed'),
+SWITCH_STATE = {
+    1: {6: False, 8: True},  # True -> open_channel, False -> close_channel
+    2: {6: False, 8: False},  # ToDo switch 4 not properly connected
+    3: {6: True, 7: True},
+    4: {6: True, 7: False, 8: False},
+    5: {6: True, 7: False, 8: True},
 }
 
 SIGNALS = {  # Gleis -> Channels to switch
@@ -28,51 +24,24 @@ SIGNALS = {  # Gleis -> Channels to switch
 }
 
 
-class SwitchManager:
+class Terminus:
 
-    def __init__(self, relays: RelayManager):
-        self.relays = relays
-        self._states: Dict[int, bool] = {}  # switch -> curved
-
-    def _operate_switch(self, switch: int, curved: bool):
-        """ Sends a signal to the specified track switch. """
-        if not self.relays.is_connected:
-            return False
-        try:
-            channel, state = RELAY_STATE_BY_SWITCH_STATE[(switch, curved)]
-            if state == 'open':
-                self.relays.device.open_channel(channel)
-            else:
-                self.relays.device.close_channel(channel)
-            self.relays.device.pulse(SWITCH_POWER_CHANNEL)
-            self._states[switch] = curved
-        except BaseException as exc:
-            print(f"Failed to operate switch {switch}: {exc}")
-
-    def set_switches(self, state: Dict[int, bool], refresh=False):
-        for switch, curved in state.items():
-            needs_change = refresh or (self._states[switch] != curved if switch in self._states else True)
-            if needs_change:
-                self._operate_switch(switch, curved)
-
-
-class StationSwitchesController:
-
-    CONFIGS = {
-        1: {1: False},
-        2: {1: True, 2: True},
-        3: {1: True, 2: False, 3: True},
-        4: {1: True, 2: False, 3: False},
-        5: {1: True, 2: False, 3: False},
-    }
-
-    def __init__(self, switches: SwitchManager, generator: SubprocessGenerator, port: str, max_train_count: int):
-        self.switches = switches
+    def __init__(self, relay: Relay8, generator: SubprocessGenerator, port: str):
+        self.relay = relay
         self.generator = generator
         self.port = port
-        self.max_train_count = max_train_count
+        # for each track: which train, start position, length
         self.last_occupancy: tuple = (None, None, None)
         self.start_operation()
+
+    def set_switches_for(self, platform: int):
+        for channel, req_open in SWITCH_STATE[platform].items():
+            if req_open:
+                self.relay.open_channel(channel)
+            else:
+                self.relay.close_channel(channel)
+        time.sleep(.01)
+        self.relay.pulse(5)
 
     @property
     def error(self):
@@ -144,3 +113,13 @@ class StationSwitchesController:
             # ToDo check that trains currently on the track (not in terminus) can be assigned a proper track (e.g. keep 4/5 open for ICE) Weighted by expected arrival time.
             cost[track] = base_cost[track] + wait_cost
         return min(cost, key=cost.get)
+
+
+if __name__ == '__main__':
+    relays = RelayManager()
+    def main(relay: Relay8):
+        relay.open_channel(1)
+        relay.open_channel(2)
+        relay.open_channel(3)
+    relays.on_connected(main)
+    time.sleep(1)
