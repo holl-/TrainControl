@@ -1,7 +1,7 @@
 import math
 import time
 import warnings
-from typing import Sequence, Optional, Dict, Set
+from typing import Sequence, Optional, Dict, Set, Any
 
 import numpy
 
@@ -181,6 +181,12 @@ class TrainControl:
             if limit is not None and self.target_speeds[train] > limit:
                 self.target_speeds[train] = limit
 
+    def add_speed_limit(self, train: Train, owner: Any, limit: float):
+        raise NotImplementedError
+
+    def slow_stop(self, train: Train, owner: Any):
+        raise NotImplementedError
+
     def set_lights_on(self, on: bool):
         if self.light == on:
             return
@@ -303,3 +309,6 @@ class TrainControl:
         if round_up_to_first and abs_speed > 0 and speed_idx == 0:
             speed_idx = 1  # this ensures we don't wait for startup sound to finish
         return speed_idx
+
+    def get_signed_distance(self, train: Train):
+        raise NotImplementedError
