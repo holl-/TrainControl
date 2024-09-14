@@ -86,7 +86,7 @@ DAMPF = Train('Dampf', "🚂", 78, acceleration=30., img_path="Dampf.png", regio
 BEIGE_218 = Train('218 B', "🛲", 73, acceleration=25., img_path="Thumb_BR218_Beige.png", regional_fac=.5,
                   speeds=[0, None, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
                   functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
-ROT_218 = Train('218 R', "🛲", 74, acceleration=40., img_path="Thumb_BR218_Beige.png", regional_fac=.5,
+ROT_218 = Train('218 R', "🛲", 74, acceleration=40., img_path="Thumb_BR218_Rot.png", regional_fac=.5,
                 speeds=[0, 15, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
                 functions=(LIGHT, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,), warmup_time=19.5, reverse_time=4.), TrainFunction("Hupe 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Hupe 1", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Lüfter", 4, False, (TAG_SPECIAL_SOUND,))))
 DIESEL = Train('Diesel', "🛲", 72, acceleration=25., img_path="Diesel.png", regional_fac=.5,
