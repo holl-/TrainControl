@@ -17,10 +17,10 @@ SWITCH_STATE = {
 }
 
 SIGNALS = {  # Gleis -> Channels to switch
-    'in': [5, 8],
-    2: [6],
-    3: [6],
-    4: [7],
+    'in': [3, 4],
+    2: [1],
+    3: [1],
+    4: [2],
 }
 
 
