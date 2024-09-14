@@ -60,11 +60,7 @@ class InputManager:
             return
         _, _, _, _, _, pressed, _, hat, _ = data
         hat_pos = VECTOR[hat]
-        self.control.set_acceleration_control(train, hat_pos[1], cause=device_path)
-        # acc = 0 if event.delta_y == 0 else train.acceleration if event.delta_y < 0 else -train.deceleration
-        # event_period = 0.03
-        # target_speed = max(0, abs(control.get_speed(train) or 0.) + (event_period * 2.1) * acc)
-        # control.set_target_speed(train, target_speed * (-1 if control.is_in_reverse(train) else 1), cause=event.device.path)
+        self.control.set_acceleration_control(train, 'VR-Park', hat_pos[1], cause=device_path)
         if pressed == 16:  # Button A / Trigger 2
             self.control.emergency_stop(train, cause=device_path)
             event_text = "A (stop)"
