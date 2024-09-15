@@ -31,6 +31,8 @@ PREVENT_EXIT = {  # when entering platform x, train on platforms y must wait
 ENTRY_SIGNAL = 3
 ENTRY_POWER = 4
 
+SPEED_LIMIT = 80.
+
 
 @dataclass
 class ParkedTrain:
@@ -83,6 +85,8 @@ class Terminus:
         self._request_lock = Lock()
         relay.close_all_channels()
         self.load_state()
+        for t in self.trains:
+            control.set_speed_limit(t.train, 'terminus', SPEED_LIMIT)
         schedule_at_fixed_rate(self.save_state, 5.)
         schedule_at_fixed_rate(self.check_exited, 1.)
 
@@ -154,7 +158,7 @@ class Terminus:
             self.entering = entering = ParkedTrain(train, platform)
             entering.dist_request = self.control[train].signed_distance
             self.trains.append(entering)
-        self.control.set_speed_limit(train, 'terminus', 80)
+        self.control.set_speed_limit(train, 'terminus', SPEED_LIMIT)
         self.prevent_exit(platform)
         self.set_switches_for(platform)
         self.relay.open_channel(ENTRY_SIGNAL)
