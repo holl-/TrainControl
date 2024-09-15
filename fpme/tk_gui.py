@@ -223,7 +223,7 @@ class TKGUI:
                 platform, pos = self.terminus.get_train_position(train)
                 if platform:
                     y = {1: 15, 2: 65, 3: 115, 4: 170, 5: 220}[platform]
-                    x = pos * 1.2 + 50 if pos is not None else 10
+                    x = pos * 1.8 + 50 if pos is not None else 10
                 else:
                     x, y = -100, -100
                 self.canvas.coords(img_id, x, y)

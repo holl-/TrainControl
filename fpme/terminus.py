@@ -21,12 +21,6 @@ SWITCH_STATE = {
     5: {6: True, 7: False, 8: True},
 }
 
-SIGNAL_CHANNELS = {  # Gleis -> Channels to switch
-    2: [1],
-    3: [1],
-    4: [2],
-}
-
 PREVENT_EXIT = {  # when entering platform x, train on platforms y must wait
     1: [2, 3],
     2: [3],
@@ -55,7 +49,7 @@ class ParkedTrain:
 
     @property
     def train_length(self):
-        return abs(self.dist_clear - self.dist_trip) + 0.18  # detector track length
+        return abs(self.dist_clear - self.dist_trip) - 0.18  # detector track length
 
     @property
     def entered_forward(self):
@@ -221,19 +215,19 @@ class Terminus:
 
     def prevent_exit(self, entering_platform):
         if entering_platform == 1:
-            self.relay.close_channel(1)
+            self.relay.close_channel(1)  # Platforms 2, 3
         elif entering_platform == 2:
-            self.relay.close_channel(1)
+            self.relay.close_channel(1)  # Platforms 2, 3
         elif entering_platform == 5:
-            self.relay.close_channel(2)
+            self.relay.close_channel(2)  # Platform 4
         trains = [t for t in self.trains if t.platform in PREVENT_EXIT.get(entering_platform, [])]
         for t in trains:
             ...
             # self.control.block(t.train, self)
 
     def free_exit(self):
-        self.relay.open_channel(1)
-        self.relay.open_channel(2)
+        self.relay.open_channel(1)  # Platforms 2, 3
+        self.relay.open_channel(2)  # Platform 4
         for t in self.trains:
             ...
             # self.control.unblock(t.train, self)
