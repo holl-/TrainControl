@@ -2,6 +2,7 @@
 
 """
 import platform
+import threading
 import time
 import warnings
 from ctypes import CDLL, sizeof, c_void_p, c_char_p, string_at, c_int
@@ -37,6 +38,7 @@ for fun_name, result_type, arg_types in [
 
 _INIT = False
 # print(f"USB Relay library version: {DLL.usb_relay_device_lib_version()}")
+_LOCK = threading.Lock()
 
 
 class Relay8:
@@ -47,21 +49,24 @@ class Relay8:
 
     def close(self):
         if self.handle:
-            NATIVE.usb_relay_device_close(self.handle)
+            with _LOCK:
+                NATIVE.usb_relay_device_close(self.handle)
 
     def open_channel(self, channel, tries=3):
-        if NATIVE.usb_relay_device_open_one_relay_channel(self.handle, channel) != 0:
-            warnings.warn(f"Relay8 {self.name}: open_channel({channel}) returned an error. tries={tries}")
-            if tries > 1:
-                time.sleep(0.001)
-                Thread(target=self.open_channel, args=(channel, tries-1)).start()
+        with _LOCK:
+            if NATIVE.usb_relay_device_open_one_relay_channel(self.handle, channel) != 0:
+                warnings.warn(f"Relay8 {self.name}: open_channel({channel}) returned an error. tries={tries}")
+                if tries > 1:
+                    time.sleep(0.001)
+                    Thread(target=self.open_channel, args=(channel, tries-1)).start()
 
     def close_channel(self, channel, tries=3):
-        if NATIVE.usb_relay_device_close_one_relay_channel(self.handle, channel) != 0:
-            warnings.warn(f"Relay8 {self.name}: close_channel({channel}) returned an error")
-            if tries > 1:
-                time.sleep(0.001)
-                Thread(target=self.close_channel, args=(channel, tries-1)).start()
+        with _LOCK:
+            if NATIVE.usb_relay_device_close_one_relay_channel(self.handle, channel) != 0:
+                warnings.warn(f"Relay8 {self.name}: close_channel({channel}) returned an error")
+                if tries > 1:
+                    time.sleep(0.001)
+                    Thread(target=self.close_channel, args=(channel, tries-1)).start()
 
     def set_channel_open(self, channel: int, value: bool):
         if value:
@@ -70,7 +75,8 @@ class Relay8:
             self.close_channel(channel)
 
     def close_all_channels(self):
-        NATIVE.usb_relay_device_close_all_relay_channel(self.handle)
+        with _LOCK:
+            NATIVE.usb_relay_device_close_all_relay_channel(self.handle)
 
     def pulse(self, channel: int, duration=0.1):
         """
@@ -109,7 +115,8 @@ def open_device(name: str) -> Relay8:
 
 
 def destroy():
-    NATIVE.usb_relay_exit()
+    with _LOCK:
+        NATIVE.usb_relay_exit()
 
 
 class RelayManager:
