@@ -7,6 +7,7 @@ from typing import Optional, List
 
 from dataclasses import dataclass
 
+from fpme.audio import play_audio
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl
@@ -284,7 +285,7 @@ class Terminus:
         return min(cost, key=cost.get)
 
     def play_announcement(self, train: Train, platform: int):
-        pass
+        play_audio("sound/ansagen/Gong.mp3", None)
 
 
 if __name__ == '__main__':

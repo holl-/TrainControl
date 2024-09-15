@@ -11,5 +11,5 @@ setup(
     author_email='philipp@mholl.de',
     url='https://github.com/holl-/TrainControl',
     include_package_data=False,
-    install_requires=['dash', 'dash-bootstrap-components', 'dash-daq', 'numpy', 'pyserial', 'win-raw-in', 'pillow', 'waitress'],
+    install_requires=['numpy', 'pyserial', 'win-raw-in', "pillow>=10.3.0", 'sounddevice', 'pydub', 'numpy'],
 )
