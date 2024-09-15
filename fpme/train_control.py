@@ -190,7 +190,7 @@ class TrainControl:
         for train in self.trains:
             self[train].set_speed_limit('global', limit)
 
-    def add_speed_limit(self, train: Train, cause: str, limit: Optional[float]):
+    def set_speed_limit(self, train: Train, cause: str, limit: Optional[float]):
         self[train].set_speed_limit(cause, limit)
 
     def force_stop(self, train: Train, cause: str):

@@ -153,7 +153,7 @@ class Terminus:
             self.entering = entering = ParkedTrain(train, platform)
             entering.dist_request = self.control[train].signed_distance
             self.trains.append(entering)
-        self.control.add_speed_limit(train, "terminus", 80)
+        self.control.set_speed_limit(train, 'terminus', 80)
         self.prevent_exit(platform)
         self.set_switches_for(platform)
         self.relay.open_channel(ENTRY_SIGNAL)
@@ -206,6 +206,7 @@ class Terminus:
                 exited = pos < 0
                 if exited:
                     self.trains.remove(t)
+                    self.control.set_speed_limit(t.train, 'terminus', None)
 
     def set_switches_for(self, platform: int):
         for channel, req_open in SWITCH_STATE[platform].items():
