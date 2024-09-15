@@ -31,7 +31,7 @@ class TrainState:
     last_emergency_break: Tuple[float, str] = (0., "")
     speed_limits: Dict[str, float] = field(default_factory=dict)
     force_stopping: Optional[str] = None
-    signed_distance: float = 0.
+    signed_distance: float = 0.  # distance travelled in cm
 
     @property
     def is_emergency_stopping(self):
@@ -262,7 +262,8 @@ class TrainControl:
             state.speed = 0
             return
         # --- Signed distance ---
-        state.signed_distance += state.speed * dt
+        speed_cm_s = state.speed * 27.78 / 87
+        state.signed_distance += speed_cm_s * dt
         # --- Deactivate after 30 seconds of inactivity ---
         if state.acc_input == 0 and state.speed == 0 and state.is_active:
             state.inactive_time += dt
