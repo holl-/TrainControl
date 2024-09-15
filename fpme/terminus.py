@@ -60,6 +60,12 @@ class ParkedTrain:
         else:
             return (self.dist_clear - self.dist_trip) > 0
 
+    def get_position(self, current_signed_distance):
+        if not self.has_tripped:
+            return None
+        delta = current_signed_distance - self.dist_trip
+        return delta if self.entered_forward else -delta
+
 
 class Terminus:
 
@@ -102,6 +108,12 @@ class Terminus:
             dist_clear = data['dist_clear']
             delta = self.control[train].signed_distance - data['dist']
             self.trains.append(ParkedTrain(train, platform, dist_request + delta, dist_trip + delta, dist_clear + delta))
+
+    def get_train_position(self, train: Train):
+        for t in self.trains:
+            if t.train == train:
+                return t.platform, t.get_position(self.control[train].signed_distance)
+        return None, None
 
     def request_entry(self, train: Train):
         if self.entering:

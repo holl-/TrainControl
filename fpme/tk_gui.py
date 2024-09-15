@@ -5,7 +5,7 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from typing import Dict, List
 
-from PIL import ImageTk
+from PIL import ImageTk, Image
 
 from .helper import fit_image_size
 from .hid_input import InputManager, CONTROLS
@@ -30,41 +30,45 @@ class TKGUI:
         self.shown_trains: List[Train] = []
 
         self.window.title("Modellbahn Steuerung")
-        self.window.geometry('640x600')
+        self.window.geometry('800x840')
+        tk.Label(text="Press F11 to enter fullscreen mode").pack()
         if fullscreen:
             self.window.attributes("-fullscreen", True)
         for info in infos:
             tk.Label(text=info).pack()
-        # --- Hardware ---
-        tk.Label(text="Hardware", font='Helvetica 14 bold').pack()
         status_pane = tk.Frame(self.window)
         status_pane.pack()
+        # --- Hardware ---
+        tk.Label(status_pane, text="Hardware", font='Helvetica 14 bold').grid(row=0, column=0)
+        hardware_pane = tk.Frame(status_pane)
+        hardware_pane.grid(row=1, column=0)
         self.status_labels = {}  # port -> Label
         row = 0
         port_descriptions = {port: desc for port, desc, hwid in list_com_ports(include_bluetooth=True)}
         for port in control.generator.get_open_ports():
-            tk.Label(status_pane, text=port).grid(row=row, column=0)
-            tk.Label(status_pane, text=port_descriptions.get(port, 'Fake port')).grid(row=row, column=1)
-            status_label = tk.Label(status_pane, text="unknown")
+            tk.Label(hardware_pane, text=port).grid(row=row, column=0)
+            tk.Label(hardware_pane, text=port_descriptions.get(port, 'Fake port')).grid(row=row, column=1)
+            status_label = tk.Label(hardware_pane, text="unknown")
             status_label.grid(row=row, column=2)
             self.status_labels[port] = status_label
             row += 1
-        # --- Terminus ---
-        tk.Label(status_pane, text="Terminus Relay").grid(row=row, column=0)
-        tk.Label(status_pane, text="USB switch control").grid(row=row, column=1)
-        status_label = tk.Label(status_pane, text="unknown")
+        # --- Relay ---
+        tk.Label(hardware_pane, text="Terminus Relay").grid(row=row, column=0)
+        tk.Label(hardware_pane, text="USB switch control").grid(row=row, column=1)
+        status_label = tk.Label(hardware_pane, text="unknown")
         status_label.grid(row=row, column=2)
         self.status_labels['terminus'] = status_label
         row += 1
-        # --- Status highlights ---
-        event_pane = tk.Frame(self.window)
-        event_pane.pack()
+        # --- Event highlights ---
+        tk.Label(status_pane, text="Events", font='Helvetica 14 bold').grid(row=0, column=1)
+        event_pane = tk.Frame(status_pane)
+        event_pane.grid(row=1, column=1)
         self.emergency_break_all_highlight = tk.Label(event_pane, text="")
-        self.emergency_break_all_highlight.grid(row=0, column=0)
+        self.emergency_break_all_highlight.pack()
         self.power_off_highlight = tk.Label(event_pane, text="Power off")
-        self.power_off_highlight.grid(row=0, column=1)
+        self.power_off_highlight.pack()
         self.power_on_highlight = tk.Label(event_pane, text="Power on")
-        self.power_on_highlight.grid(row=0, column=2)
+        self.power_on_highlight.pack()
         # --- Trains ---
         tk.Label(text="Controls", font='Helvetica 14 bold').pack()
         controls_pane = tk.Frame(self.window)
@@ -103,23 +107,37 @@ class TKGUI:
                 row += 1
                 self.shown_trains.append(train)
         # --- Status ---
+        tk.Label(status_pane, text="State", font='Helvetica 14 bold').grid(row=0, column=2)
         tk.Label(text="Status (P/R)", font='Helvetica 14 bold').pack()
-        status_pane = tk.Frame(self.window)
-        status_pane.pack()
-        tk.Label(status_pane, text="Status (P/R)").grid(row=0, column=0)
-        self.active_status = tk.Label(status_pane, text="...")
+        state_pane = tk.Frame(status_pane)
+        state_pane.grid(row=1, column=2)
+        tk.Label(state_pane, text="Status (P/R)").grid(row=0, column=0)
+        self.active_status = tk.Label(state_pane, text="...")
         self.active_status.grid(row=0, column=1)
-        tk.Label(status_pane, text="Light (F2/F3)").grid(row=1, column=0)
-        self.light_status = tk.Label(status_pane, text="...")
+        tk.Label(state_pane, text="Light (F2/F3)").grid(row=1, column=0)
+        self.light_status = tk.Label(state_pane, text="...")
         self.light_status.grid(row=1, column=1)
-        tk.Label(status_pane, text="Sound (F6/F7)").grid(row=2, column=0)
-        self.sound_status = tk.Label(status_pane, text="...")
+        tk.Label(state_pane, text="Sound (F6/F7)").grid(row=2, column=0)
+        self.sound_status = tk.Label(state_pane, text="...")
         self.sound_status.grid(row=2, column=1)
-        tk.Label(status_pane, text="Limit (+/-)").grid(row=3, column=0)
-        self.speed_limit = tk.Label(status_pane, text="...")
+        tk.Label(state_pane, text="Limit (+/-)").grid(row=3, column=0)
+        self.speed_limit = tk.Label(state_pane, text="...")
         self.speed_limit.grid(row=3, column=1)
+        # --- Terminus ---
+        terminus_pane = tk.Frame(self.window)
+        terminus_pane.pack()
+        self.canvas = tk.Canvas(terminus_pane, width=800, height=300)
+        self.canvas.pack()
+        image = Image.open("assets/Kopfbahnhof final.jpg")
+        image = image.resize((800, 300), Image.ANTIALIAS)
+        photo_image = ImageTk.PhotoImage(image)  # Keep a reference to the image to prevent garbage collection
+        self.canvas.create_image(0, 0, anchor=tk.NW, image=photo_image)
+        self.canvas_images = {'__bg__': photo_image}
+        self.canvas_ids = {}
+        for train in control.trains:
+            train_photo = self.canvas_images[train.name] = ImageTk.PhotoImage(train.image.resize(fit_image_size(train.img_res, 80, 30)))
+            self.canvas_ids[train] = self.canvas.create_image(0, 0, anchor=tk.NW, image=train_photo)
         # --- Hotkeys ---
-        tk.Label(text="Press F11 to enter fullscreen mode").pack()
         self.window.bind("<F11>", lambda e: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
         self.window.bind("<F2>", lambda e: self.control.set_lights_on(False))
         self.window.bind("<F3>", lambda e: self.control.set_lights_on(True))
@@ -199,6 +217,16 @@ class TKGUI:
         self.light_status.config(text="on" if self.control.light else ("?" if self.control.light is None else "off"))
         self.sound_status.config(text="on" if self.control.sound else ("?" if self.control.sound is None else "off"))
         self.speed_limit.config(text=str(self.control.speed_limit))
+        # --- Terminus plan ---
+        if self.terminus:
+            for train, img_id in self.canvas_ids.items():
+                platform, pos = self.terminus.get_train_position(train)
+                if platform:
+                    y = platform * 35
+                    x = pos * 1.2 + 50
+                else:
+                    x, y = -100, -100
+                self.canvas.coords(img_id, x, y)
         # --- Schedule next update ---
         self.window.after(10, self.update_ui)
 
