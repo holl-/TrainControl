@@ -10,6 +10,7 @@ from typing import List, Dict, Optional, Set
 
 import pywinusb.hid as hid
 
+from fpme.terminus import Terminus
 from fpme.train_control import TrainControl
 
 
@@ -17,9 +18,13 @@ class InputManager:
 
     def __init__(self, control: Optional[TrainControl]):
         self.control = control
+        self.terminus = None
         self.connected: Dict[str, Optional[hid.HidDevice]] = {}
         self.disconnected: Set[str] = set()
         self.last_events: Dict[str, Tuple[float, str]] = {}  # (time, text)
+
+    def set_terminus(self, terminus: Terminus):
+        self.terminus = terminus
 
     def check_for_new_devices(self, vid=0x05AC, pid=0x022C):  # 1452, 556
         devices = hid.find_all_hid_devices()
@@ -68,9 +73,12 @@ class InputManager:
             self.control.reverse(train, cause=device_path)
             event_text = "B (reverse)"
         elif pressed == 8:  # Button C
-            self.control.emergency_stop_all(train, cause=device_path)
-            event_text = "C (stop all)"
+            if self.terminus:
+                self.terminus.request_entry(train)
+                # self.control.emergency_stop_all(train, cause=device_path)
+            event_text = "C (terminus)"
         elif pressed == 2:  # Button D
+            # ToDo or switch on light/sound
             self.control.power_on(None, cause=device_path)
             event_text = "D (Power)"
         else:

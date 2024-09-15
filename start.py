@@ -30,4 +30,5 @@ if __name__ == '__main__':
     def setup_terminal(relay: Relay8):
         terminus = Terminus(relay, control, 'COM3')
         gui.set_terminus(terminus)
+        inputs.set_terminus(terminus)
     relay.on_connected(setup_terminal)
