@@ -25,10 +25,12 @@ if __name__ == '__main__':
     relay = RelayManager()
     # Thread(target=lambda: dash_app.Server(control).launch(port=PORT)).start()
     gui = tk_gui.TKGUI(control, relay, inputs, infos=[], fullscreen=False)
-    gui.launch()
 
     def setup_terminal(relay: Relay8):
-        terminus = Terminus(relay, control, 'COM3')
+        print("Relay detected. Setting up terminus.")
+        terminus = Terminus(relay, control, 'COM8')
         gui.set_terminus(terminus)
         inputs.set_terminus(terminus)
     relay.on_connected(setup_terminal)
+
+    gui.launch()

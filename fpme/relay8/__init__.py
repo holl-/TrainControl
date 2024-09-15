@@ -51,7 +51,7 @@ class Relay8:
 
     def open_channel(self, channel, tries=3):
         if NATIVE.usb_relay_device_open_one_relay_channel(self.handle, channel) != 0:
-            warnings.warn(f"Relay8 {self.name}: open_channel({channel}) returned an error")
+            warnings.warn(f"Relay8 {self.name}: open_channel({channel}) returned an error. tries={tries}")
             if tries > 1:
                 time.sleep(0.001)
                 Thread(target=self.open_channel, args=(channel, tries-1)).start()

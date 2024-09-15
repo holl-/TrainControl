@@ -2,10 +2,10 @@ import json
 import os.path
 import time
 import warnings
-from threading import Thread
+from threading import Thread, Lock
 from typing import Optional, List
 
-from etils.edc import dataclass
+from dataclasses import dataclass
 
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
@@ -50,6 +50,10 @@ class ParkedTrain:
         return self.dist_trip is not None
 
     @property
+    def has_cleared(self):
+        return self.dist_clear is not None
+
+    @property
     def train_length(self):
         return abs(self.dist_clear - self.dist_trip) + 0.18  # detector track length
 
@@ -64,7 +68,12 @@ class ParkedTrain:
         if not self.has_tripped:
             return None
         delta = current_signed_distance - self.dist_trip
+        #print(self.train.name, "fwd", self.entered_forward, "since tripped: ", delta)
         return delta if self.entered_forward else -delta
+
+    def __repr__(self):
+        status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
+        return f"{self.train.name} on platform {self.platform} ({status})."
 
 
 class Terminus:
@@ -76,11 +85,13 @@ class Terminus:
         self.port = port
         self.trains: List[ParkedTrain] = []
         self.entering: Optional[ParkedTrain] = None
+        self._request_lock = Lock()
+        relay.close_all_channels()
         self.load_state()
         schedule_at_fixed_rate(self.save_state, 5.)
         schedule_at_fixed_rate(self.check_exited, 1.)
 
-    def save_state(self):
+    def save_state(self, *_args):
         data = {
             'switches': [],
             'trains': [{
@@ -102,12 +113,14 @@ class Terminus:
             data = json.load(file)
         for train_data in data['trains']:
             train = TRAINS_BY_NAME[train_data['name']]
-            platform = data['platform']
-            dist_request = data['dist_request']
-            dist_trip = data['dist_trip']
-            dist_clear = data['dist_clear']
-            delta = self.control[train].signed_distance - data['dist']
-            self.trains.append(ParkedTrain(train, platform, dist_request + delta, dist_trip + delta, dist_clear + delta))
+            platform = train_data['platform']
+            dist_request = train_data['dist_request']
+            dist_trip = train_data['dist_trip']
+            dist_clear = train_data['dist_clear']
+            delta = self.control[train].signed_distance - train_data['dist']
+            self.trains.append(ParkedTrain(train, platform, dist_request + delta,
+                                           dist_trip + delta if dist_trip is not None else None,
+                                           dist_clear + delta if dist_clear is not None else None))
 
     def get_train_position(self, train: Train):
         for t in self.trains:
@@ -116,46 +129,59 @@ class Terminus:
         return None, None
 
     def request_entry(self, train: Train):
-        if self.entering:
-            if train == self.entering.train:  # clicked again, no effect
+        print(self.trains)
+        with self._request_lock:
+            if self.entering:
+                if train == self.entering.train:  # clicked again, no effect
+                    return
+                elif self.entering.has_tripped:
+                    print(f"Terminus: {train} cannot enter until {self.entering} has cleared switches")
+                    self.control.force_stop(train, "wait for previous train")  # Wait until previous train has passed
+                    return
+                else:  # Who is first? Previous one might have been an accident. Stop both, block entry
+                    print(f"Terminus: Conflict between {train} and {self.entering}")
+                    self.control.emergency_stop(train, f"Contested terminus entry: {train} vs {self.entering.train}")
+                    self.control.emergency_stop(self.entering.train, f"Contested terminus entry: {train} vs {self.entering.train}")
+                    self.relay.close_channel(ENTRY_SIGNAL)
+                    self.relay.close_channel(ENTRY_POWER)
+                    self.entering = None
+                    self.free_exit()
+                    return
+            if any(t.train == train for t in self.trains):
+                print(f"{train} is already in terminus")
                 return
-            elif self.entering.has_tripped:
-                self.control.force_stop(train, "wait for previous train")  # Wait until previous train has passed
+            # --- prepare entry ---
+            platform = self.select_track(train)
+            print(f"Terminus: {train} assigned to platform {platform}")
+            if platform is None:  # cannot enter
+                self.control.force_stop(train, "no platform")
                 return
-            else:  # Who is first? Previous one might have been an accident. Stop both, block entry
-                self.control.emergency_stop(train, f"Contested terminus entry: {train} vs {self.entering.train}")
-                self.control.emergency_stop(self.entering.train, f"Contested terminus entry: {train} vs {self.entering.train}")
-                self.relay.close_channel(ENTRY_SIGNAL)
-                self.relay.close_channel(ENTRY_POWER)
-                self.entering = None
-                self.free_exit()
-                return
-        # --- prepare entry ---
-        platform = self.select_track(train)
-        if platform is None:  # cannot enter
-            self.control.force_stop(train, "no platform")
-            return
+            self.entering = entering = ParkedTrain(train, platform)
+            entering.dist_request = self.control[train].signed_distance
+            self.trains.append(entering)
+        self.control.add_speed_limit(train, "terminus", 80)
         self.prevent_exit(platform)
         self.set_switches_for(platform)
         self.relay.open_channel(ENTRY_SIGNAL)
         self.relay.open_channel(ENTRY_POWER)
-        self.entering = entering = ParkedTrain(train, platform)
-        entering.dist_request = self.control[train].signed_distance
-        self.trains.append(entering)
-        self.control.add_speed_limit(train, "terminus", 80)
 
-        def process_entry(entering, duration=5, interval=0.01):
+        def process_entry(entering: ParkedTrain, duration=5, interval=0.01):
             for _ in range(int(duration / interval)):
                 if self.control.generator.contact_status(self.port)[0]:
+                    print(f"Terminus: Contact tripped. {entering}")
                     entering.dist_trip = self.control[train].signed_distance
+                    if entering.dist_trip == entering.dist_request:
+                        entering.dist_request -= -1e-3 if self.control[train].is_in_reverse else 1e-3
                     driven = entering.dist_trip - entering.dist_request
-                    if self.control[train].speed > 0 != entering.enter_forward:
+                    if (self.control[train].speed > 0) != entering.entered_forward:
                         warnings.warn(f"Train switched direction while entering? driven={driven}, speed={self.control[train].speed}")
                     self.play_announcement(train, platform)
                     def red_when_entered():
-                        time.sleep(0.1)
-                        if abs(self.control[train].signed_distance - entering.dist_trip) > 20:
-                            self.relay.close_channel(ENTRY_SIGNAL)  # red when train has driven for 20cm
+                        while True:
+                            time.sleep(0.1)
+                            if entering.get_position(self.control[train].signed_distance) > 20:
+                                self.relay.close_channel(ENTRY_SIGNAL)  # red when train has driven for 20cm
+                                return
                     Thread(target=red_when_entered).start()
                     # --- wait for clear ---
                     while True:
@@ -166,23 +192,26 @@ class Terminus:
                             # --- wait for clear switches ---
                             while True:
                                 time.sleep(interval)
-                                if self.control[train].signed_distance > entering.dist_clear + ...:
+                                if self.control[train].signed_distance > entering.dist_clear + 50:
                                     self.free_exit()
-                                    entering = None
+                                    self.entering = None
                                     return
                 time.sleep(interval)
-            # --- not tripped ---
+            # --- not tripped - maybe button pressed on accident or train too far ---
             self.relay.close_channel(ENTRY_SIGNAL)
             self.relay.close_channel(ENTRY_POWER)
             self.control.force_stop(train, "train did not enter terminus")
+            self.entering = None
+            self.trains.remove(entering)
         Thread(target=process_entry, args=(entering,)).start()
 
-    def check_exited(self):
+    def check_exited(self, *_args):
         for t in tuple(self.trains):
-            d = self.control[t.train].signed_distance
-            exited = (d - t.dist_trip) != t.entered_forward
-            if exited:
-                self.trains.remove(t)
+            if t.has_cleared:
+                pos = t.get_position(self.control[t.train].signed_distance)
+                exited = pos < 0
+                if exited:
+                    self.trains.remove(t)
 
     def set_switches_for(self, platform: int):
         for channel, req_open in SWITCH_STATE[platform].items():
@@ -216,7 +245,7 @@ class Terminus:
             speed = self.control[t.train].speed
             if speed == 0:
                 state[t.platform] = 'parked'
-            elif speed > 0 == t.entered_forward:
+            elif (speed > 0) == t.entered_forward:
                 state[t.platform] = 'entering'
             else:
                 state[t.platform] = 'exiting'
@@ -232,7 +261,8 @@ class Terminus:
             4: state[4] == 'empty',
             5: state[5] == 'empty' and state[4] != 'exiting',
         }
-        if not any(can_enter.values()):
+        can_enter = [p for p, c in can_enter.items() if c]
+        if not can_enter:
             return None
         future_collision_cost = .1
         cost_regional = 1 - train.regional_fac
@@ -244,7 +274,7 @@ class Terminus:
             4: cost_far_distance + future_collision_cost,
             5: cost_far_distance,
         }
-        cost = base_cost
+        cost = {p: base_cost[p] for p in can_enter}
         # cost = {}
         # for track in [t for t, c in can_enter.items() if c]:
         #     wait_cost = 0

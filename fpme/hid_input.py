@@ -76,6 +76,8 @@ class InputManager:
             if self.terminus:
                 self.terminus.request_entry(train)
                 # self.control.emergency_stop_all(train, cause=device_path)
+            else:
+                print("no terminus set")
             event_text = "C (terminus)"
         elif pressed == 2:  # Button D
             # ToDo or switch on light/sound

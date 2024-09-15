@@ -258,7 +258,7 @@ def subprocess_main(queue: Queue, active, short_circuited, error, contacts):
     main = SignalGenProcessInterface(active, short_circuited, error, *contacts)
     while True:
         cmd = queue.get(block=True)
-        print(f"Subprocess received: {cmd}")
+        #print(f"Subprocess received: {cmd}")
         getattr(main, cmd[0])(*cmd[1:])
 
 
@@ -430,9 +430,9 @@ class SignalGenerator:
                 short_circuited = self._short_circuited.value
             else:
                 short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
-                self._contact1.value = self._ser.getCD()
-                self._contact2.value = self._ser.getRI()
-                self._contact3.value = self._ser.getDSR()
+                self._contact1.value = not self._ser.getRI()
+                self._contact2.value = not self._ser.getCD()
+                self._contact3.value = not self._ser.getDSR()
             self._short_circuited.value, newly_short_circuited = short_circuited, short_circuited and not self._short_circuited.value
             if self._short_circuited.value:
                 if newly_short_circuited and self.on_short_circuit is not None:
@@ -461,7 +461,7 @@ class SignalGenerator:
 
 
 if __name__ == '__main__':
-    PORT = 'COM3'
+    PORT = 'COM8'
     gen = SubprocessGenerator(max_generators=2)
     gen.set(24, 2, False, {0: True, 1: False, 2: False, 3: False, 4: True}, protocol=MM1)
     gen.setup()
@@ -477,10 +477,8 @@ if __name__ == '__main__':
     #         print("no power")
     #     time.sleep(.1)
     while True:
-        time.sleep(2)
-        gen.set(24, 2, True, {0: True, 1: False, 2: False, 3: False, 4: True}, protocol=MM1)
-        time.sleep(2)
-        gen.set(24, 2, False, {0: True, 1: False, 2: False, 3: False, 4: True}, protocol=MM1)
+        time.sleep(.2)
+        print(gen.contact_status(PORT))
 
     # for i in range(10):
     #     for f in [0, 1, 2, 3, 4]:

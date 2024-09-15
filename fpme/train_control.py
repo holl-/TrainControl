@@ -216,7 +216,7 @@ class TrainControl:
     def set_train_functions_by_tag(self, train: Train, tag: str, on: bool):
         for func in train.functions:
             if tag in func.tags:
-                print(f"setting {train}.{tag} = {on}")
+                #print(f"setting {train}.{tag} = {on}")
                 self[train].active_functions[func] = on
 
     def activate(self, train: Train, cause: str):
@@ -262,8 +262,9 @@ class TrainControl:
             state.speed = 0
             return
         # --- Signed distance ---
-        speed_cm_s = state.speed * 27.78 / 87
-        state.signed_distance += speed_cm_s * dt
+        if state.speed:
+            speed_cm_s = state.speed * 27.78 / 87
+            state.signed_distance += speed_cm_s * dt
         # --- Deactivate after 30 seconds of inactivity ---
         if state.acc_input == 0 and state.speed == 0 and state.is_active:
             state.inactive_time += dt
@@ -275,6 +276,8 @@ class TrainControl:
         # --- Input ---
         if state.force_stopping:
             state.target_speed = math.copysign(0, state.target_speed)
+            if abs(state.speed) == 0:
+                state.force_stopping = False
         elif state.acc_input != 0:
             acc = train.acceleration if state.acc_input > 0 else train.deceleration
             abs_target = max(0., abs(state.speed or 0.) + dt * acc * state.acc_input)

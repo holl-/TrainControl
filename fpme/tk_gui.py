@@ -129,7 +129,7 @@ class TKGUI:
         self.canvas = tk.Canvas(terminus_pane, width=800, height=300)
         self.canvas.pack()
         image = Image.open("assets/Kopfbahnhof final.jpg")
-        image = image.resize((800, 300), Image.ANTIALIAS)
+        image = image.resize((800, 300))
         photo_image = ImageTk.PhotoImage(image)  # Keep a reference to the image to prevent garbage collection
         self.canvas.create_image(0, 0, anchor=tk.NW, image=photo_image)
         self.canvas_images = {'__bg__': photo_image}
@@ -222,8 +222,8 @@ class TKGUI:
             for train, img_id in self.canvas_ids.items():
                 platform, pos = self.terminus.get_train_position(train)
                 if platform:
-                    y = platform * 35
-                    x = pos * 1.2 + 50
+                    y = {1: 15, 2: 65, 3: 115, 4: 170, 5: 220}[platform]
+                    x = pos * 1.2 + 50 if pos is not None else 10
                 else:
                     x, y = -100, -100
                 self.canvas.coords(img_id, x, y)
@@ -241,6 +241,8 @@ class TKGUI:
             self.control.activate(train, "UI")
 
     def terminate(self):
+        self.control.generator.terminate()
+        time.sleep(.5)
         if self.terminus:
             self.terminus.save_state()
         os._exit(0)
