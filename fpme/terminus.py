@@ -68,6 +68,9 @@ class ParkedTrain:
         #print(self.train.name, "fwd", self.entered_forward, "since tripped: ", delta)
         return delta if self.entered_forward else -delta
 
+    def get_end_position(self, current_signed_distance):
+        return self.get_position(current_signed_distance) - self.train_length
+
     def __repr__(self):
         status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
         return f"{self.train.name} on platform {self.platform} ({status})."
@@ -182,19 +185,22 @@ class Terminus:
                                 self.relay.close_channel(ENTRY_SIGNAL)  # red when train has driven for 20cm
                                 return
                     Thread(target=red_when_entered).start()
-                    # --- wait for clear ---
+                    # --- wait for clear sensor ---
                     while True:
                         time.sleep(interval)
-                        if not self.control.generator.contact_status(self.port)[0]:
-                            entering.dist_clear = self.control[train].signed_distance
-                            self.relay.close_channel(ENTRY_POWER)
-                            # --- wait for clear switches ---
-                            while True:
-                                time.sleep(interval)
-                                if self.control[train].signed_distance > entering.dist_clear + 50:
-                                    self.free_exit()
-                                    self.entering = None
-                                    return
+                        if not self.control.generator.contact_status(self.port)[0]:  # possible sensor clear
+                            if entering.dist_clear is None:
+                                entering.dist_clear = self.control[train].signed_distance
+                                self.relay.close_channel(ENTRY_POWER)
+                        elif entering.dist_clear is not None and entering.get_end_position(self.control[train].signed_distance) < 30:  # another wheel entered
+                            entering.dist_clear = None
+                            self.relay.open_channel(ENTRY_POWER)
+                            continue
+                        # --- clear switches ---
+                        if self.entering.dist_clear is not None and entering.get_position(self.control[train].signed_distance) > 57:
+                            self.free_exit()
+                            self.entering = None
+                            return
                 time.sleep(interval)
             # --- not tripped - maybe button pressed on accident or train too far ---
             self.relay.close_channel(ENTRY_SIGNAL)
