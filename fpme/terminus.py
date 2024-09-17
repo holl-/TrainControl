@@ -1,18 +1,20 @@
 import json
 import os.path
+import random
 import time
 import warnings
+from datetime import datetime, timedelta
+from random import choice
 from threading import Thread, Lock
 from typing import Optional, List
 
 from dataclasses import dataclass
 
-from fpme.audio import play_audio
+from fpme.audio import play_announcement
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl
-from fpme.train_def import Train, TRAINS_BY_NAME
-
+from fpme.train_def import Train, TRAINS_BY_NAME, ICE
 
 SWITCH_STATE = {
     1: {6: False, 8: True},  # True -> open_channel, False -> close_channel
@@ -177,7 +179,7 @@ class Terminus:
                     driven = entering.dist_trip - entering.dist_request
                     if (self.control[train].speed > 0) != entering.entered_forward:
                         warnings.warn(f"Train switched direction while entering? driven={driven}, speed={self.control[train].speed}")
-                    self.play_announcement(train, platform)
+                    play_terminus_announcement(train, platform)
                     def red_when_entered():
                         while True:
                             time.sleep(0.1)
@@ -294,15 +296,49 @@ class Terminus:
         #     cost[track] = base_cost[track] + wait_cost
         return min(cost, key=cost.get)
 
-    def play_announcement(self, train: Train, platform: int):
-        play_audio("sound/ansagen/Gong.mp3", None)
+
+def play_terminus_announcement(train: Train, platform: int):
+    targets = {
+        ICE: [('I C E, 109', 'Wiesbaden', 'Böblingen'), ('I C E, 22', 'Kirchbach', 'Waldbrunn')],
+    }
+    connection, target, intermediate = choice(targets[train])
+    delay = max(0, random.randint(-40, 60))
+    hour, minute, delay = delayed_now(delay)
+    delay_text = f", heute circa {delay} Minuten später." if delay else ""
+    play_announcement(f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, über: {intermediate}, Abfahrt {hour} Uhr {minute}{delay_text}. Vorsicht bei der Einfahrt.", None)
+
+
+def delayed_now(delay_minutes: int):
+    dt = datetime.now()
+    delay_minutes = (delay_minutes // 5) * 5
+    minutes = round(dt.minute / 5) * 5
+    if minutes >= 60:
+        dt += timedelta(hours=1)
+        minutes = 0
+    minute_text = {
+        0: "",
+        5: "fünf",
+        10: "zehn",
+        15: "fünfzehn",
+        20: "zwanzig",
+        25: "fünfundzwanzig",
+        30: "dreißig",
+        35: "fünfunddreißig",
+        40: "vierzig",
+        45: "fünfundvierzig",
+        50: "fünfzig",
+        55: "fünfundfünfzig",
+    }
+    dt = dt.replace(minute=minutes, second=0, microsecond=0) - timedelta(minutes=delay_minutes)
+    return dt.hour, minute_text[dt.minute], delay_minutes
 
 
 if __name__ == '__main__':
-    relays = RelayManager()
-    def main(relay: Relay8):
-        relay.open_channel(1)
-        relay.open_channel(2)
-        relay.open_channel(3)
-    relays.on_connected(main)
-    time.sleep(1)
+    # relays = RelayManager()
+    # def main(relay: Relay8):
+    #     relay.open_channel(1)
+    #     relay.open_channel(2)
+    #     relay.open_channel(3)
+    # relays.on_connected(main)
+    # time.sleep(1)
+    play_terminus_announcement(ICE, 5)
