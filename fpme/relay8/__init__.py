@@ -54,16 +54,18 @@ class Relay8:
 
     def open_channel(self, channel, tries=3):
         with _LOCK:
-            if NATIVE.usb_relay_device_open_one_relay_channel(self.handle, channel) != 0:
-                warnings.warn(f"Relay8 {self.name}: open_channel({channel}) returned an error. tries={tries}")
+            code = NATIVE.usb_relay_device_open_one_relay_channel(self.handle, channel)
+            if code != 0:
+                warnings.warn(f"Relay8 {self.name}: open_channel({channel}) returned error {code}. tries={tries}")
                 if tries > 1:
                     time.sleep(0.001)
                     Thread(target=self.open_channel, args=(channel, tries-1)).start()
 
     def close_channel(self, channel, tries=3):
         with _LOCK:
-            if NATIVE.usb_relay_device_close_one_relay_channel(self.handle, channel) != 0:
-                warnings.warn(f"Relay8 {self.name}: close_channel({channel}) returned an error")
+            code = NATIVE.usb_relay_device_close_one_relay_channel(self.handle, channel)
+            if code != 0:
+                warnings.warn(f"Relay8 {self.name}: close_channel({channel}) returned error {code}. tries={tries}")
                 if tries > 1:
                     time.sleep(0.001)
                     Thread(target=self.close_channel, args=(channel, tries-1)).start()
@@ -164,3 +166,7 @@ if __name__ == '__main__':
     devices = list_devices()
     print(f"Relays: {devices}")
     device = open_device(devices[0])
+    while True:
+        #device.close_channel(5)
+        device.pulse(5)
+        time.sleep(.5)
