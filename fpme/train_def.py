@@ -35,7 +35,7 @@ SOUND = TrainFunction("Motor", 2, False, (TAG_DEFAULT_SOUND,))
 
 class Train:
 
-    def __init__(self, name: str, icon: str, address: int, speeds: Sequence, acceleration: float, deceleration: float = None, has_built_in_acceleration: bool = True, supports_mm2: bool = True, stop_by_mm1_reverse=True, functions: Tuple[TrainFunction, ...] = (LIGHT,), img_path: str = None, regional_fac: float = .5):
+    def __init__(self, name: str, icon: str, address: int, speeds: Sequence, acceleration: float, deceleration: float = None, has_built_in_acceleration: bool = True, supports_mm2: bool = True, stop_by_mm1_reverse=True, functions: Tuple[TrainFunction, ...] = (LIGHT,), img_path: str = None, regional_fac: float = .5, max_delay=60, delay_rate=.3):
         assert len(speeds) == 15, len(speeds)
         self.name: str = name
         self.address: int = address
@@ -52,6 +52,8 @@ class Train:
         self.image = Image.open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', img_path)) if img_path else None
         self.regional_fac = regional_fac
         self.functions = functions
+        self.max_delay = max_delay
+        self.delay_rate = delay_rate
 
     def __repr__(self):
         return self.name
@@ -78,7 +80,8 @@ E_RB = Train('RB', "🚉", 24, acceleration=30., supports_mm2=False, stop_by_mm1
              speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 183))
 S = Train('S', "Ⓢ", 48, acceleration=35., img_path="S-Bahn.png", regional_fac=.8,
           speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136),
-          functions=(LIGHT, TrainFunction("Innenbeleuchtung", 1, False, (TAG_DEFAULT_LIGHT,)), SOUND, TrainFunction("Horn", 3, False, (TAG_SPECIAL_SOUND,)), INSTANT_ACCELERATION))
+          functions=(LIGHT, TrainFunction("Innenbeleuchtung", 1, False, (TAG_DEFAULT_LIGHT,)), SOUND, TrainFunction("Horn", 3, False, (TAG_SPECIAL_SOUND,)), INSTANT_ACCELERATION),
+          max_delay=35, delay_rate=.5)
 DAMPF = Train('Dampf', "🚂", 78, acceleration=30., img_path="Dampf.png", regional_fac=.5,
               speeds=(0, 0.1, 0.2, 0.3, 48, 80, 100, 110, 120, 140, 165, 180, 192, 202, 210),
               functions=(LIGHT, TrainFunction("Dampfgeräusche", 1, False, (TAG_DEFAULT_SOUND,)),

@@ -39,6 +39,7 @@ gong_duration = 4.
 
 
 def play_announcement(text: str, device_index: Optional[int] = None):
+    # ToDo one process per speaker?
     # sd.play(gong_reverb_data, samplerate=gong.frame_rate, device=device_index, blocking=False)
     voices = engine.getProperty('voices')
     german_voices = [voice for voice in voices if 'German' in voice.name]

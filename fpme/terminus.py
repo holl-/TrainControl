@@ -14,7 +14,7 @@ from fpme.audio import play_announcement
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl
-from fpme.train_def import Train, TRAINS_BY_NAME, ICE
+from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S
 
 SWITCH_STATE = {
     1: {6: False, 8: True},  # True -> open_channel, False -> close_channel
@@ -236,15 +236,15 @@ class Terminus:
             self.relay.close_channel(2)  # Platform 4
         trains = [t for t in self.trains if t.platform in PREVENT_EXIT.get(entering_platform, [])]
         for t in trains:
-            ...
-            # self.control.block(t.train, self)
+            if (self.control[t.train].speed < 0) == t.entered_forward:
+                self.control.emergency_stop(t.train, 'terminus-conflict')
+                self.control.set_speed_limit(t.train, 'terminus-wait', 0)
 
     def free_exit(self):
         self.relay.open_channel(1)  # Platforms 2, 3
         self.relay.open_channel(2)  # Platform 4
         for t in self.trains:
-            ...
-            # self.control.unblock(t.train, self)
+            self.control.set_speed_limit(t.train, 'terminus-wait', None)
 
     def get_platform_state(self):
         """For each platform returns one of (empty, parked, entering, exiting) """
@@ -299,13 +299,29 @@ class Terminus:
 
 def play_terminus_announcement(train: Train, platform: int):
     targets = {
-        ICE: [('I C E, 109', 'Wiesbaden', 'Böblingen'), ('I C E, 22', 'Kirchbach', 'Waldbrunn')],
+        ICE: {
+            1: ('I C E, 86',  'Waldbrunn'),
+            2: ('I C E, 109', 'Heilbronn, über: Waldbrunn'),
+            3: ('I C E, 170', 'Böblingen, über: Waldbrunn'),
+            4: ('I C E, 18',  'Wiesbaden, über: Böblingen'),
+            5: ('I C E, 34',  'Radeburg, über: Wiesbaden'),
+        },
+        S: {
+            1: ('S 3', "Kirchbach"),
+            2: ('S 5', "Waldbrunn"),
+            3: ('S 1', "Heilbronn"),
+            4: ('S 2', "Böblingen"),
+            5: ('S 4', "Grünstein"),
+        }
     }
-    connection, target, intermediate = choice(targets[train])
-    delay = max(0, random.randint(-40, 60))
-    hour, minute, delay = delayed_now(delay)
-    delay_text = f", heute circa {delay} Minuten später." if delay else ""
-    play_announcement(f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, über: {intermediate}, Abfahrt {hour} Uhr {minute}{delay_text}. Vorsicht bei der Einfahrt.", None)
+    if train in targets:
+        connection, target = targets[train][platform]
+        delay = max(0, random.randint(int(-train.max_delay * (1 - train.delay_rate)), train.max_delay))
+        hour, minute, delay = delayed_now(delay)
+        delay_text = f", heute circa {delay} Minuten später." if delay else ". Vorsicht bei der Einfahrt."
+        play_announcement(f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}", None)
+    else:
+        play_announcement(f"Vorsicht auf Gleis {platform}, ein Zug fährt ein.")
 
 
 def delayed_now(delay_minutes: int):
@@ -341,4 +357,4 @@ if __name__ == '__main__':
     #     relay.open_channel(3)
     # relays.on_connected(main)
     # time.sleep(1)
-    play_terminus_announcement(ICE, 5)
+    play_terminus_announcement(S, 1)
