@@ -40,7 +40,7 @@ SPEED_LIMIT = 60.
 class ParkedTrain:
     train: Train
     platform: int
-    dist_request: float = None  # Signed distance when enter request was sent
+    dist_request: float = None  # Signed distance when enter request was sent. None for trains set through the UI.
     dist_trip: float = None  # Signed distance when entering the switches
     dist_clear: float = None  # Signed distance when leaving the sensor, now fully on switches
 
@@ -63,11 +63,17 @@ class ParkedTrain:
         else:
             return (self.dist_clear - self.dist_trip) > 0
 
+    @property
+    def was_entry_recorded(self):
+        return self.dist_request is not None
+
     def get_position(self, current_signed_distance):
         if not self.has_tripped:
             return None
         delta = current_signed_distance - self.dist_trip
-        #print(self.train.name, "fwd", self.entered_forward, "since tripped: ", delta)
+        if not self.was_entry_recorded:
+            default_position = 200
+            return default_position - abs(delta - 200)
         return delta if self.entered_forward else -delta
 
     def get_end_position(self, current_signed_distance):
@@ -131,6 +137,25 @@ class Terminus:
             if t.train == train:
                 return t.platform, t.get_position(self.control[train].signed_distance)
         return None, None
+
+    def set_occupied(self, platform: int, train: Train):
+        if any([t.train == train for t in self.trains]):
+            t = [t for t in self.trains if t.train == train][0]
+            t.platform = platform
+            # position = t.get_position(self.control[train].signed_distance)
+            # train_length = t.train_length
+            # self.trains.remove(t)
+        else:
+            dist = self.control[train].signed_distance
+            position = 200
+            train_length = 50
+            t = ParkedTrain(train, platform, None, dist - position, dist - position + train_length + 0.18)
+            self.trains.append(t)
+            assert t.train_length == train_length
+            assert t.get_position(dist) == position
+
+    def set_empty(self, platform: int):
+        self.trains = [t for t in self.trains if t.platform != platform]
 
     def request_entry(self, train: Train):
         print(self.trains)
@@ -357,4 +382,11 @@ if __name__ == '__main__':
     #     relay.open_channel(3)
     # relays.on_connected(main)
     # time.sleep(1)
-    play_terminus_announcement(S, 1)
+    # play_terminus_announcement(S, 1)
+
+    dist = 432
+    position = 200
+    train_length = 50
+    t = ParkedTrain(None, 1, None, dist - position, dist - position + train_length + 0.18)
+    print(t.train_length)
+    print(t.get_position(dist - 10))

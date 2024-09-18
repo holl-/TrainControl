@@ -22,6 +22,7 @@ class TKGUI:
         self.control = control
         self.relays = relays
         self.terminus = None
+        self.selected_platform = None
         self.inputs = inputs
         self.window = tk.Tk()
         self.speed_bars: Dict[Train, ttk.Progressbar] = {}
@@ -148,16 +149,22 @@ class TKGUI:
         self.window.bind("<+>", lambda e: self.control.set_global_speed_limit(None if self.control.speed_limit is None else (self.control.speed_limit + 20 if self.control.speed_limit < 240 else None)))
         self.window.bind("<minus>", lambda e: self.control.set_global_speed_limit(240 if self.control.speed_limit is None else self.control.speed_limit - 20))
         self.window.bind("<Escape>", lambda e: self.terminate())
-        self.window.bind("1", lambda e: self.toggle_active(0))
-        self.window.bind("2", lambda e: self.toggle_active(1))
-        self.window.bind("3", lambda e: self.toggle_active(2))
-        self.window.bind("4", lambda e: self.toggle_active(3))
-        self.window.bind("5", lambda e: self.toggle_active(4))
-        self.window.bind("6", lambda e: self.toggle_active(5))
-        self.window.bind("7", lambda e: self.toggle_active(6))
-        self.window.bind("8", lambda e: self.toggle_active(7))
-        self.window.bind("9", lambda e: self.toggle_active(8))
-        self.window.bind("0", lambda e: self.toggle_active(9))
+        self.window.bind("1", lambda e: self.terminus_set(1))
+        self.window.bind("2", lambda e: self.terminus_set(1))
+        self.window.bind("3", lambda e: self.terminus_set(2))
+        self.window.bind("4", lambda e: self.terminus_set(3))
+        self.window.bind("5", lambda e: self.terminus_set(4))
+        self.window.bind("6", lambda e: self.terminus_set(5))
+        self.window.bind("7", lambda e: self.terminus_set(6))
+        self.window.bind("8", lambda e: self.terminus_set(7))
+        self.window.bind("9", lambda e: self.terminus_set(8))
+        self.window.bind("0", lambda e: self.terminus_set(9))
+        self.window.bind("<Control-Key-1>", lambda e: self.terminus_select(1))
+        self.window.bind("<Control-Key-2>", lambda e: self.terminus_select(2))
+        self.window.bind("<Control-Key-3>", lambda e: self.terminus_select(3))
+        self.window.bind("<Control-Key-4>", lambda e: self.terminus_select(4))
+        self.window.bind("<Control-Key-5>", lambda e: self.terminus_select(5))
+        self.window.bind("<BackSpace>", lambda e: self.terminus.set_empty(self.selected_platform))
         self.window.protocol("WM_DELETE_WINDOW", lambda: self.terminate())
 
     def launch(self):
@@ -166,6 +173,19 @@ class TKGUI:
 
     def set_terminus(self, terminus: Terminus):
         self.terminus = terminus
+
+    def terminus_select(self, platform: int):
+        if self.terminus is not None:
+            self.selected_platform = platform
+
+    def terminus_set(self, train_id: int):
+        if train_id >= len(self.shown_trains):
+            return
+        if self.selected_platform is None:
+            return
+        train = self.shown_trains[train_id]
+        if self.terminus is not None:
+            self.terminus.set_occupied(self.selected_platform, train)
 
     def update_ui(self):
         now = time.perf_counter()
@@ -230,15 +250,15 @@ class TKGUI:
         # --- Schedule next update ---
         self.window.after(10, self.update_ui)
 
-    def toggle_active(self, train_id: int):
-        if train_id >= len(self.shown_trains):
-            return
-        train = self.shown_trains[train_id]
-        is_active = self.control[train].is_active
-        if is_active:
-            self.control.deactivate(train, "UI")
-        else:
-            self.control.activate(train, "UI")
+    # def toggle_active(self, train_id: int):
+    #     if train_id >= len(self.shown_trains):
+    #         return
+    #     train = self.shown_trains[train_id]
+    #     is_active = self.control[train].is_active
+    #     if is_active:
+    #         self.control.deactivate(train, "UI")
+    #     else:
+    #         self.control.activate(train, "UI")
 
     def terminate(self):
         self.control.generator.terminate()
