@@ -54,7 +54,8 @@ class TrainState:
 
     def set_speed_limit(self, name: str, limit: Optional[float]):
         if limit is None:
-            del self.speed_limits[name]
+            if name in self.speed_limits:
+                del self.speed_limits[name]
         else:
             self.speed_limits[name] = max(0., limit)
             self.set_target_speed(self.target_speed)
