@@ -80,9 +80,9 @@ class InputManager:
                 print("no terminus set")
             event_text = "C (terminus)"
         elif pressed == 2:  # Button D
-            # ToDo or switch on light/sound
-            self.control.power_on(None, cause=device_path)
-            event_text = "D (Power)"
+            self.control.use_ability(train, cause=device_path)
+            # self.control.power_on(None, cause=device_path)
+            event_text = "D (Ability)"
         else:
             event_text = str(hat_pos)
         self.last_events[device_path] = (time.perf_counter(), event_text)

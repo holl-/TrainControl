@@ -1,5 +1,5 @@
 import os
-from typing import Tuple, Sequence
+from typing import Tuple, Sequence, Optional
 
 import numpy as np
 from PIL import Image
@@ -25,6 +25,13 @@ class TrainFunction:
 
     def __eq__(self, other):
         return isinstance(other, TrainFunction) and self.name == other.name and self.id == other.id
+
+    def __repr__(self):
+        return self.name + ":" + str(self.id)
+
+    @property
+    def cooldown(self):
+        return 60 if TAG_SPECIAL_SOUND in self.tags else 1
 
 
 LIGHT = TrainFunction('Licht', 0, False, (TAG_DEFAULT_LIGHT,))
@@ -69,6 +76,14 @@ class Train:
     def max_speed(self):
         return self.speeds[-1]
 
+    @property
+    def primary_ability(self) -> Optional[TrainFunction]:
+        for tag in [TAG_SPECIAL_SOUND, TAG_SPECIAL_LIGHT, TAG_DEFAULT_LIGHT]:
+            for f in self.functions:
+                if tag in f.tags:
+                    return f
+        return None
+
 
 ICE = Train('ICE', "🚅", 3, acceleration=25., img_path="ICE.png", regional_fac=0,
             speeds=np.linspace(0, 310, 15),
@@ -85,19 +100,19 @@ S = Train('S', "Ⓢ", 48, acceleration=35., img_path="S-Bahn.png", regional_fac=
 DAMPF = Train('Dampf', "🚂", 78, acceleration=30., img_path="Dampf.png", regional_fac=.5,
               speeds=(0, 0.1, 0.2, 0.3, 48, 80, 100, 110, 120, 140, 165, 180, 192, 202, 210),
               functions=(LIGHT, TrainFunction("Dampfgeräusche", 1, False, (TAG_DEFAULT_SOUND,)),
-                         TrainFunction("Hupe", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Glocke", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Kohle schaufeln", 4, False, (TAG_SPECIAL_SOUND,))))
+                         TrainFunction("Glocke", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Horn", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Kohle schaufeln", 4, False, (TAG_SPECIAL_SOUND,))))
 BEIGE_218 = Train('218 B', "🛲", 73, acceleration=25., img_path="Thumb_BR218_Beige.png", regional_fac=.5,
                   speeds=[0, None, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
                   functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
 ROT_218 = Train('218 R', "🛲", 74, acceleration=40., img_path="Thumb_BR218_Rot.png", regional_fac=.5,
                 speeds=[0, 15, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220],
-                functions=(LIGHT, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,), warmup_time=19.5, reverse_time=4.), TrainFunction("Hupe 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Hupe 1", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Lüfter", 4, False, (TAG_SPECIAL_SOUND,))))
+                functions=(LIGHT, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,), warmup_time=19.5, reverse_time=4.), TrainFunction("Horn 1", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Horn 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Lüfter", 4, False, (TAG_SPECIAL_SOUND,))))
 DIESEL = Train('Diesel', "🛲", 72, acceleration=25., img_path="Diesel.png", regional_fac=.5,
                speeds=np.linspace(0, 180, 15),
                functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
 E40_RE_BLAU = Train('RE', "🚉", 23, acceleration=30., img_path="Thumb_E40.png", stop_by_mm1_reverse=False, regional_fac=.6,
                     speeds=np.linspace(0, 220, 15),
-                    functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction('Hupe', -1, False, (TAG_SPECIAL_SOUND,))))
+                    functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction('Horn', -1, False, (TAG_SPECIAL_SOUND,))))  # ToDo which ID?
 BUS = Train('Bus', "🚌", 62, acceleration=40., img_path="Thumb_Schienenbus.png", stop_by_mm1_reverse=False, regional_fac=.9,
             speeds=np.linspace(0, 190, 15),
             functions=())
@@ -106,3 +121,5 @@ TRAINS = [ICE, E_BW_IC, E_RB, S, BEIGE_218, ROT_218, DIESEL, E40_RE_BLAU, BUS, D
 
 TRAINS_BY_NAME = {train.name: train for train in TRAINS}
 
+for train in TRAINS:
+    print(train.name, train.primary_ability)

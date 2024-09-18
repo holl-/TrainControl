@@ -1,6 +1,7 @@
 import math
 import time
 import warnings
+from threading import Thread
 from typing import Sequence, Optional, Dict, Set, Tuple
 
 import numpy
@@ -8,7 +9,7 @@ from dataclasses import dataclass, field
 
 from .helper import schedule_at_fixed_rate
 from .signal_gen import SubprocessGenerator, MM1, MM2
-from .train_def import TRAINS, Train, TAG_DEFAULT_LIGHT, TAG_DEFAULT_SOUND
+from .train_def import TRAINS, Train, TAG_DEFAULT_LIGHT, TAG_DEFAULT_SOUND, TAG_SPECIAL_SOUND
 
 
 def get_preferred_protocol(train: Train):
@@ -32,6 +33,7 @@ class TrainState:
     speed_limits: Dict[str, float] = field(default_factory=dict)
     force_stopping: Optional[str] = None
     signed_distance: float = 0.  # distance travelled in cm
+    primary_ability_last_used = 0.
 
     @property
     def is_emergency_stopping(self):
@@ -59,6 +61,15 @@ class TrainState:
 
     def set_target_speed(self, target_speed):
         self.target_speed = math.copysign(min(target_speed, *self.speed_limits.values()), target_speed)
+
+    @property
+    def can_use_primary_ability(self):
+        ability = self.train.primary_ability
+        if ability is None:
+            return False
+        if not self.primary_ability_last_used:
+            return True
+        return time.perf_counter() - self.primary_ability_last_used > ability.cooldown
 
 
 class TrainControl:
@@ -216,8 +227,19 @@ class TrainControl:
     def set_train_functions_by_tag(self, train: Train, tag: str, on: bool):
         for func in train.functions:
             if tag in func.tags:
-                #print(f"setting {train}.{tag} = {on}")
+                print(f"setting {train}.{func.name} = {on}")
                 self[train].active_functions[func] = on
+
+    def use_ability(self, train: Train, cause: str):
+        func = train.primary_ability
+        state = self[train]
+        state.active_functions[func] = True
+        state.primary_ability_last_used = time.perf_counter()
+        if TAG_SPECIAL_SOUND in func.tags:
+            def deactivate():
+                time.sleep(1.1)
+                state.active_functions[func] = False
+            Thread(target=deactivate).start()
 
     def activate(self, train: Train, cause: str):
         """ user: If no user specified, will auto-deactivate again soon. """
