@@ -80,12 +80,17 @@ class InputManager:
                 print("no terminus set")
             event_text = "C (terminus)"
         elif pressed == 2:  # Button D
-            self.control.use_ability(train, cause=device_path)
+            if self.control[train].can_use_primary_ability:
+                self.control.use_ability(train, cause=device_path)
             # self.control.power_on(None, cause=device_path)
             event_text = "D (Ability)"
         else:
-            event_text = str(hat_pos)
-        self.last_events[device_path] = (time.perf_counter(), event_text)
+            if hat_pos != (0, 0):
+                event_text = str(hat_pos)
+            else:
+                event_text = ""
+        if event_text:
+            self.last_events[device_path] = (time.perf_counter(), event_text)
 
 
 VECTOR = {
