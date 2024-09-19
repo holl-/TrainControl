@@ -133,6 +133,7 @@ class TKGUI:
         image = image.resize((800, 300))
         photo_image = ImageTk.PhotoImage(image)  # Keep a reference to the image to prevent garbage collection
         self.canvas.create_image(0, 0, anchor=tk.NW, image=photo_image)
+        self.sel_platform = self.canvas.create_rectangle(0, 0, 300, 10, fill='blue')
         self.canvas_images = {'__bg__': photo_image}
         self.canvas_ids = {}
         for train in control.trains:
@@ -149,7 +150,7 @@ class TKGUI:
         self.window.bind("<+>", lambda e: self.control.set_global_speed_limit(None if self.control.speed_limit is None else (self.control.speed_limit + 20 if self.control.speed_limit < 240 else None)))
         self.window.bind("<minus>", lambda e: self.control.set_global_speed_limit(240 if self.control.speed_limit is None else self.control.speed_limit - 20))
         self.window.bind("<Escape>", lambda e: self.terminate())
-        self.window.bind("1", lambda e: self.terminus_set(1))
+        self.window.bind("1", lambda e: self.terminus_set(0))
         self.window.bind("2", lambda e: self.terminus_set(1))
         self.window.bind("3", lambda e: self.terminus_set(2))
         self.window.bind("4", lambda e: self.terminus_set(3))
@@ -164,7 +165,7 @@ class TKGUI:
         self.window.bind("<Control-Key-3>", lambda e: self.terminus_select(3))
         self.window.bind("<Control-Key-4>", lambda e: self.terminus_select(4))
         self.window.bind("<Control-Key-5>", lambda e: self.terminus_select(5))
-        self.window.bind("<BackSpace>", lambda e: self.terminus.set_empty(self.selected_platform))
+        self.window.bind("<BackSpace>", lambda e: self.clear_platform())
         self.window.protocol("WM_DELETE_WINDOW", lambda: self.terminate())
 
     def launch(self):
@@ -186,6 +187,11 @@ class TKGUI:
         train = self.shown_trains[train_id]
         if self.terminus is not None:
             self.terminus.set_occupied(self.selected_platform, train)
+        self.selected_platform = None
+
+    def clear_platform(self):
+        self.terminus.set_empty(self.selected_platform)
+        self.selected_platform = None
 
     def update_ui(self):
         now = time.perf_counter()
@@ -247,6 +253,11 @@ class TKGUI:
                 else:
                     x, y = -100, -100
                 self.canvas.coords(img_id, x, y)
+            if self.selected_platform is None:
+                self.canvas.coords(self.sel_platform, -100, -100, 1, 1)
+            else:
+                y = {1: 12, 2: 68, 3: 118, 4: 177, 5: 224}[self.selected_platform]
+                self.canvas.coords(self.sel_platform, 600, y, 800, y+10)
         # --- Schedule next update ---
         self.window.after(10, self.update_ui)
 
