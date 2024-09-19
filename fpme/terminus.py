@@ -128,7 +128,8 @@ class Terminus:
             dist_trip = train_data['dist_trip']
             dist_clear = train_data['dist_clear']
             delta = self.control[train].signed_distance - train_data['dist']
-            self.trains.append(ParkedTrain(train, platform, dist_request + delta,
+            self.trains.append(ParkedTrain(train, platform,
+                                           dist_request + delta if dist_request is not None else None,
                                            dist_trip + delta if dist_trip is not None else None,
                                            dist_clear + delta if dist_clear is not None else None))
 
@@ -151,8 +152,6 @@ class Terminus:
             train_length = 50
             t = ParkedTrain(train, platform, None, dist - position, dist - position + train_length + 0.18)
             self.trains.append(t)
-            assert t.train_length == train_length
-            assert t.get_position(dist) == position
 
     def set_empty(self, platform: int):
         self.trains = [t for t in self.trains if t.platform != platform]
@@ -247,10 +246,13 @@ class Terminus:
                     self.control.set_speed_limit(t.train, 'terminus', None)
 
     def set_switches_for(self, platform: int):
+        self.relay.open_channel(5)
+        time.sleep(.1)
         for channel, req_open in SWITCH_STATE[platform].items():
             self.relay.set_channel_open(channel, req_open)
-        time.sleep(.01)
-        self.relay.pulse(5)
+            time.sleep(.1)
+        #self.relay.pulse(5)
+        self.relay.close_channel(5)
 
     def prevent_exit(self, entering_platform):
         if entering_platform == 1:
@@ -382,11 +384,4 @@ if __name__ == '__main__':
     #     relay.open_channel(3)
     # relays.on_connected(main)
     # time.sleep(1)
-    # play_terminus_announcement(S, 1)
-
-    dist = 432
-    position = 200
-    train_length = 50
-    t = ParkedTrain(None, 1, None, dist - position, dist - position + train_length + 0.18)
-    print(t.train_length)
-    print(t.get_position(dist - 10))
+    play_terminus_announcement(S, 1)
