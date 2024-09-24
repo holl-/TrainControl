@@ -14,7 +14,7 @@ from fpme.audio import play_announcement
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl
-from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S
+from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW_IC, E40_RE_BLAU
 
 SWITCH_STATE = {
     1: {6: False, 8: True},  # True -> open_channel, False -> close_channel
@@ -339,6 +339,27 @@ def play_terminus_announcement(train: Train, platform: int):
             3: ('S 1', "Heilbronn"),
             4: ('S 2', "Böblingen"),
             5: ('S 4', "Grünstein"),
+        },
+        E_BW_IC: {
+            1: ("Intercity", ""),
+            2: ("", ""),
+            3: ("", ""),
+            4: ("", ""),
+            5: ("", ""),
+        },
+        E_RB: {
+            1: ("Regionalbahn", ""),
+            2: ("", ""),
+            3: ("", ""),
+            4: ("", ""),
+            5: ("", ""),
+        },
+        E40_RE_BLAU: {
+            1: ("Regional-Express", ""),
+            2: ("", ""),
+            3: ("", ""),
+            4: ("", ""),
+            5: ("", ""),
         }
     }
     if train in targets:
