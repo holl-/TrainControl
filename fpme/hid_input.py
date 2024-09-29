@@ -10,7 +10,7 @@ from typing import List, Dict, Optional, Set
 
 import pywinusb.hid as hid
 
-from fpme.terminus import Terminus
+from fpme.terminus import Terminus, play_special_announcement
 from fpme.train_control import TrainControl
 
 
@@ -80,8 +80,11 @@ class InputManager:
                 print("no terminus set")
             event_text = "C (terminus)"
         elif pressed == 2:  # Button D
-            if self.control[train].can_use_primary_ability:
-                self.control.use_ability(train, cause=device_path)
+            if train.primary_ability is not None:
+                if self.control[train].can_use_primary_ability:
+                    self.control.use_ability(train, cause=device_path)
+            else:  # Schienenbus
+                play_special_announcement()
             # self.control.power_on(None, cause=device_path)
             event_text = "D (Ability)"
         else:

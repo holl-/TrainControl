@@ -397,6 +397,23 @@ def delayed_now(delay_minutes: int):
     return dt.hour, minute_text[dt.minute], delay_minutes
 
 
+def play_special_announcement():
+    sentences = [
+        "Information zu, Hohgworts Express, nach: Hohgworts: Heube ab Gleis 8 Drei Viertel, direkt gegenüber.",
+        "I C E 397, nach: Atlantis, fällt heute aus.",
+        "Achtung Passagiere des Polarexpresses: Bitte halten Sie Ihr goldenes Ticket bereit.",
+        "Information zu Orient Express: Der Zug verspätet sich aufgrund eines Mordes an Bord.",
+        "Information zu: Thomas der kleinen Lokomotive: Heute ca. 20 Minuten später, da sie einem Freund auf die Gleise hilft.",
+        "Information zu: Zeitreisezug, nach: 1955. Bitte vermeiden Sie Paradoxa",
+        "Information zu I C E, 910, nach: Saarbrücken. Der Zug entfällt aufgrund mangelnder Nachfrage.",
+        "Information zum Schienenersatzverkehr zwischen: München, und: Berlin. Bitte benutzen Sie eines der bereitstehenden Fahrräder.",
+        "Information zu: I C E, 86, Heute pünktlich. Grund hierfür sind Personen im Gleis, die den Zug anschieben.",
+        "Achtung Passagiere des I C E 987, nach: Gotham Sittie. Bitte benutzen Sie ausschließlich Abschnitte D bis F., Grund hierfür ist ein Auftritt des Jokers in Abteil A.",
+        "Achtung Passagiere des I C E 456, nach: Wunderland. Bitte folgen Sie dem weißen Kaninchen zum Gleis",
+    ]
+    play_announcement(random.choice(sentences), language='German')
+
+
 if __name__ == '__main__':
     # relays = RelayManager()
     # def main(relay: Relay8):
@@ -405,4 +422,5 @@ if __name__ == '__main__':
     #     relay.open_channel(3)
     # relays.on_connected(main)
     # time.sleep(1)
-    play_terminus_announcement(S, 1)
+    # play_terminus_announcement(S, 1)
+    play_special_announcement()
