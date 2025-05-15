@@ -136,9 +136,11 @@ class TKGUI:
         self.sel_platform = self.canvas.create_rectangle(0, 0, 300, 10, fill='blue')
         self.canvas_images = {'__bg__': photo_image}
         self.canvas_ids = {}
+        self.canvas_texts = {}
         for train in control.trains:
             train_photo = self.canvas_images[train.name] = ImageTk.PhotoImage(train.image.resize(fit_image_size(train.img_res, 80, 30)))
             self.canvas_ids[train] = self.canvas.create_image(0, 0, anchor=tk.NW, image=train_photo)
+            self.canvas_texts[train] = self.canvas.create_text(0, 0, anchor=tk.NW)
         # --- Hotkeys ---
         self.window.bind("<F11>", lambda e: self.window.attributes("-fullscreen", not self.window.attributes('-fullscreen')))
         self.window.bind("<F2>", lambda e: self.control.set_lights_on(False))
@@ -250,9 +252,15 @@ class TKGUI:
                 if platform:
                     y = {1: 15, 2: 65, 3: 115, 4: 170, 5: 220}[platform]
                     x = pos * (800/250) + 50 if pos is not None else 10
+                    x = min(x, 750)
+                    label = str(pos)
                 else:
                     x, y = -100, -100
+                    label = ""
                 self.canvas.coords(img_id, x, y)
+                self.canvas.coords(self.canvas_texts[train], x, y)
+                self.canvas.itemconfig(self.canvas_texts[train], text=label)
+            # --- Highlight platform selection ---
             if self.selected_platform is None:
                 self.canvas.coords(self.sel_platform, -100, -100, 1, 1)
             else:
