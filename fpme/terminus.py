@@ -68,6 +68,7 @@ class ParkedTrain:
         return self.dist_request is not None
 
     def get_position(self, current_signed_distance):
+        """Positive towards station."""
         if not self.has_tripped:
             return None
         delta = current_signed_distance - self.dist_trip
@@ -91,10 +92,11 @@ class Terminus:
         self.relay = relay
         self.control = control
         self.port = port
-        self.trains: List[ParkedTrain] = []
+        self.trains: List[ParkedTrain] = []  # trains in Terminal
         self.entering: Optional[ParkedTrain] = None
         self._request_lock = Lock()
         relay.close_all_channels()
+        relay.open_channel(ENTRY_POWER)
         self.load_state()
         for t in self.trains:
             control.set_speed_limit(t.train, 'terminus', SPEED_LIMIT)
@@ -171,12 +173,13 @@ class Terminus:
                     self.control.emergency_stop(train, f"Contested terminus entry: {train} vs {self.entering.train}")
                     self.control.emergency_stop(self.entering.train, f"Contested terminus entry: {train} vs {self.entering.train}")
                     self.relay.close_channel(ENTRY_SIGNAL)
-                    self.relay.close_channel(ENTRY_POWER)
+                    self.relay.open_channel(ENTRY_POWER)
                     self.entering = None
                     self.free_exit()
                     return
             if any(t.train == train for t in self.trains):
-                print(f"{train} is already in terminus")
+                t = [t for t in self.trains if t.train == train][0]
+                print(f"{train} is already in terminus: {t.platform} @ {t.get_position(self.control[train].signed_distance)}")
                 return
             # --- prepare entry ---
             platform = self.select_track(train)
@@ -189,11 +192,11 @@ class Terminus:
             self.trains.append(entering)
         self.control.set_speed_limit(train, 'terminus', SPEED_LIMIT)
         self.prevent_exit(platform)
-        self.set_switches_for(platform)
+        set_switches_for(self.relay, platform)
         self.relay.open_channel(ENTRY_SIGNAL)
-        self.relay.open_channel(ENTRY_POWER)
+        self.relay.close_channel(ENTRY_POWER)
 
-        def process_entry(entering: ParkedTrain, duration=5, interval=0.01):
+        def process_entry(entering: ParkedTrain, duration=6, interval=0.01):
             for _ in range(int(duration / interval)):
                 if self.control.generator.contact_status(self.port)[0]:
                     print(f"Terminus: Contact tripped. {entering}")
@@ -217,10 +220,10 @@ class Terminus:
                         if not self.control.generator.contact_status(self.port)[0]:  # possible sensor clear
                             if entering.dist_clear is None:
                                 entering.dist_clear = self.control[train].signed_distance
-                                self.relay.close_channel(ENTRY_POWER)
+                                self.relay.open_channel(ENTRY_POWER)
                         elif entering.dist_clear is not None and entering.get_end_position(self.control[train].signed_distance) < 30:  # another wheel entered
                             entering.dist_clear = None
-                            self.relay.open_channel(ENTRY_POWER)
+                            self.relay.close_channel(ENTRY_POWER)
                             continue
                         # --- clear switches ---
                         if self.entering.dist_clear is not None and entering.get_position(self.control[train].signed_distance) > 57:
@@ -230,13 +233,14 @@ class Terminus:
                 time.sleep(interval)
             # --- not tripped - maybe button pressed on accident or train too far ---
             self.relay.close_channel(ENTRY_SIGNAL)
-            self.relay.close_channel(ENTRY_POWER)
+            self.relay.open_channel(ENTRY_POWER)
             self.control.force_stop(train, "train did not enter terminus")
             self.entering = None
             self.trains.remove(entering)
         Thread(target=process_entry, args=(entering,)).start()
 
     def check_exited(self, *_args):
+        print(f"Check exited for {self.trains}")
         for t in tuple(self.trains):
             if t.has_cleared:
                 pos = t.get_position(self.control[t.train].signed_distance)
@@ -244,15 +248,8 @@ class Terminus:
                 if exited:
                     self.trains.remove(t)
                     self.control.set_speed_limit(t.train, 'terminus', None)
-
-    def set_switches_for(self, platform: int):
-        self.relay.open_channel(5)
-        time.sleep(.1)
-        for channel, req_open in SWITCH_STATE[platform].items():
-            self.relay.set_channel_open(channel, req_open)
-            time.sleep(.1)
-        #self.relay.pulse(5)
-        self.relay.close_channel(5)
+                else:
+                    print(f"{t} still in station")
 
     def prevent_exit(self, entering_platform):
         if entering_platform == 1:
@@ -322,6 +319,13 @@ class Terminus:
         #     # ToDo check that trains currently on the track (not in terminus) can be assigned a proper track (e.g. keep 4/5 open for ICE) Weighted by expected arrival time.
         #     cost[track] = base_cost[track] + wait_cost
         return min(cost, key=cost.get)
+
+
+def set_switches_for(relay, platform: int):
+    time.sleep(.01)
+    for channel, req_open in SWITCH_STATE[platform].items():
+        relay.set_channel_open(channel, req_open)
+        time.sleep(.1)
 
 
 def play_terminus_announcement(train: Train, platform: int):
@@ -399,28 +403,37 @@ def delayed_now(delay_minutes: int):
 
 def play_special_announcement():
     sentences = [
-        "Information zu, Hohgworts Express, nach: Hohgworts: Heube ab Gleis 8 Drei Viertel, direkt gegenüber.",
+        "Information zu, Hoggworts Express, nach: Hoggworts: Heube ab Gleis 8 Drei Viertel, direkt gegenüber.",
         "I C E 397, nach: Atlantis, fällt heute aus.",
         "Achtung Passagiere des Polarexpresses: Bitte halten Sie Ihr goldenes Ticket bereit.",
         "Information zu Orient Express: Der Zug verspätet sich aufgrund eines Mordes an Bord.",
         "Information zu: Thomas der kleinen Lokomotive: Heute ca. 20 Minuten später, da sie einem Freund auf die Gleise hilft.",
         "Information zu: Zeitreisezug, nach: 1955. Bitte vermeiden Sie Paradoxa",
-        "Information zu I C E, 910, nach: Saarbrücken. Der Zug entfällt aufgrund mangelnder Nachfrage.",
+        # "Information zu I C E, 910, nach: Saarbrücken. Der Zug entfällt aufgrund mangelnder Nachfrage.",
         "Information zum Schienenersatzverkehr zwischen: München, und: Berlin. Bitte benutzen Sie eines der bereitstehenden Fahrräder.",
         "Information zu: I C E, 86, Heute pünktlich. Grund hierfür sind Personen im Gleis, die den Zug anschieben.",
         "Achtung Passagiere des I C E 987, nach: Gotham Sittie. Bitte benutzen Sie ausschließlich Abschnitte D bis F., Grund hierfür ist ein Auftritt des Jokers in Abteil A.",
         "Achtung Passagiere des I C E 456, nach: Wunderland. Bitte folgen Sie dem weißen Kaninchen zum Gleis",
+        "Jim Knopf",
     ]
-    play_announcement(random.choice(sentences), language='German')
+    # play_announcement(sentences[0])
+    play_announcement(random.choice(sentences))
 
 
 if __name__ == '__main__':
-    # relays = RelayManager()
-    # def main(relay: Relay8):
-    #     relay.open_channel(1)
-    #     relay.open_channel(2)
-    #     relay.open_channel(3)
-    # relays.on_connected(main)
-    # time.sleep(1)
+    relays = RelayManager()
+    def main(relay: Relay8):
+        relay.close_channel(ENTRY_POWER)
+        # for i in range(100):
+            # relay.open_channel(6)
+            # relay.open_channel(8)
+            # relay.open_channel(7)
+            # time.sleep(1)
+            # relay.close_channel(7)
+            # relay.close_channel(6)
+            # relay.close_channel(8)
+            # time.sleep(1)
+    relays.on_connected(main)
+    time.sleep(1)
     # play_terminus_announcement(S, 1)
-    play_special_announcement()
+    # play_special_announcement()

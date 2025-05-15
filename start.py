@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     def setup_terminal(relay: Relay8):
         print("Relay detected. Setting up terminus.")
-        terminus = Terminus(relay, control, 'COM8')
+        terminus = Terminus(relay, control, ports[0][0])
         gui.set_terminus(terminus)
         inputs.set_terminus(terminus)
     relay.on_connected(setup_terminal)
