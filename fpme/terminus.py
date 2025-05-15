@@ -95,7 +95,9 @@ class Terminus:
         self.trains: List[ParkedTrain] = []  # trains in Terminal
         self.entering: Optional[ParkedTrain] = None
         self._request_lock = Lock()
-        relay.close_all_channels()
+        relay.close_channel(1)
+        relay.close_channel(2)
+        relay.close_channel(ENTRY_SIGNAL)
         relay.open_channel(ENTRY_POWER)
         self.load_state()
         for t in self.trains:
@@ -249,7 +251,7 @@ class Terminus:
         Thread(target=process_entry, args=(entering,)).start()
 
     def check_exited(self, *_args):
-        print(f"Check exited for {self.trains}")
+        # print(f"Check exited for {self.trains}")
         for t in tuple(self.trains):
             if t.has_cleared:
                 pos = t.get_position(self.control[t.train].signed_distance)
@@ -257,8 +259,8 @@ class Terminus:
                 if exited:
                     self.trains.remove(t)
                     self.control.set_speed_limit(t.train, 'terminus', None)
-                else:
-                    print(f"{t} still in station")
+                # else:
+                    # print(f"{t} still in station")
 
     def prevent_exit(self, entering_platform):
         if entering_platform == 1:
