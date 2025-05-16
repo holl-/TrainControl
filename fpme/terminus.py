@@ -163,6 +163,7 @@ class Terminus:
     def request_entry(self, train: Train):
         print(self.trains)
         with self._request_lock:
+            print(f"entering = {self.entering}")
             if self.entering:
                 if train == self.entering.train:  # clicked again, no effect
                     return
@@ -225,21 +226,26 @@ class Terminus:
                     if entering.get_position(self.control[train].signed_distance) > 20:
                         self.relay.close_channel(ENTRY_SIGNAL)  # red when train has driven for 20cm
                         return
+            print("-> (async) Red when entered...")
             Thread(target=red_when_entered).start()
             # --- wait for clear sensor ---
+            print("Waiting for clear...")
             while True:
                 time.sleep(interval)
+                print(f"Sensor: {self.control.generator.contact_status(self.port)[0]}")
                 if not self.control.generator.contact_status(self.port)[0]:  # possible sensor clear
                     if entering.dist_clear is None:
                         print("Sensor clear. Waiting for possible next wheel...")
                         entering.dist_clear = self.control[train].signed_distance
                         # self.relay.open_channel(ENTRY_POWER)
                 elif entering.dist_clear is not None and entering.get_end_position(self.control[train].signed_distance) < 30:  # another wheel entered
+                    print("Another wheel entered")
                     entering.dist_clear = None  # enable above block to re-trigger
                     # self.relay.close_channel(ENTRY_POWER)
                     continue
-                if entering.get_position(self.control[train].signed_distance) > max_train_length:
+                if entering.get_position(self.control[train].signed_distance) > max_train_length and entering.dist_clear is None:
                     entering.dist_clear = self.control[train].signed_distance
+                    print(f"Max train length reached. Setting as cleared. End = {entering.get_end_position(self.control[train].signed_distance)}")
                 # --- cleared switches ---
                 if self.entering.dist_clear is not None and entering.get_end_position(self.control[train].signed_distance) > 40:  # approx. 57 cm
                     print("Train cleared switches.")
@@ -340,6 +346,7 @@ def set_switches_for(relay, platform: int):
 
 
 def play_terminus_announcement(train: Train, platform: int):
+    return  # ToDo async!
     targets = {
         ICE: {
             1: ('I C E, 86',  'Waldbrunn'),
