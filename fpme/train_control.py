@@ -59,6 +59,8 @@ class TrainState:
         else:
             self.speed_limits[name] = max(0., limit)
             self.set_target_speed(self.target_speed)
+            if self.speed is not None and abs(self.speed) > limit:
+                self.speed *= limit / abs(self.speed)
 
     def set_target_speed(self, target_speed):
         self.target_speed = math.copysign(min(target_speed, *self.speed_limits.values()), target_speed)

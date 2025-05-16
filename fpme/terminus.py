@@ -33,7 +33,7 @@ PREVENT_EXIT = {  # when entering platform x, train on platforms y must wait
 ENTRY_SIGNAL = 3
 ENTRY_POWER = 4  # no power when open
 
-SPEED_LIMIT = 60.
+SPEED_LIMIT = 80.
 
 
 @dataclass
@@ -182,7 +182,7 @@ class Terminus:
                     return
             if any(t.train == train for t in self.trains):
                 t = [t for t in self.trains if t.train == train][0]
-                print(f"{train} is already in terminus: {t.platform} @ {t.get_position(self.control[train].signed_distance)}")
+                print(f"{train} is already in terminus: {t.platform} @ {t.get_position(self.control[train].signed_distance)}, cleared={t.has_cleared}")
                 return
             # --- prepare entry ---
             platform = self.select_track(train)
@@ -208,7 +208,7 @@ class Terminus:
             else:  # --- not tripped - maybe button pressed on accident or train too far ---
                 self.relay.close_channel(ENTRY_SIGNAL)
                 self.relay.open_channel(ENTRY_POWER)
-                self.control.force_stop(train, "train did not enter terminus")
+                self.control.emergency_stop(train, "train did not enter terminus")
                 self.entering = None
                 self.trains.remove(entering)
                 return
@@ -232,7 +232,7 @@ class Terminus:
             print("Waiting for clear...")
             while True:
                 time.sleep(interval)
-                print(f"Sensor: {self.control.generator.contact_status(self.port)[0]}")
+                # print(f"Sensor: {self.control.generator.contact_status(self.port)[0]}")
                 if not self.control.generator.contact_status(self.port)[0]:  # possible sensor clear
                     if entering.dist_clear is None:
                         print("Sensor clear. Waiting for possible next wheel...")
@@ -391,7 +391,7 @@ def play_terminus_announcement(train: Train, platform: int):
         speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
     else:
         speech = f"Vorsicht auf Gleis {platform}, ein Zug fährt ein."
-    play_announcement_async(speech, None)
+    play_announcement_async(speech)
 
 
 def delayed_now(delay_minutes: int):
