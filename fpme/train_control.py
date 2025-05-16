@@ -1,4 +1,5 @@
 import math
+import threading
 import time
 import warnings
 from threading import Thread
@@ -34,6 +35,10 @@ class TrainState:
     force_stopping: Optional[str] = None
     signed_distance: float = 0.  # distance travelled in cm
     primary_ability_last_used = 0.
+    modify_lock = threading.RLock()
+
+    def __repr__(self):
+        return f"{self.train.name} {self.speed:.0f} -> {self.target_speed:.0f} func={self.active_functions} controlled by {len(self.controllers)}"
 
     @property
     def is_emergency_stopping(self):
@@ -52,18 +57,23 @@ class TrainState:
     def is_active(self):
         return len(self.controllers) > 0 and self.inactive_time <= 30.
 
-    def set_speed_limit(self, name: str, limit: Optional[float]):
-        if limit is None:
-            if name in self.speed_limits:
-                del self.speed_limits[name]
-        else:
-            self.speed_limits[name] = max(0., limit)
-            self.set_target_speed(self.target_speed)
-            if self.speed is not None and abs(self.speed) > limit:
-                self.speed *= limit / abs(self.speed)
+    def set_speed_limit(self, name: str, limit: Optional[float], jerk=True):
+        with self.modify_lock:
+            if limit is None:
+                if name in self.speed_limits:
+                    del self.speed_limits[name]
+            else:
+                self.speed_limits[name] = max(0., limit)
+                if jerk and self.speed is not None and abs(self.speed) > limit:
+                    self.speed *= limit / abs(self.speed)
+                self.set_target_speed(self.target_speed)
 
     def set_target_speed(self, target_speed):
-        self.target_speed = math.copysign(min(target_speed, *self.speed_limits.values()), target_speed)
+        with self.modify_lock:
+            if not self.speed_limits:
+                self.target_speed = target_speed
+            else:
+                self.target_speed = math.copysign(min(target_speed, *self.speed_limits.values()), target_speed)
 
     @property
     def can_use_primary_ability(self):
@@ -160,20 +170,21 @@ class TrainControl:
 
     def set_acceleration_control(self, train: Train, controller: str, acc_input: float, cause: str):
         state = self[train]
-        state.controllers.add(controller)
-        if not state.is_active:
-            if acc_input <= 0:
-                self.activate(train, cause)
-                return
-            else:
-                self.activate(train, cause)  # accelerate and simultaneously enable sound, so we don't have to wait
-        if acc_input != 0 and state.acc_input * acc_input <= 0:
-            speed_idx = get_speed_index(train, state, acc_input, False, False)
-            abs_speed = train.speeds[speed_idx]
-            # prev_speed = state.speed
-            state.speed = math.copysign(abs_speed + acc_input * 1e-2, state.target_speed)
-            # print(f"Acceleration {train.name} = {acc_input} (speed = {prev_speed} ({speed_idx}) -> {state.speed}, target={state.target_speed})")
-        state.acc_input = acc_input
+        with state.modify_lock:
+            state.controllers.add(controller)
+            if not state.is_active:
+                if acc_input <= 0:
+                    self.activate(train, cause)
+                    return
+                else:
+                    self.activate(train, cause)  # accelerate and simultaneously enable sound, so we don't have to wait
+            if acc_input != 0 and state.acc_input * acc_input <= 0:
+                speed_idx = get_speed_index(train, state, acc_input, False, False)
+                abs_speed = train.speeds[speed_idx]
+                # prev_speed = state.speed
+                state.speed = math.copysign(abs_speed + acc_input * 1e-2, state.target_speed)
+                # print(f"Acceleration {train.name} = {acc_input} (speed = {prev_speed} ({speed_idx}) -> {state.speed}, target={state.target_speed})")
+            state.acc_input = acc_input
 
     def emergency_stop_all(self, train: Optional[Train], cause: str):
         """Immediately stop all trains on the same track as `train`."""
@@ -189,11 +200,12 @@ class TrainControl:
     def emergency_stop(self, train: Train, cause: str):
         """Immediately stop `train`."""
         state = self[train]
-        state.target_speed *= 0.
-        state.speed = None
-        currently_in_reverse = self.generator.is_in_reverse(train.address)
-        functions = {f.id: on for f, on in state.active_functions.items()}
-        state.last_emergency_break = (time.perf_counter(), cause)
+        with state.modify_lock:
+            state.target_speed *= 0.
+            state.speed = None
+            currently_in_reverse = self.generator.is_in_reverse(train.address)
+            functions = {f.id: on for f, on in state.active_functions.items()}
+            state.last_emergency_break = (time.perf_counter(), cause)
         if train.stop_by_mm1_reverse:
             self.generator.set(train.address, None, False, functions, get_preferred_protocol(train))
         else:
@@ -208,7 +220,9 @@ class TrainControl:
         self[train].set_speed_limit(cause, limit)
 
     def force_stop(self, train: Train, cause: str):
-        self[train].force_stopping = cause
+        state = self[train]
+        with state.modify_lock:
+            state.force_stopping = cause
 
     def set_lights_on(self, on: bool):
         if self.light == on:
@@ -231,46 +245,51 @@ class TrainControl:
         for func in train.functions:
             if tag in func.tags:
                 print(f"setting {train}.{func.name} = {on}")
-                self[train].active_functions[func] = on
+                state = self[train]
+                with state.modify_lock:
+                    state.active_functions[func] = on
 
     def use_ability(self, train: Train, cause: str):
         func = train.primary_ability
         state = self[train]
-        state.active_functions[func] = True
-        state.primary_ability_last_used = time.perf_counter()
-        if TAG_SPECIAL_SOUND in func.tags:
-            def deactivate():
-                time.sleep(1.1)
-                state.active_functions[func] = False
-            Thread(target=deactivate).start()
+        with state.modify_lock:
+            state.active_functions[func] = True
+            state.primary_ability_last_used = time.perf_counter()
+            if TAG_SPECIAL_SOUND in func.tags:
+                def deactivate():
+                    time.sleep(1.1)
+                    state.active_functions[func] = False
+                Thread(target=deactivate).start()
 
     def activate(self, train: Train, cause: str):
         """ user: If no user specified, will auto-deactivate again soon. """
         state = self[train]
-        if cause is None:
-            state.controllers.add('default')
-        else:
-            state.controllers.add(cause)
-            if 'default' in state.controllers:
-                state.controllers.remove('default')
-        state.inactive_time = 0.
-        for tag, on in self.global_status_by_tag.items():
-            self.set_train_functions_by_tag(train, tag, on)
+        with state.modify_lock:
+            if cause is None:
+                state.controllers.add('default')
+            else:
+                state.controllers.add(cause)
+                if 'default' in state.controllers:
+                    state.controllers.remove('default')
+            state.inactive_time = 0.
+            for tag, on in self.global_status_by_tag.items():
+                self.set_train_functions_by_tag(train, tag, on)
 
     def deactivate(self, train: Train, cause: str):
         """ user: If `None`, will remove all users. """
         state = self[train]
-        if cause is None:
-            state.controllers.clear()
-        else:
-            if cause in state.controllers:
-                state.controllers.remove(cause)
-            elif state.controllers:
-                warnings.warn(f"Trying to remove unregistered cause from {train}: {cause}.\nRegistered: {state.controllers}")
-        if not state.controllers:
-            self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
-            self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
-            self.force_stop(train, 'deactivation')
+        with state.modify_lock:
+            if cause is None:
+                state.controllers.clear()
+            else:
+                if cause in state.controllers:
+                    state.controllers.remove(cause)
+                elif state.controllers:
+                    warnings.warn(f"Trying to remove unregistered cause from {train}: {cause}.\nRegistered: {state.controllers}")
+            if not state.controllers:
+                self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
+                self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
+                self.force_stop(train, 'deactivation')
 
     def remove_controller(self, controller: str):
         for train in self.trains:
@@ -289,46 +308,47 @@ class TrainControl:
 
     def _update_train(self, train: Train, dt: float):  # called by update_trains()
         state = self[train]
-        if not self.is_power_on(train):
-            state.speed = 0
-            return
-        # --- Signed distance ---
-        if state.speed:
-            speed_cm_s = state.speed * 27.78 / 87
-            state.signed_distance += speed_cm_s * dt
-        # --- Deactivate after 30 seconds of inactivity ---
-        if state.acc_input == 0 and state.speed == 0 and state.is_active:
-            state.inactive_time += dt
-            if not state.is_active:
-                self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
-                self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
-        elif state.acc_input != 0 or state.speed != 0:
-            state.inactive_time = 0
-        # --- Input ---
-        if state.force_stopping:
-            state.target_speed = math.copysign(0, state.target_speed)
-            if abs(state.speed) == 0:
-                state.force_stopping = False
-        elif state.acc_input != 0:
-            acc = train.acceleration if state.acc_input > 0 else train.deceleration
-            abs_target = max(0., abs(state.speed or 0.) + dt * acc * state.acc_input)
-            state.target_speed = abs_target * (-1. if state.is_in_reverse else 1.)
-        # --- Compute new speed ---
-        speed = state.speed
-        if speed is None:
-            speed = 0. * state.target_speed  # update next time
-            if state.acc_input > 0 or time.perf_counter() > state.last_emergency_break[0] + .5:
-                state.speed = speed
+        with state.modify_lock:
+            if not self.is_power_on(train):
+                state.speed = 0
+                return
+            # --- Signed distance ---
+            if state.speed:
+                speed_cm_s = state.speed * 27.78 / 87
+                state.signed_distance += speed_cm_s * dt
+            # --- Deactivate after 30 seconds of inactivity ---
+            if state.acc_input == 0 and state.speed == 0 and state.is_active:
+                state.inactive_time += dt
+                if not state.is_active:
+                    self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
+                    self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
+            elif state.acc_input != 0 or state.speed != 0:
+                state.inactive_time = 0
+            # --- Input ---
+            if state.force_stopping:
+                state.target_speed = math.copysign(0, state.target_speed)
+                if abs(state.speed) == 0:
+                    state.force_stopping = False
+            elif state.acc_input != 0:
+                acc = train.acceleration if state.acc_input > 0 else train.deceleration
+                abs_target = max(0., abs(state.speed or 0.) + dt * acc * state.acc_input)
+                state.target_speed = abs_target * (-1. if state.is_in_reverse else 1.)
+            # --- Compute new speed ---
+            speed = state.speed
+            if speed is None:
+                speed = 0. * state.target_speed  # update next time
+                if state.acc_input > 0 or time.perf_counter() > state.last_emergency_break[0] + .5:
+                    state.speed = speed
+                else:
+                    return  # emergency brake, don't update signal
+            if state.acc_input != 0:
+                acc = train.deceleration if state.acc_input < 0 else train.acceleration
             else:
-                return  # emergency brake, don't update signal
-        if state.acc_input != 0:
-            acc = train.deceleration if state.acc_input < 0 else train.acceleration
-        else:
-            acc = train.acceleration if abs(state.target_speed) > abs(speed) else train.deceleration
-        if state.target_speed > speed:
-            state.speed = min(speed + acc * dt, state.target_speed)
-        else:
-            state.speed = max(speed - acc * dt, state.target_speed)
+                acc = train.acceleration if abs(state.target_speed) > abs(speed) else train.deceleration
+            if state.target_speed > speed:
+                state.speed = min(speed + acc * dt, state.target_speed)
+            else:
+                state.speed = max(speed - acc * dt, state.target_speed)
         self._update_signal(train)
 
     def _update_signal(self, train: Train):
