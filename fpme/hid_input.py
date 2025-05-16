@@ -34,6 +34,7 @@ class InputManager:
             if path not in controllers:
                 del self.connected[path]
                 self.disconnected.add(path)
+                self.control.remove_controller(path)
         # --- Add new controllers ---
         for device in [dev for path, dev in controllers.items() if path not in self.connected]:
             try:

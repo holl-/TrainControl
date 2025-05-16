@@ -272,6 +272,12 @@ class TrainControl:
             self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
             self.force_stop(train, 'deactivation')
 
+    def remove_controller(self, controller: str):
+        for train in self.trains:
+            state = self[train]
+            if controller in state.controllers:
+                self.deactivate(train, controller)
+
     def update_trains(self, dt):  # repeatedly called from setup()
         if self.paused:
             return
