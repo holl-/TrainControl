@@ -73,7 +73,7 @@ class TrainState:
             if not self.speed_limits:
                 self.target_speed = target_speed
             else:
-                self.target_speed = math.copysign(min(target_speed, *self.speed_limits.values()), target_speed)
+                self.target_speed = math.copysign(min(abs(target_speed), *self.speed_limits.values()), target_speed)
 
     @property
     def can_use_primary_ability(self):
