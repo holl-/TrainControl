@@ -10,7 +10,7 @@ from typing import Optional, List
 
 from dataclasses import dataclass
 
-from fpme.audio import play_announcement
+from fpme.audio import play_announcement_async
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl
@@ -346,7 +346,6 @@ def set_switches_for(relay, platform: int):
 
 
 def play_terminus_announcement(train: Train, platform: int):
-    return  # ToDo async!
     targets = {
         ICE: {
             1: ('I C E, 86',  'Waldbrunn'),
@@ -389,9 +388,10 @@ def play_terminus_announcement(train: Train, platform: int):
         delay = max(0, random.randint(int(-train.max_delay * (1 - train.delay_rate)), train.max_delay))
         hour, minute, delay = delayed_now(delay)
         delay_text = f", heute circa {delay} Minuten später." if delay else ". Vorsicht bei der Einfahrt."
-        play_announcement(f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}", None)
+        speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
     else:
-        play_announcement(f"Vorsicht auf Gleis {platform}, ein Zug fährt ein.")
+        speech = f"Vorsicht auf Gleis {platform}, ein Zug fährt ein."
+    play_announcement_async(speech, None)
 
 
 def delayed_now(delay_minutes: int):
@@ -434,8 +434,8 @@ def play_special_announcement():
         "Achtung Passagiere des I C E 456, nach: Wunderland. Bitte folgen Sie dem weißen Kaninchen zum Gleis",
         "Jim Knopf",
     ]
-    # play_announcement(sentences[0])
-    play_announcement(random.choice(sentences))
+    # play_announcement_async(sentences[0])
+    play_announcement_async(random.choice(sentences))
 
 
 if __name__ == '__main__':
