@@ -89,7 +89,6 @@ def play_announcement(text: str, device_index: Optional[int] = None, language='G
 
 
 def play_audio(file: str, device_index: Optional[int] = None, blocking=True, reverb=False, gong=False, left=True, right=True):
-    print(left, right)
     audio = AudioSegment.from_file(file)
     audio_data = np.reshape(np.array(audio.get_array_of_samples(), dtype=np.float32) / (2**15), (-1, audio.channels))
     audio_data = np.tile(audio_data, [1, 2])
@@ -101,6 +100,14 @@ def play_audio(file: str, device_index: Optional[int] = None, blocking=True, rev
     if not right:
         audio_data[:, 1] = 0
     sd.play(audio_data, samplerate=audio.frame_rate, device=device_index, blocking=blocking)
+
+
+def play_audio_async(file: str, device_index: Optional[int] = None, reverb=False, gong=False, left=True, right=True):
+    process = multiprocessing.Process(
+        target=play_audio,
+        args=(file, device_index, True, reverb, gong, left, right)
+    )
+    process.start()
 
 
 if __name__ == '__main__':

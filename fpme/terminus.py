@@ -10,11 +10,11 @@ from typing import Optional, List
 
 from dataclasses import dataclass
 
-from fpme.audio import play_announcement_async
+from fpme.audio import play_announcement_async, play_audio_async
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl, TrainState
-from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW_IC, E40_RE_BLAU
+from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW_IC, E40_RE_BLAU, DAMPF, BEIGE_218, ROT_218, DIESEL, BUS
 
 SWITCH_STATE = {  # True -> open_channel, False -> close_channel
     1: {6: False, 8: True},
@@ -39,13 +39,16 @@ SPEED_LIMIT = 80.
 @dataclass
 class ParkedTrain:
     train: Train
+    state: TrainState
     platform: int
     dist_request: float = None  # Signed distance when enter request was sent. None for trains set through the UI.
     dist_trip: float = None  # Signed distance when entering the switches
     dist_clear: float = None  # Signed distance when leaving the sensor, now fully on switches
-    # dist_stop: float = None  # Abs distance when coming to a full stop
+    # --- For
     dist_reverse: float = None  # Abs distance when the 'reverse' button is clicked for the fist time
-    time_reverse: float = None  # perf_counter() when train was first reversed in station. Used to determine whether people could get on/off.
+    # --- For departure sound ---
+    time_stopped: float = None  # perf_counter() when train was first reversed in station. Used to determine whether people could get on/off.
+    time_departed: float = None  # Track departure so we don't play sounds multiple times
 
     @property
     def has_tripped(self):
@@ -75,23 +78,23 @@ class ParkedTrain:
     def has_reversed(self):
         return self.dist_reverse is not None
 
-    def get_position(self, state: TrainState):
+    def get_position(self):
         """Positive towards station."""
         if not self.has_tripped:
             return None
-        delta = state.signed_distance - self.dist_trip
+        delta = self.state.signed_distance - self.dist_trip
         if not self.was_entry_recorded:
             default_position = 200  # ~middle of platform
             delta = default_position - abs(delta - 200)
         elif not self.entered_forward:  # entered_forward only available if was_entry_recorded
             delta = -delta  # make sure positive in station
         if self.has_reversed:  # here it's hard to know which direction the train is going.
-            since_rev = state.abs_distance - self.dist_reverse
+            since_rev = self.state.abs_distance - self.dist_reverse
             return min(250., delta) - since_rev
         return delta
 
-    def get_end_position(self, state: TrainState):
-        return self.get_position(state) - self.train_length
+    def get_end_position(self):
+        return self.get_position() - self.train_length
 
     def __repr__(self):
         status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
@@ -117,6 +120,7 @@ class Terminus:
             control.set_speed_limit(t.train, 'terminus', SPEED_LIMIT)
         schedule_at_fixed_rate(self.save_state, 5.)
         schedule_at_fixed_rate(self.check_exited, 1.)
+        schedule_at_fixed_rate(self.update, 0.1)
 
     def save_state(self, *_args):
         data = {
@@ -124,8 +128,8 @@ class Terminus:
             'trains': [{
                 'name': t.train.name,
                 'platform': t.platform,
-                'sgn_dist': self.control[t.train].signed_distance,
-                'abs_dist': self.control[t.train].abs_distance,
+                'sgn_dist': t.state.signed_distance,
+                'abs_dist': t.state.abs_distance,
                 'dist_request': t.dist_request,
                 'dist_trip': t.dist_trip,
                 'dist_clear': t.dist_clear,
@@ -150,23 +154,22 @@ class Terminus:
             dist_reverse = train_data['dist_reverse']
             sgn_delta = state.signed_distance - train_data['sgn_dist']
             abs_delta = state.abs_distance - train_data['abs_dist']  # typically < 0
-            self.trains.append(ParkedTrain(train, platform,
+            self.trains.append(ParkedTrain(train, state, platform,
                                            dist_request=dist_request + sgn_delta if dist_request is not None else None,
                                            dist_trip=dist_trip + sgn_delta if dist_trip is not None else None,
                                            dist_clear=dist_clear + sgn_delta if dist_clear is not None else None,
                                            dist_reverse=dist_reverse + abs_delta if dist_reverse is not None else state.abs_distance,  # train could be reversed by restart
-                                           time_reverse=-100))
+                                           time_stopped=-100))
 
     def reverse_to_exit(self):
         for train in self.trains:
-            state = self.control[train.train]
-            if state.abs_distance == 0 and train.entered_forward != state.is_in_reverse:
+            if train.state.abs_distance == 0 and train.entered_forward != train.state.is_in_reverse:
                 self.control.reverse(train.train, 'terminus')
 
     def get_train_position(self, train: Train):
         for t in self.trains:
             if t.train == train:
-                return t.platform, t.get_position(self.control[train].signed_distance)
+                return t.platform, t.get_position()
         return None, None
 
     def set_occupied(self, platform: int, train: Train):
@@ -174,15 +177,12 @@ class Terminus:
         if any([t.train == train for t in self.trains]):
             t = [t for t in self.trains if t.train == train][0]
             t.platform = platform
-            # position = t.get_position(self.control[train].signed_distance)
-            # train_length = t.train_length
-            # self.trains.remove(t)
         else:
             dist = state.signed_distance
             abs_dist = state.abs_distance
             position = 200
             train_length = 50
-            t = ParkedTrain(train, platform, None, dist_trip=dist - position, dist_clear=dist - position + train_length + 0.18, dist_reverse=abs_dist, time_reverse=-100)
+            t = ParkedTrain(train, state, platform, None, dist_trip=dist - position, dist_clear=dist - position + train_length + 0.18, dist_reverse=abs_dist, time_stopped=-100)
             self.trains.append(t)
 
     def set_empty(self, platform: int):
@@ -191,8 +191,8 @@ class Terminus:
     def on_reversed(self, train: Train):
         for t in self.trains:
             if t.train == train:
-                t.time_reverse = time.perf_counter()
-                t.dist_reverse = self.control[train].abs_distance
+                if t.dist_reverse is None:
+                    t.dist_reverse = t.state.abs_distance
 
     def request_entry(self, train: Train):
         print(self.trains)
@@ -216,7 +216,7 @@ class Terminus:
                     return
             if any(t.train == train for t in self.trains):
                 t = [t for t in self.trains if t.train == train][0]
-                print(f"{train} is already in terminus: {t.platform} @ {t.get_position(self.control[train].signed_distance)}, cleared={t.has_cleared}")
+                print(f"{train} is already in terminus: {t.platform} @ {t.get_position()}, cleared={t.has_cleared}")
                 return
             # --- prepare entry ---
             platform = self.select_track(train)
@@ -224,8 +224,8 @@ class Terminus:
             if platform is None:  # cannot enter
                 self.control.force_stop(train, "no platform")
                 return
-            self.entering = entering = ParkedTrain(train, platform)
-            entering.dist_request = self.control[train].signed_distance
+            self.entering = entering = ParkedTrain(train, self.control[train], platform)
+            entering.dist_request = entering.state.signed_distance
             self.trains.append(entering)
         self.control.set_speed_limit(train, 'terminus', SPEED_LIMIT)
         self.prevent_exit(platform)
@@ -247,17 +247,17 @@ class Terminus:
                 self.trains.remove(entering)
                 return
             # --- Contact tripped ---
-            entering.dist_trip = self.control[train].signed_distance
+            entering.dist_trip = entering.state.signed_distance
             if entering.dist_trip == entering.dist_request:
-                entering.dist_request -= -1e-3 if self.control[train].is_in_reverse else 1e-3
+                entering.dist_request -= -1e-3 if entering.state.is_in_reverse else 1e-3
             driven = entering.dist_trip - entering.dist_request
-            if (self.control[train].speed > 0) != entering.entered_forward:
-                warnings.warn(f"Train switched direction while entering? driven={driven}, speed={self.control[train].speed}")
+            if (entering.state.speed > 0) != entering.entered_forward:
+                warnings.warn(f"Train switched direction while entering? driven={driven}, speed={entering.state.speed}")
             play_terminus_announcement(train, platform)
             def red_when_entered():
                 while True:
                     time.sleep(0.1)
-                    if entering.get_position(self.control[train].signed_distance) > 20:
+                    if entering.get_position() > 20:
                         self.relay.close_channel(ENTRY_SIGNAL)  # red when train has driven for 20cm
                         return
             print("-> (async) Red when entered...")
@@ -270,18 +270,18 @@ class Terminus:
                 if not self.control.generator.contact_status(self.port)[0]:  # possible sensor clear
                     if entering.dist_clear is None:
                         print("Sensor clear. Waiting for possible next wheel...")
-                        entering.dist_clear = self.control[train].signed_distance
+                        entering.dist_clear = entering.state.signed_distance
                         # self.relay.open_channel(ENTRY_POWER)
-                elif entering.dist_clear is not None and entering.get_end_position(self.control[train].signed_distance) < 30:  # another wheel entered
+                elif entering.dist_clear is not None and entering.get_end_position(entering.state.signed_distance) < 30:  # another wheel entered
                     print("Another wheel entered")
                     entering.dist_clear = None  # enable above block to re-trigger
                     # self.relay.close_channel(ENTRY_POWER)
                     continue
-                if entering.get_position(self.control[train].signed_distance) > max_train_length and entering.dist_clear is None:
-                    entering.dist_clear = self.control[train].signed_distance
-                    print(f"Max train length reached. Setting as cleared. End = {entering.get_end_position(self.control[train].signed_distance)}")
+                if entering.get_position() > max_train_length and entering.dist_clear is None:
+                    entering.dist_clear = entering.state.signed_distance
+                    print(f"Max train length reached. Setting as cleared. End = {entering.get_end_position()}")
                 # --- cleared switches ---
-                if self.entering.dist_clear is not None and entering.get_end_position(self.control[train].signed_distance) > 40:  # approx. 57 cm
+                if self.entering.dist_clear is not None and entering.get_end_position() > 40:  # approx. 57 cm
                     print("Train cleared switches.")
                     self.free_exit()
                     self.entering = None
@@ -290,17 +290,29 @@ class Terminus:
 
         Thread(target=process_entry, args=(entering,)).start()
 
-    def check_exited(self, *_args):
+    def check_exited(self, *_):
         # print(f"Check exited for {self.trains}")
         for t in tuple(self.trains):
             if t.has_cleared:
-                pos = t.get_position(self.control[t.train].signed_distance)
+                pos = t.get_position()
                 exited = pos < 0
                 if exited:
                     self.trains.remove(t)
                     self.control.set_speed_limit(t.train, 'terminus', None)
                 # else:
                     # print(f"{t} still in station")
+
+    def update(self, *_):
+        for train in self.trains:
+            if train.time_stopped is None and not train.state.speed:
+                print(f"{train} came to a stop in terminus")
+                train.time_stopped = time.perf_counter()
+            elif train.time_departed is None and train.time_stopped is not None and train.has_reversed:
+                print(f"{train} is departing")
+                train.time_departed = time.perf_counter()
+                if time.perf_counter() - train.time_stopped > 4.:
+                    play_departure(train.train)
+
 
     def prevent_exit(self, entering_platform):
         if entering_platform == 1:
@@ -311,7 +323,7 @@ class Terminus:
             self.relay.close_channel(2)  # Platform 4
         trains = [t for t in self.trains if t.platform in PREVENT_EXIT.get(entering_platform, [])]
         for t in trains:
-            if (self.control[t.train].speed < 0) == t.entered_forward:
+            if (t.state.speed < 0) == t.entered_forward:
                 self.control.emergency_stop(t.train, 'terminus-conflict')
                 self.control.set_speed_limit(t.train, 'terminus-wait', 0)
 
@@ -325,7 +337,7 @@ class Terminus:
         """For each platform returns one of (empty, parked, entering, exiting) """
         state = {i: 'empty' for i in range(1, 6)}
         for t in self.trains:
-            speed = self.control[t.train].speed
+            speed = t.state.speed
             if speed == 0:
                 state[t.platform] = 'parked'
             elif (speed > 0) == t.entered_forward:
@@ -387,46 +399,48 @@ def set_switches_for(relay, platform: int):
             time.sleep(.1)
 
 
-def play_terminus_announcement(train: Train, platform: int):
-    targets = {
-        ICE: {
-            1: ('I C E, 86',  'Waldbrunn'),
-            2: ('I C E, 109', 'Heilbronn, über: Waldbrunn'),
-            3: ('I C E, 170', 'Böblingen, über: Waldbrunn'),
-            4: ('I C E, 18',  'Wiesbaden, über: Böblingen'),
-            5: ('I C E, 34',  'Radeburg, über: Wiesbaden'),
-        },
-        S: {
-            1: ('S 3', "Kirchbach"),
-            2: ('S 5', "Waldbrunn"),
-            3: ('S 1', "Heilbronn"),
-            4: ('S 2', "Böblingen"),
-            5: ('S 4', "Grünstein"),
-        },
-        E_BW_IC: {
-            1: ("Intercity", ""),
-            2: ("", ""),
-            3: ("", ""),
-            4: ("", ""),
-            5: ("", ""),
-        },
-        E_RB: {
-            1: ("Regionalbahn", ""),
-            2: ("", ""),
-            3: ("", ""),
-            4: ("", ""),
-            5: ("", ""),
-        },
-        E40_RE_BLAU: {
-            1: ("Regional-Express", ""),
-            2: ("", ""),
-            3: ("", ""),
-            4: ("", ""),
-            5: ("", ""),
-        }
+TARGETS = {
+    ICE: {
+        1: ('I C E, 86',  'Neuffen'),
+        2: ('I C E, 109', 'Waldbrunn, über: Neuffen'),
+        3: ('I C E, 170', 'Böblingen, über: Waldbrunn'),
+        4: ('I C E, 18',  'Waldbrunn, über: Böblingen'),
+        5: ('I C E, 34',  'Radeburg, über: Waldbrunn'),
+    },
+    S: {
+        1: ('S 3', "Neuenbürg"),
+        2: ('S 5', "Neuffen"),
+        3: ('S 1', "Waldbrunn"),
+        4: ('S 2', "Radeburg"),
+        5: ('S 4', "Böblingen"),
+    },
+    E_BW_IC: {
+        1: ("Intercity", "Neuffen"),
+        2: ("Intercity", "Neuffen"),
+        3: ("Intercity", "Neuffen"),
+        4: ("Intercity", "Radeburg"),
+        5: ("Intercity", "Radeburg"),
+    },
+    E_RB: {
+        1: ("Regionalbahn", "Neuffen"),
+        2: ("Regionalbahn", "Neuffen"),
+        3: ("Regionalbahn", "Neuffen"),
+        4: ("Regionalbahn", "Radeburg"),
+        5: ("Regionalbahn", "Waldbrunn"),
+    },
+    E40_RE_BLAU: {
+        1: ("Regional-Express", "Neuffen"),
+        2: ("Regional-Express", "Neuffen"),
+        3: ("Regional-Express", "Neuffen"),
+        4: ("Regional-Express", "Radeburg"),
+        5: ("Regional-Express", "Wiesbaden"),
     }
-    if train in targets:
-        connection, target = targets[train][platform]
+}
+
+
+def play_terminus_announcement(train: Train, platform: int):
+    if train in TARGETS:
+        connection, target = TARGETS[train][platform]
         delay = max(0, random.randint(int(-train.max_delay * (1 - train.delay_rate)), train.max_delay))
         hour, minute, delay = delayed_now(delay)
         delay_text = f", heute circa {delay} Minuten später." if delay else ". Vorsicht bei der Einfahrt."
@@ -480,10 +494,37 @@ def play_special_announcement():
     play_announcement_async(random.choice(sentences))
 
 
+DEPARTURE_SOUNDS = {  # , "e-train1.wav"
+    ICE: ["whistle1.wav"],
+    S: ["door-beep1.wav"],
+    E_BW_IC: ["whistle2.wav"],
+    E_RB: ["doors1.wav"],
+    DAMPF: ["steam-horn.wav"],
+    E40_RE_BLAU: ["whistle-and-train1.wav"],
+    BEIGE_218: [],
+    ROT_218: [],
+    DIESEL: ["diesel1.wav"],
+    BUS: ["e-drive1.wav"],
+}
+
+
+def play_departure(train: Train):
+    sounds = DEPARTURE_SOUNDS[train]
+    if not sounds:
+        return
+    sound_file = random.choice(sounds)
+    path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure', sound_file))
+    if not os.path.isfile(path):
+        warnings.warn(f"File {path} does not exist.")
+        return
+    play_audio_async(path, reverb=True)
+
+
 if __name__ == '__main__':
-    relays = RelayManager()
-    def main(relay: Relay8):
-        relay.close_channel(ENTRY_POWER)
+    play_departure(ICE)
+    # relays = RelayManager()
+    # def main(relay: Relay8):
+    #     relay.close_channel(ENTRY_POWER)
         # for i in range(100):
             # relay.open_channel(6)
             # relay.open_channel(8)
@@ -493,7 +534,7 @@ if __name__ == '__main__':
             # relay.close_channel(6)
             # relay.close_channel(8)
             # time.sleep(1)
-    relays.on_connected(main)
-    time.sleep(1)
+    # relays.on_connected(main)
+    # time.sleep(1)
     # play_terminus_announcement(S, 1)
     # play_special_announcement()
