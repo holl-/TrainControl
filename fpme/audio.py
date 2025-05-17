@@ -91,7 +91,8 @@ def play_announcement(text: str, device_index: Optional[int] = None, language='G
 def play_audio(file: str, device_index: Optional[int] = None, blocking=True, reverb=False, gong=False, left=True, right=True):
     audio = AudioSegment.from_file(file)
     audio_data = np.reshape(np.array(audio.get_array_of_samples(), dtype=np.float32) / (2**15), (-1, audio.channels))
-    audio_data = np.tile(audio_data, [1, 2])
+    if audio_data.shape[-1] == 1:
+        audio_data = np.tile(audio_data, [1, 2])
     if gong:
         audio_data = np.concatenate([gong_data[::2, :audio_data.shape[1]], audio_data], 0)
     audio_data = apply_reverb(audio_data) if reverb else audio_data
