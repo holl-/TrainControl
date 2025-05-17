@@ -72,6 +72,8 @@ class InputManager:
             event_text = "A (stop)"
         elif pressed == 1:  # Button B / Trigger 1
             self.control.reverse(train, cause=device_path)
+            if self.terminus is not None:
+                self.terminus.on_reversed(train)
             event_text = "B (reverse)"
         elif pressed == 8:  # Button C
             if self.terminus:

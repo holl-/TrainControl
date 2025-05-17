@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from fpme.audio import play_announcement_async
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
-from fpme.train_control import TrainControl
+from fpme.train_control import TrainControl, TrainState
 from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW_IC, E40_RE_BLAU
 
 SWITCH_STATE = {  # True -> open_channel, False -> close_channel
@@ -43,6 +43,9 @@ class ParkedTrain:
     dist_request: float = None  # Signed distance when enter request was sent. None for trains set through the UI.
     dist_trip: float = None  # Signed distance when entering the switches
     dist_clear: float = None  # Signed distance when leaving the sensor, now fully on switches
+    # dist_stop: float = None  # Abs distance when coming to a full stop
+    dist_reverse: float = None  # Abs distance when the 'reverse' button is clicked for the fist time
+    time_reverse: float = None  # perf_counter() when train was first reversed in station. Used to determine whether people could get on/off.
 
     @property
     def has_tripped(self):
@@ -54,7 +57,8 @@ class ParkedTrain:
 
     @property
     def train_length(self):
-        return abs(self.dist_clear - self.dist_trip) - 0.18  # detector track length
+        computed_length = abs(self.dist_clear - self.dist_trip) - 0.18  # detector track length
+        return min(120., computed_length)
 
     @property
     def entered_forward(self):
@@ -67,18 +71,27 @@ class ParkedTrain:
     def was_entry_recorded(self):
         return self.dist_request is not None
 
-    def get_position(self, current_signed_distance):
+    @property
+    def has_reversed(self):
+        return self.dist_reverse is not None
+
+    def get_position(self, state: TrainState):
         """Positive towards station."""
         if not self.has_tripped:
             return None
-        delta = current_signed_distance - self.dist_trip
+        delta = state.signed_distance - self.dist_trip
         if not self.was_entry_recorded:
-            default_position = 200
-            return default_position - abs(delta - 200)
-        return delta if self.entered_forward else -delta
+            default_position = 200  # ~middle of platform
+            delta = default_position - abs(delta - 200)
+        elif not self.entered_forward:  # entered_forward only available if was_entry_recorded
+            delta = -delta  # make sure positive in station
+        if self.has_reversed:  # here it's hard to know which direction the train is going.
+            since_rev = state.abs_distance - self.dist_reverse
+            return min(250., delta) - since_rev
+        return delta
 
-    def get_end_position(self, current_signed_distance):
-        return self.get_position(current_signed_distance) - self.train_length
+    def get_end_position(self, state: TrainState):
+        return self.get_position(state) - self.train_length
 
     def __repr__(self):
         status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
@@ -111,10 +124,12 @@ class Terminus:
             'trains': [{
                 'name': t.train.name,
                 'platform': t.platform,
-                'dist': self.control[t.train].signed_distance,
+                'sgn_dist': self.control[t.train].signed_distance,
+                'abs_dist': self.control[t.train].abs_distance,
                 'dist_request': t.dist_request,
                 'dist_trip': t.dist_trip,
                 'dist_clear': t.dist_clear,
+                'dist_reverse': t.dist_reverse,
             } for t in self.trains]
         }
         with open("terminus.json", 'w', encoding='utf-8') as file:
@@ -127,15 +142,20 @@ class Terminus:
             data = json.load(file)
         for train_data in data['trains']:
             train = TRAINS_BY_NAME[train_data['name']]
+            state = self.control[train]
             platform = train_data['platform']
             dist_request = train_data['dist_request']
             dist_trip = train_data['dist_trip']
             dist_clear = train_data['dist_clear']
-            delta = self.control[train].signed_distance - train_data['dist']
+            dist_reverse = train_data['dist_reverse']
+            sgn_delta = state.signed_distance - train_data['sgn_dist']
+            abs_delta = state.abs_distance - train_data['abs_dist']  # typically < 0
             self.trains.append(ParkedTrain(train, platform,
-                                           dist_request + delta if dist_request is not None else None,
-                                           dist_trip + delta if dist_trip is not None else None,
-                                           dist_clear + delta if dist_clear is not None else None))
+                                           dist_request=dist_request + sgn_delta if dist_request is not None else None,
+                                           dist_trip=dist_trip + sgn_delta if dist_trip is not None else None,
+                                           dist_clear=dist_clear + sgn_delta if dist_clear is not None else None,
+                                           dist_reverse=dist_reverse + abs_delta if dist_reverse is not None else state.abs_distance,  # train could be reversed by restart
+                                           time_reverse=-100))
 
     def get_train_position(self, train: Train):
         for t in self.trains:
@@ -144,6 +164,7 @@ class Terminus:
         return None, None
 
     def set_occupied(self, platform: int, train: Train):
+        state = self.control[train]
         if any([t.train == train for t in self.trains]):
             t = [t for t in self.trains if t.train == train][0]
             t.platform = platform
@@ -151,14 +172,21 @@ class Terminus:
             # train_length = t.train_length
             # self.trains.remove(t)
         else:
-            dist = self.control[train].signed_distance
+            dist = state.signed_distance
+            abs_dist = state.abs_distance
             position = 200
             train_length = 50
-            t = ParkedTrain(train, platform, None, dist - position, dist - position + train_length + 0.18)
+            t = ParkedTrain(train, platform, None, dist_trip=dist - position, dist_clear=dist - position + train_length + 0.18, dist_reverse=abs_dist, time_reverse=-100)
             self.trains.append(t)
 
     def set_empty(self, platform: int):
         self.trains = [t for t in self.trains if t.platform != platform]
+
+    def on_reversed(self, train: Train):
+        for t in self.trains:
+            if t.train == train:
+                t.time_reverse = time.perf_counter()
+                t.dist_reverse = self.control[train].abs_distance
 
     def request_entry(self, train: Train):
         print(self.trains)
@@ -335,7 +363,9 @@ class Terminus:
         #                 wait_cost += ...  # ToDo maximum cost at 5-10 seconds after parking
         #     # ToDo check that trains currently on the track (not in terminus) can be assigned a proper track (e.g. keep 4/5 open for ICE) Weighted by expected arrival time.
         #     cost[track] = base_cost[track] + wait_cost
-        return min(cost, key=cost.get)
+        best = min(cost, key=cost.get)
+        print(f"{train.name} -> platform {best},  costs={cost} (others cannot be entered due to occupancy or currently exiting trains)")
+        return best
 
 
 def set_switches_for(relay, platform: int):
