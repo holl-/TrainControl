@@ -85,15 +85,15 @@ class Train:
         return None
 
 
-ICE = Train('ICE', "🚅", 3, acceleration=25., img_path="ICE.png", regional_fac=0,
+ICE = Train('ICE', "🚅", 3, acceleration=25., img_path="ICE.png", regional_fac=.25,
             speeds=np.linspace(0, 310, 15),
             functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
-E_BW_IC = Train('IC', "🚉", 1, acceleration=30., img_path="E-Lok BW.png", stop_by_mm1_reverse=False, regional_fac=.2,
+E_BW_IC = Train('IC', "🚉", 1, acceleration=30., img_path="E-Lok BW.png", stop_by_mm1_reverse=False, regional_fac=.33,
                 speeds=(0, 13.4, 24.9, 45.6, 66.5, 86.3, 107.6, 124.5, 139.5, 155.6, 173.2, 190.9, 201.1, 215.2, 226),
                 functions=(LIGHT, TrainFunction("Nebelscheinwerfer", 2, False, (TAG_SPECIAL_LIGHT,)), TrainFunction("Fahrtlicht hinten", 3, False, (TAG_SPECIAL_LIGHT,)), INSTANT_ACCELERATION))
 E_RB = Train('RB', "🚉", 24, acceleration=30., supports_mm2=False, stop_by_mm1_reverse=False, img_path="E-Lok DB.png", regional_fac=.7,
              speeds=(0, 1.9, 20.2, 33, 49.2, 62.7, 77.1, 93.7, 109, 124.5, 136.9, 154.7, 168.7, 181.6, 183))
-S = Train('S', "Ⓢ", 48, acceleration=35., img_path="S-Bahn.png", regional_fac=.8,
+S = Train('S', "Ⓢ", 48, acceleration=35., img_path="S-Bahn.png", regional_fac=.75,
           speeds=(0, 1.9, 5.2, 9.6, 14.8, 22, 29.9, 40.7, 51.2, 64.1, 77.1, 90.8, 106.3, 120.2, 136),
           functions=(LIGHT, TrainFunction("Innenbeleuchtung", 1, False, (TAG_DEFAULT_LIGHT,)), SOUND, TrainFunction("Horn", 3, False, (TAG_SPECIAL_SOUND,)), INSTANT_ACCELERATION),
           max_delay=35, delay_rate=.5)
@@ -113,7 +113,7 @@ DIESEL = Train('Diesel', "🛲", 72, acceleration=25., img_path="Diesel.png", re
 E40_RE_BLAU = Train('RE', "🚉", 23, acceleration=30., img_path="Thumb_E40.png", stop_by_mm1_reverse=False, regional_fac=.6,
                     speeds=np.linspace(0, 220, 15),
                     functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction('Horn', -1, False, (TAG_SPECIAL_SOUND,))))  # ToDo which ID?
-BUS = Train('Bus', "🚌", 62, acceleration=40., img_path="Thumb_Schienenbus.png", stop_by_mm1_reverse=False, regional_fac=.9,
+BUS = Train('Bus', "🚌", 62, acceleration=40., img_path="Thumb_Schienenbus.png", stop_by_mm1_reverse=False, regional_fac=.8,
             speeds=np.linspace(0, 190, 15),
             functions=(), max_delay=10, delay_rate=0.1)
 
