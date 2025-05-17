@@ -341,8 +341,14 @@ class Terminus:
 def set_switches_for(relay, platform: int):
     time.sleep(.01)
     for channel, req_open in SWITCH_STATE[platform].items():
-        relay.set_channel_open(channel, req_open)
-        time.sleep(.1)
+        if channel == 8:  # secondary switches, delay by 1s
+            def delayed_switch_secondary(channel=channel, req_open=req_open):
+                time.sleep(1.)
+                relay.set_channel_open(channel, req_open)
+            Thread(target=delayed_switch_secondary).start()
+        else:
+            relay.set_channel_open(channel, req_open)
+            time.sleep(.1)
 
 
 def play_terminus_announcement(train: Train, platform: int):
