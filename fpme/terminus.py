@@ -157,6 +157,12 @@ class Terminus:
                                            dist_reverse=dist_reverse + abs_delta if dist_reverse is not None else state.abs_distance,  # train could be reversed by restart
                                            time_reverse=-100))
 
+    def reverse_to_exit(self):
+        for train in self.trains:
+            state = self.control[train.train]
+            if state.abs_distance == 0 and train.entered_forward != state.is_in_reverse:
+                self.control.reverse(train.train, 'terminus')
+
     def get_train_position(self, train: Train):
         for t in self.trains:
             if t.train == train:
