@@ -95,7 +95,7 @@ class TrainControl:
         self.generator = SubprocessGenerator(max_generators=2)
         self.speed_limit = None
         self.global_status_by_tag: Dict[str, bool] = {}
-        self.sound = None
+        self.sound: int = 0  # 0=off 1=announcements 2=all
         self.light = None
         self.paused = False
         self.last_emergency_break_all = (0., "")
@@ -236,10 +236,10 @@ class TrainControl:
         self.set_functions_by_tag(TAG_DEFAULT_LIGHT, on)
 
     def set_sound_on(self, on: bool):
-        if self.sound == on:
-            return
-        self.sound = on
-        self.set_functions_by_tag(TAG_DEFAULT_SOUND, on)
+        level = max(0, min(self.sound + (1 if on else -1), 2))
+        if self.sound != level:
+            self.sound = level
+            self.set_functions_by_tag(TAG_DEFAULT_SOUND, level >= 2)
 
     def set_functions_by_tag(self, tag: str, on: bool):
         self.global_status_by_tag[tag] = on

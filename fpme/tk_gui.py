@@ -245,7 +245,7 @@ class TKGUI:
         # --- State ---
         self.active_status.config(text="paused" if self.control.paused else "not paused")
         self.light_status.config(text="on" if self.control.light else ("?" if self.control.light is None else "off"))
-        self.sound_status.config(text="on" if self.control.sound else ("?" if self.control.sound is None else "off"))
+        self.sound_status.config(text=["off", "station", "all"][self.control.sound])
         self.speed_limit.config(text=str(self.control.speed_limit))
         # --- Terminus plan ---
         if self.terminus:

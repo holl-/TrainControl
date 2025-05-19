@@ -214,6 +214,9 @@ class Terminus:
                     if t.doors_closing:
                         return
                     t.doors_closing = True
+                    if self.control.sound < 2:
+                        t.state.custom_acceleration_handler = None
+                        break
                     # --- Play sound ---
                     sound, duration = READY_SOUNDS[t.train]
                     path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure-effects', sound))
@@ -290,7 +293,8 @@ class Terminus:
             driven = entering.dist_trip - entering.dist_request
             if (entering.state.speed > 0) != entering.entered_forward:
                 warnings.warn(f"Train switched direction while entering? driven={driven}, speed={entering.state.speed}")
-            play_terminus_announcement(train, platform)
+            if self.control.sound >= 1:
+                play_terminus_announcement(train, platform)
             def red_when_entered():
                 while True:
                     time.sleep(0.1)
@@ -347,9 +351,9 @@ class Terminus:
             elif train.time_departed is None and train.time_stopped is not None and train.has_reversed and train.state.speed:
                 print(f"{train} is departing")
                 train.time_departed = time.perf_counter()
-                if time.perf_counter() - train.time_stopped > 4.:
-                    sound = DEPARTURE_SOUNDS[train.train]
-                    if sound:
+                if self.control.sound >= 2 and train.train in DEPARTURE_SOUNDS:
+                    if time.perf_counter() - train.time_stopped > 4.:
+                        sound = DEPARTURE_SOUNDS[train.train]
                         path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure', sound))
                         is_left = train.platform <= 3
                         async_play(path, int(is_left), 1 - int(is_left))
