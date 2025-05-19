@@ -304,10 +304,10 @@ class Terminus:
 
     def update(self, *_):
         for train in self.trains:
-            if train.time_stopped is None and not train.state.speed:
+            if train.time_stopped is None and not train.state.speed and train.has_cleared:
                 print(f"{train} came to a stop in terminus")
                 train.time_stopped = time.perf_counter()
-            elif train.time_departed is None and train.time_stopped is not None and train.has_reversed:
+            elif train.time_departed is None and train.time_stopped is not None and train.has_reversed and train.state.speed:
                 print(f"{train} is departing")
                 train.time_departed = time.perf_counter()
                 if time.perf_counter() - train.time_stopped > 4.:
