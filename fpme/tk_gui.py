@@ -206,8 +206,10 @@ class TKGUI:
                     train = CONTROLS[device]
                     self.control.deactivate(train, device)
                 else:
-                    fac = 1 - math.exp(t - now)
-                    label.config(text=text, bg=tk_rgb(int(255 * fac), 255, int(255 * fac)))
+                    fac = int(255 * (1 - math.exp(t - now)))
+                    if not (fac >= 0 and fac <= 255):
+                        fac = 100
+                    label.config(text=text, bg=tk_rgb(fac, 255, fac))
         # -- Highlight recent global commands ---
         cause_text = lambda x: CONTROLS[x].name if x in CONTROLS else x
         fac = 1 - math.exp(self.control.last_emergency_break_all[0] - now)
