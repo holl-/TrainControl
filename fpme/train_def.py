@@ -114,7 +114,7 @@ E40_RE_BLAU = Train('RE', "🚉", 23, acceleration=30., img_path="Thumb_E40.png"
                     speeds=np.linspace(0, 220, 15),
                     functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction('Horn', -1, False, (TAG_SPECIAL_SOUND,))))  # ToDo which ID?
 BUS = Train('Bus', "🚌", 62, acceleration=40., img_path="Thumb_Schienenbus.png", stop_by_mm1_reverse=False, regional_fac=.8,
-            speeds=np.linspace(0, 190, 15),
+            speeds=[0, 0.1, 0.2, *np.linspace(0, 190, 12)],
             functions=(), max_delay=10, delay_rate=0.1)
 
 TRAINS = [ICE, E_BW_IC, E_RB, S, BEIGE_218, ROT_218, DIESEL, E40_RE_BLAU, BUS, DAMPF]  # available trains
