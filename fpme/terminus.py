@@ -49,6 +49,7 @@ class ParkedTrain:
     dist_reverse: float = None  # Abs distance when the 'reverse' button is clicked for the fist time
     # --- For departure sound ---
     time_stopped: float = None  # perf_counter() when train was first reversed in station. Used to determine whether people could get on/off.
+    doors_closing: bool = False
     time_departed: float = None  # Track departure so we don't play sounds multiple times
 
     @property
@@ -112,7 +113,6 @@ class Terminus:
         self.trains: List[ParkedTrain] = []  # trains in Terminal
         self.entering: Optional[ParkedTrain] = None
         self._request_lock = Lock()
-        self.blocked_inputs = {}  # Train -> float
         relay.close_channel(1)
         relay.close_channel(2)
         relay.close_channel(ENTRY_SIGNAL)
@@ -161,7 +161,13 @@ class Terminus:
                                            dist_trip=dist_trip + sgn_delta if dist_trip is not None else None,
                                            dist_clear=dist_clear + sgn_delta if dist_clear is not None else None,
                                            dist_reverse=dist_reverse + abs_delta if dist_reverse is not None else state.abs_distance,  # train could be reversed by restart
-                                           time_stopped=-100))
+                                           doors_closing=False,
+                                           time_stopped=-100,))
+            if train in READY_SOUNDS:
+                state.custom_acceleration_handler = self.handle_acceleration
+                print(f"Terminus blocking acceleration on {train} - {id(state)}")
+            else:
+                print(f"No sound for {train}")
 
     def reverse_to_exit(self):
         for train in self.trains:
@@ -193,16 +199,21 @@ class Terminus:
     def on_reversed(self, train: Train):
         for t in self.trains:
             if t.train == train:
-                if t.dist_reverse is None:
+                if t.dist_reverse is None:  # ignore subsequent reverses
                     t.dist_reverse = t.state.abs_distance
+                    print(f"Reversed: {train}")
                     if t.train in READY_SOUNDS:
+                        print(f"Blocking input for sound {READY_SOUNDS[t.train]}")
                         t.state.custom_acceleration_handler = self.handle_acceleration
 
     def handle_acceleration(self, train: Train, controller: str, acc_input: float, cause: str):
+        print(f"Terminus handling acceleration for {train}")
         for t in self.trains:
             if t.train == train:
                 if acc_input > 0:
-                    self.blocked_inputs[t.train] = acc_input
+                    if t.doors_closing:
+                        return
+                    t.doors_closing = True
                     # --- Play sound ---
                     sound, duration = READY_SOUNDS[t.train]
                     path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure-effects', sound))
@@ -210,8 +221,10 @@ class Terminus:
                     async_play(path, int(is_left), 1-int(is_left))
                     # --- Wait, then release control ---
                     def release_block(t=t):
+                        time.sleep(duration)
+                        print(f"Terminus: door closing complete for {t.train}")
                         t.state.custom_acceleration_handler = None
-                        self.control.set_acceleration_control(train, controller, self.blocked_inputs[t.train], 'terminus-release')
+                        # self.control.set_acceleration_control(train, controller, self.blocked_inputs[t.train], 'terminus-release')
                     Thread(target=release_block).start()
                 break
         else:
@@ -337,7 +350,7 @@ class Terminus:
                 if time.perf_counter() - train.time_stopped > 4.:
                     sound = DEPARTURE_SOUNDS[train.train]
                     if sound:
-                        path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure-effects', sound))
+                        path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure', sound))
                         is_left = train.platform <= 3
                         async_play(path, int(is_left), 1 - int(is_left))
 
@@ -523,9 +536,9 @@ def play_special_announcement():
 # ToDo sounds only if enabled
 READY_SOUNDS = {
     ICE: ("whistle1.wav", 1.5),
-    S: ("door-beep-S-Bahn.wav", 4.),
+    S: ("door-beep-S-Bahn.wav", 5.),
     E_BW_IC: ("whistle2.wav", 1.5),
-    E_RB: ("door-beep-RE.wav", 4.),
+    E_RB: ("door-beep-RE.wav", 5.),
     DAMPF: ("steam-horn.wav", 4.),  # oder Horn vom Zug
     E40_RE_BLAU: ("whistle-and-train1.wav", 1.5),
     BEIGE_218: ("diesel-steam.wav", 0.),
