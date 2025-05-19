@@ -3,7 +3,7 @@ import threading
 import time
 import warnings
 from threading import Thread
-from typing import Sequence, Optional, Dict, Set, Tuple
+from typing import Sequence, Optional, Dict, Set, Tuple, Callable
 
 import numpy
 from dataclasses import dataclass, field
@@ -37,6 +37,7 @@ class TrainState:
     abs_distance: float = 0.  # distance travelled in cm
     primary_ability_last_used = 0.
     modify_lock = threading.RLock()
+    custom_acceleration_handler: Callable = None
 
     def __repr__(self):
         return f"{self.train.name} {self.speed:.0f} -> {self.target_speed:.0f} func={self.active_functions} controlled by {len(self.controllers)}"
@@ -179,13 +180,16 @@ class TrainControl:
                     return
                 else:
                     self.activate(train, cause)  # accelerate and simultaneously enable sound, so we don't have to wait
-            if acc_input != 0 and state.acc_input * acc_input <= 0:
-                speed_idx = get_speed_index(train, state, acc_input, False, False)
-                abs_speed = train.speeds[speed_idx]
-                # prev_speed = state.speed
-                state.speed = math.copysign(abs_speed + acc_input * 1e-2, state.target_speed)
-                # print(f"Acceleration {train.name} = {acc_input} (speed = {prev_speed} ({speed_idx}) -> {state.speed}, target={state.target_speed})")
-            state.acc_input = acc_input
+            if state.custom_acceleration_handler is not None:
+                state.custom_acceleration_handler(train, controller, acc_input, cause)
+            else:
+                if acc_input != 0 and state.acc_input * acc_input <= 0:  # switching acceleration direction
+                    speed_idx = get_speed_index(train, state, acc_input, False, False)
+                    abs_speed = train.speeds[speed_idx]
+                    # prev_speed = state.speed
+                    state.speed = math.copysign(abs_speed + acc_input * 1e-2, state.target_speed)
+                    # print(f"Acceleration {train.name} = {acc_input} (speed = {prev_speed} ({speed_idx}) -> {state.speed}, target={state.target_speed})")
+                state.acc_input = acc_input
 
     def emergency_stop_all(self, train: Optional[Train], cause: str):
         """Immediately stop all trains on the same track as `train`."""
