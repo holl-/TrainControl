@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from fpme.audio import play_announcement_async, play_audio_async
 from fpme.helper import schedule_at_fixed_rate
+from fpme.pygame_audio import async_play
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl, TrainState
 from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW_IC, E40_RE_BLAU, DAMPF, BEIGE_218, ROT_218, DIESEL, BUS
@@ -111,6 +112,7 @@ class Terminus:
         self.trains: List[ParkedTrain] = []  # trains in Terminal
         self.entering: Optional[ParkedTrain] = None
         self._request_lock = Lock()
+        self.blocked_inputs = {}  # Train -> float
         relay.close_channel(1)
         relay.close_channel(2)
         relay.close_channel(ENTRY_SIGNAL)
@@ -193,6 +195,28 @@ class Terminus:
             if t.train == train:
                 if t.dist_reverse is None:
                     t.dist_reverse = t.state.abs_distance
+                    if t.train in READY_SOUNDS:
+                        t.state.custom_acceleration_handler = self.handle_acceleration
+
+    def handle_acceleration(self, train: Train, controller: str, acc_input: float, cause: str):
+        for t in self.trains:
+            if t.train == train:
+                if acc_input > 0:
+                    self.blocked_inputs[t.train] = acc_input
+                    # --- Play sound ---
+                    sound, duration = READY_SOUNDS[t.train]
+                    path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure-effects', sound))
+                    is_left = t.platform <= 3
+                    async_play(path, int(is_left), 1-int(is_left))
+                    # --- Wait, then release control ---
+                    def release_block(t=t):
+                        t.state.custom_acceleration_handler = None
+                        self.control.set_acceleration_control(train, controller, self.blocked_inputs[t.train], 'terminus-release')
+                    Thread(target=release_block).start()
+                break
+        else:
+            warnings.warn(f"Terminus got input for {train} but train is not in station")
+            self.control.set_acceleration_control(train, controller, acc_input, cause)
 
     def request_entry(self, train: Train):
         print(self.trains)
@@ -311,8 +335,11 @@ class Terminus:
                 print(f"{train} is departing")
                 train.time_departed = time.perf_counter()
                 if time.perf_counter() - train.time_stopped > 4.:
-                    play_departure(train.train)
-
+                    sound = DEPARTURE_SOUNDS[train.train]
+                    if sound:
+                        path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure-effects', sound))
+                        is_left = train.platform <= 3
+                        async_play(path, int(is_left), 1 - int(is_left))
 
     def prevent_exit(self, entering_platform):
         if entering_platform == 1:
@@ -488,40 +515,41 @@ def play_special_announcement():
         "Information zu: I C E, 86, Heute pünktlich. Grund hierfür sind Personen im Gleis, die den Zug anschieben.",
         "Achtung Passagiere des I C E 987, nach: Gotham Sittie. Bitte benutzen Sie ausschließlich Abschnitte D bis F., Grund hierfür ist ein Auftritt des Jokers in Abteil A.",
         "Achtung Passagiere des I C E 456, nach: Wunderland. Bitte folgen Sie dem weißen Kaninchen zum Gleis",
-        "Jim Knopf",
+        # "Jim Knopf",
     ]
     # play_announcement_async(sentences[0])
     play_announcement_async(random.choice(sentences))
 
-
-DEPARTURE_SOUNDS = {  # , "e-train1.wav"
-    ICE: ["whistle1.wav"],
-    S: ["door-beep1.wav"],
-    E_BW_IC: ["whistle2.wav"],
-    E_RB: ["doors1.wav"],
-    DAMPF: ["steam-horn.wav"],
-    E40_RE_BLAU: ["whistle-and-train1.wav"],
-    BEIGE_218: [],
-    ROT_218: [],
-    DIESEL: ["diesel1.wav"],
-    BUS: ["e-drive1.wav"],
+# ToDo sounds only if enabled
+READY_SOUNDS = {
+    ICE: ("whistle1.wav", 1.5),
+    S: ("door-beep-S-Bahn.wav", 4.),
+    E_BW_IC: ("whistle2.wav", 1.5),
+    E_RB: ("door-beep-RE.wav", 4.),
+    DAMPF: ("steam-horn.wav", 4.),  # oder Horn vom Zug
+    E40_RE_BLAU: ("whistle-and-train1.wav", 1.5),
+    BEIGE_218: ("diesel-steam.wav", 0.),
+    ROT_218: ("diesel-steam.wav", 2.),
+    DIESEL: ("diesel-steam.wav", 2.),
+    BUS: ("doors-tram.wav", 4.),
 }
 
-
-def play_departure(train: Train):
-    sounds = DEPARTURE_SOUNDS[train]
-    if not sounds:
-        return
-    sound_file = random.choice(sounds)
-    path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure', sound_file))
-    if not os.path.isfile(path):
-        warnings.warn(f"File {path} does not exist.")
-        return
-    play_audio_async(path, reverb=True)
-
+DEPARTURE_SOUNDS = {  # , "e-train1.wav"
+    ICE: "e-train1.wav",
+    S: None,  # sound from train
+    E_BW_IC: "e-train1.wav",
+    E_RB: "e-train1.wav",
+    DAMPF: None,  # sound from train
+    E40_RE_BLAU: "e-train1.wav",
+    BEIGE_218: "diesel-departure.mp3",
+    ROT_218: None,
+    DIESEL: "diesel-departure.mp3",
+    BUS: "e-drive1.wav",
+}
 
 if __name__ == '__main__':
-    play_departure(ICE)
+    pass
+    # play_departure(ICE)
     # relays = RelayManager()
     # def main(relay: Relay8):
     #     relay.close_channel(ENTRY_POWER)

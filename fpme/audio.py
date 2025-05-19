@@ -1,6 +1,7 @@
 import multiprocessing
 import os
 import time
+import warnings
 from typing import Optional
 
 import sounddevice as sd
@@ -104,6 +105,9 @@ def play_audio(file: str, device_index: Optional[int] = None, blocking=True, rev
 
 
 def play_audio_async(file: str, device_index: Optional[int] = None, reverb=False, gong=False, left=True, right=True):
+    if not os.path.isfile(file):
+        warnings.warn(f"File {file} does not exist.")
+        return
     process = multiprocessing.Process(
         target=play_audio,
         args=(file, device_index, True, reverb, gong, left, right)
