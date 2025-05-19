@@ -2,9 +2,14 @@ import pygame
 
 pygame.mixer.init()
 
+
 def play_background_loop(file: str):
     pygame.mixer.music.load(file)
     pygame.mixer.music.play(loops=-1)  # infinite loop
+
+
+def set_background_volume(volume):
+    pygame.mixer.music.set_volume(volume)
 
 
 def async_play(file: str, left_vol=1., right_vol=1.):

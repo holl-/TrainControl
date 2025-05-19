@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from fpme.audio import play_announcement_async, play_audio_async
 from fpme.helper import schedule_at_fixed_rate
-from fpme.pygame_audio import async_play
+from fpme.pygame_audio import async_play, set_background_volume, play_background_loop
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl, TrainState
 from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW_IC, E40_RE_BLAU, DAMPF, BEIGE_218, ROT_218, DIESEL, BUS
@@ -123,6 +123,7 @@ class Terminus:
         schedule_at_fixed_rate(self.save_state, 5.)
         schedule_at_fixed_rate(self.check_exited, 1.)
         schedule_at_fixed_rate(self.update, 0.1)
+        play_background_loop(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'ambient', 'station1.mp3')))
 
     def save_state(self, *_args):
         data = {
@@ -345,6 +346,7 @@ class Terminus:
                     # print(f"{t} still in station")
 
     def update(self, *_):
+        set_background_volume(.5 if self.control.sound >= 2 else 0)
         for train in self.trains:
             if train.time_stopped is None and not train.state.speed and train.has_cleared:
                 print(f"{train} came to a stop in terminus")
@@ -566,7 +568,10 @@ DEPARTURE_SOUNDS = {  # , "e-train1.wav"
 }
 
 if __name__ == '__main__':
-    pass
+    play_background_loop(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'ambient', 'station1.mp3')))
+    set_background_volume(.5)
+    play_terminus_announcement(ICE, 4)
+    time.sleep(100)
     # play_departure(ICE)
     # relays = RelayManager()
     # def main(relay: Relay8):
