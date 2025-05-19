@@ -232,6 +232,7 @@ class Terminus:
                 break
         else:
             warnings.warn(f"Terminus got input for {train} but train is not in station")
+            self.control[train].custom_acceleration_handler = None
             self.control.set_acceleration_control(train, controller, acc_input, cause)
 
     def request_entry(self, train: Train):
