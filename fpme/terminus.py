@@ -558,9 +558,13 @@ DEPARTURE_SOUNDS = {  # , "e-train1.wav"
 }
 
 if __name__ == '__main__':
-    play_background_loop(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'ambient', 'station1.mp3')))
-    set_background_volume(.5)
+    # play_background_loop(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'ambient', 'station1.mp3')))
+    # set_background_volume(.5)
     play_terminus_announcement(ICE, 4)
+    time.sleep(2)
+    play_terminus_announcement(S, 3)
+    time.sleep(2)
+    play_terminus_announcement(E40_RE_BLAU, 2)
     time.sleep(100)
     # play_departure(ICE)
     # relays = RelayManager()

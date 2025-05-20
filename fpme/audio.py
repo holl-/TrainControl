@@ -86,8 +86,8 @@ def play_announcement(text: str, device_index: Optional[int] = None, language='G
     engine.runAndWait()
     # sd.wait()
     print(f"Announcement on side {side}")
-    play_audio(file_path, device_index, blocking=True, reverb=True, gong=True, left=side=='left', right=side=='right')
-    sd.wait()
+    play_audio(file_path, device_index, blocking=False, reverb=True, gong=True, left=side=='left', right=side=='right')
+    # sd.wait()
 
 
 def play_audio(file: str, device_index: Optional[int] = None, blocking=True, reverb=False, gong=False, left=True, right=True):
