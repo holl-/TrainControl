@@ -657,11 +657,12 @@ def play_special_announcement(train: Train, platform: int, delay_minutes: int):
     # play_announcement_async(sentences[0])
     if train in TARGETS:
         connection, target = TARGETS[train][platform]
-        hour, minute, delay = delayed_now(delay_minutes)
+        hour, minute, delay = delayed_now(max(5, delay_minutes))
         # delay_text = f", heute circa {delay} Minuten später." if delay else ". Vorsicht bei der Einfahrt."
         # speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
         reasons = fake_reasons if random.random() < .3 else real_reasons
-        speech = f"Bitte beachten Sie: Die Weiterfahrt des {connection}, verzögert sich um circa {delay} Minuten. Grund dafür " + random.choice(reasons)
+        of = {S: 'der', E_RB: 'der'}.get(train, 'des')
+        speech = f"Bitte beachten Sie: Die Weiterfahrt {of} {connection}, verzögert sich um circa {delay} Minuten. Grund dafür " + random.choice(reasons)
     else:
         speech = random.choice(sentences)
     play_announcement(speech)
