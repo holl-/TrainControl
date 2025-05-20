@@ -346,7 +346,7 @@ class Terminus:
                     # print(f"{t} still in station")
 
     def update(self, *_):
-        set_background_volume(.5 if self.control.sound >= 2 else 0)
+        set_background_volume(.2 if self.control.sound >= 2 else 0)
         for train in self.trains:
             if train.time_stopped is None and not train.state.speed and train.has_cleared:
                 print(f"{train} came to a stop in terminus")
