@@ -184,7 +184,7 @@ class TrainControl:
             if state.custom_acceleration_handler is not None:
                 state.custom_acceleration_handler(train, controller, acc_input, cause)
             else:
-                state.acc_input = acc_input
+                print(acc_input, state.acc_input)
                 if acc_input != 0 and state.acc_input * acc_input <= 0:  # switching acceleration direction or was 0 -> jump to next level
                     speed_idx = get_speed_index(train, state, acc_input, False, False)  # this rounds up/down depending on sign(acc_input)
                     abs_speed = train.speeds[speed_idx]
@@ -192,7 +192,8 @@ class TrainControl:
                     prev_speed = state.speed
                     state.speed = math.copysign(abs_speed, state.target_speed)
                     prev_index = self._last_sent[train][1]
-                    print(f"Acceleration {train.name} = {acc_input} ({prev_speed:.2f} ({prev_index} | {speed_idx}) -> {state.speed:.2f} ({get_speed_index(train, state, acc_input, True)}), target={state.target_speed})")
+                    print(f"Acceleration {train.name} = {acc_input} ({prev_speed} ({prev_index} | {speed_idx}) -> {state.speed:.2f} ({get_speed_index(train, state, acc_input, True)}), target={state.target_speed})")
+                state.acc_input = acc_input
 
     def emergency_stop_all(self, train: Optional[Train], cause: str):
         """Immediately stop all trains on the same track as `train`."""
@@ -374,7 +375,7 @@ class TrainControl:
         if data != self._last_sent[train]:
             self._last_sent[train] = data
             protocol = get_preferred_protocol(train)
-            print(f"Sending {train}: {'-' if currently_in_reverse else '+'}{speed_code} {functions} via {protocol}")
+            # print(f"Sending {train}: {'-' if currently_in_reverse else '+'}{speed_code} {functions} via {protocol}")
             self.generator.set(train.address, speed_code, currently_in_reverse, functions, protocol)
 
 

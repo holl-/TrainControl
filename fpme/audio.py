@@ -46,7 +46,7 @@ def play_announcement(text: str, language='German', left_vol=1., right_vol=1.):
 
 def _play_announcement(text: str, language='German', left_vol=1., right_vol=1.):
     t0 = time.perf_counter()
-    async_play(gong)
+    async_play(gong, left_vol=left_vol * .4, right_vol=right_vol * .4)
     # --- Generate speech ---
     voices = engine.getProperty('voices')
     german_voices = [voice for voice in voices if language in voice.name]

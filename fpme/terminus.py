@@ -219,9 +219,8 @@ class Terminus:
                         break
                     # --- Play sound ---
                     sound, duration = READY_SOUNDS[t.train]
-                    path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure-effects', sound))
                     is_left = t.platform <= 3
-                    async_play(path, int(is_left), 1-int(is_left))
+                    async_play('departure-effects/' + sound, int(is_left), 1-int(is_left))
                     # --- Wait, then release control ---
                     def release_block(t=t):
                         time.sleep(duration)
@@ -314,7 +313,7 @@ class Terminus:
                         print("Sensor clear. Waiting for possible next wheel...")
                         entering.dist_clear = entering.state.signed_distance
                         # self.relay.open_channel(ENTRY_POWER)
-                elif entering.dist_clear is not None and entering.get_end_position(entering.state.signed_distance) < 30:  # another wheel entered
+                elif entering.dist_clear is not None and entering.get_end_position() < 30:  # another wheel entered
                     print("Another wheel entered")
                     entering.dist_clear = None  # enable above block to re-trigger
                     # self.relay.close_channel(ENTRY_POWER)
@@ -356,9 +355,8 @@ class Terminus:
                 if self.control.sound >= 2 and train.train in DEPARTURE_SOUNDS:
                     if time.perf_counter() - train.time_stopped > 4.:
                         sound = DEPARTURE_SOUNDS[train.train]
-                        path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'departure', sound))
                         is_left = train.platform <= 3
-                        async_play(path, int(is_left), 1 - int(is_left))
+                        async_play("departure/"+sound, int(is_left), 1 - int(is_left))
 
     def prevent_exit(self, entering_platform):
         if entering_platform == 1:
