@@ -280,27 +280,21 @@ class TrainControl:
             for tag, on in self.global_status_by_tag.items():
                 self.set_train_functions_by_tag(train, tag, on)
 
-    def deactivate(self, train: Train, cause: str):
-        """ user: If `None`, will remove all users. """
-        state = self[train]
-        with state.modify_lock:
-            if cause is None:
-                state.controllers.clear()
-            else:
-                if cause in state.controllers:
-                    state.controllers.remove(cause)
-                elif state.controllers:
-                    warnings.warn(f"Trying to remove unregistered cause from {train}: {cause}.\nRegistered: {state.controllers}")
-            if not state.controllers:
-                self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
-                self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
-                self.force_stop(train, 'deactivation')
-
     def remove_controller(self, controller: str):
         for train in self.trains:
             state = self[train]
             if controller in state.controllers:
-                self.deactivate(train, controller)
+                with state.modify_lock:
+                    state.controllers.remove(controller)
+                    if not state.controllers:
+                        print(f"Deactivating {train} because it has no more controllers (triggered by removal of {controller})")
+                        self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
+                        self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
+                        self.force_stop(train, 'deactivation')
+
+    # def deactivate(self, train: Train, cause: str):
+    #     """ user: If `None`, will remove all users. """
+    #     state = self[train]
 
     def update_trains(self, dt):  # repeatedly called from setup()
         if self.paused:
