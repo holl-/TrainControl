@@ -10,9 +10,8 @@ from typing import Optional, List
 
 from dataclasses import dataclass
 
-from fpme.audio import play_announcement_async, play_audio_async
+from fpme.audio import play_announcement, play_background_loop, async_play, set_background_volume
 from fpme.helper import schedule_at_fixed_rate
-from fpme.pygame_audio import async_play, set_background_volume, play_background_loop
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl, TrainState
 from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW_IC, E40_RE_BLAU, DAMPF, BEIGE_218, ROT_218, DIESEL, BUS
@@ -484,7 +483,7 @@ def play_terminus_announcement(train: Train, platform: int):
     else:
         speech = f"Vorsicht auf Gleis {platform}, ein Zug fährt ein."
     print(f"Announcement: '{speech}'")
-    play_announcement_async(speech)
+    play_announcement(speech)
 
 
 def delayed_now(delay_minutes: int):
@@ -528,7 +527,7 @@ def play_special_announcement():
         # "Jim Knopf",
     ]
     # play_announcement_async(sentences[0])
-    play_announcement_async(random.choice(sentences))
+    play_announcement(random.choice(sentences))
 
 # ToDo sounds only if enabled
 READY_SOUNDS = {

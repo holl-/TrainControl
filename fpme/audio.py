@@ -1,76 +1,53 @@
-import multiprocessing
 import os
 import time
-import warnings
-from typing import Optional
+from threading import Thread
 
-import sounddevice as sd
-from pydub import AudioSegment
 import numpy as np
-from scipy.signal import convolve
+from scipy.io import wavfile
+from scipy.signal import fftconvolve
+
+import pygame
 import pyttsx3
 
 
-
-engine = None
-side: str = None
-
-
-def init_worker(my_side: str):
-    global engine, side
-    engine = pyttsx3.init()
-    side = my_side
+pygame.mixer.init()
+engine = pyttsx3.init()
 
 
-pool = None
+DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../assets/sound"))
+_, ir = wavfile.read(DIR + "/ansagen/IR_DUBWISE E001 M2S.wav")
+if ir.ndim > 1:
+    ir = np.mean(ir, axis=1)
+ir = ir / np.max(np.abs(ir))
 
-def _setup_pool():
-    assert multiprocessing.parent_process() is None
-    global pool
-    if pool is not None:
-        return
-    pool = multiprocessing.Pool(2)
-    pool.map(init_worker, ['left', 'right'])
+gong = pygame.mixer.Sound(DIR + "/ansagen/gong-reverb.wav")
 
 
-def play_announcement_async(text):
-    _setup_pool()
-    pool.apply_async(_subprocess_play, (text,))
+def play_background_loop(file: str):
+    pygame.mixer.music.load(file)
+    pygame.mixer.music.play(loops=-1)  # infinite loop
 
 
-def _subprocess_play(text: str, device_index: Optional[int] = None, language='German'):
-    play_announcement(text, device_index, language, side=side)
-    return True
+def set_background_volume(volume):
+    pygame.mixer.music.set_volume(volume)
 
 
-def audio_device_by_name(name: str, api=None):
-    for device in sd.query_devices():
-        if device['max_output_channels'] > 0 and name in device['name']:
-            if api is None or device['hostapi'] == api:
-                return device
+def async_play(sound: str, left_vol=1., right_vol=1.):
+    if isinstance(sound, str):
+        sound = pygame.mixer.Sound(DIR + "/" + sound)
+    channel = pygame.mixer.find_channel()
+    channel.set_volume(left_vol, right_vol)  # Left speaker only
+    channel.play(sound)
 
 
-DIR = os.path.join(os.path.dirname(__file__), "../assets/sound/ansagen/")
-impulse_response = AudioSegment.from_file(DIR + "IR_DUBWISE E001 M2S.wav")
-ir_samples = np.array(impulse_response.get_array_of_samples(), dtype=np.float32) / (2**15)
-impulse_data = np.reshape(ir_samples, (-1, impulse_response.channels))
+def play_announcement(text: str, language='German', left_vol=1., right_vol=1.):
+    Thread(target=_play_announcement, args=(text, language, left_vol, right_vol)).start()
 
 
-def apply_reverb(audio_data: np.ndarray):
-    output_data = np.column_stack([convolve(audio_data[:, ch], impulse_data[:, 0], mode='full') for ch in range(audio_data.shape[-1])])
-    max_val = np.max(abs(output_data))
-    if max_val > 1:  # Normalize the output to avoid clipping
-        output_data /= max_val
-    return (output_data * (2 ** 15)).astype(np.int16)  # Convert back to 16-bit integer for playback
-
-
-gong = AudioSegment.from_file(DIR + "Gong.mp3")
-gong_data = np.reshape(np.array(gong.get_array_of_samples(), dtype=np.float32) / (2**15), (-1, gong.channels))
-gong_reverb_data = apply_reverb(gong_data)
-gong_duration = 4.
-
-
-def play_announcement(text: str, device_index: Optional[int] = None, language='German', side='left'):
+def _play_announcement(text: str, language='German', left_vol=1., right_vol=1.):
+    t0 = time.perf_counter()
+    async_play(gong)
+    # --- Generate speech ---
     voices = engine.getProperty('voices')
     german_voices = [voice for voice in voices if language in voice.name]
     if german_voices:
@@ -81,58 +58,26 @@ def play_announcement(text: str, device_index: Optional[int] = None, language='G
     engine.setProperty('volume', 1.0)  # Volume (0.0 to 1.0)
     if not os.path.exists('output'):
         os.makedirs('output')
-    file_path = os.path.join(DIR + "ansage.wav")
-    engine.save_to_file(text, file_path)
+    engine.save_to_file(text, DIR + "/speech.wav")
     engine.runAndWait()
-    # sd.wait()
-    print(f"Announcement on side {side}")
-    play_audio(file_path, device_index, blocking=False, reverb=True, gong=True, left=side=='left', right=side=='right')
-    # sd.wait()
+    # --- Reverb and play ---
+    apply_reverb("speech.wav", "speech-reverb.wav")
+    sound = pygame.mixer.Sound(DIR + "/speech-reverb.wav")  # pre-load sound file
+    time.sleep(max(0, 1.9 - t0 + time.perf_counter()))  # wait for gong to subside
+    async_play(sound, left_vol=left_vol, right_vol=right_vol)
 
 
-def play_audio(file: str, device_index: Optional[int] = None, blocking=True, reverb=False, gong=False, left=True, right=True):
-    print(f"Audio: {file} reverb={reverb}, left={left}, right={right}, gong={gong}, blocking={blocking}")
-    audio = AudioSegment.from_file(file)
-    audio_data = np.reshape(np.array(audio.get_array_of_samples(), dtype=np.float32) / (2**15), (-1, audio.channels))
-    if audio_data.shape[-1] == 1:
-        audio_data = np.tile(audio_data, [1, 2])
-    if gong:
-        audio_data = np.concatenate([gong_data[::2, :audio_data.shape[1]], audio_data], 0)
-    audio_data = apply_reverb(audio_data) if reverb else audio_data
-    if not left:
-        audio_data[:, 0] = 0
-    if not right:
-        audio_data[:, 1] = 0
-    sd.play(audio_data, samplerate=audio.frame_rate, device=device_index, blocking=blocking)
-
-
-def play_audio_async(file: str, device_index: Optional[int] = None, reverb=False, gong=False, left=True, right=True):
-    if not os.path.isfile(file):
-        warnings.warn(f"File {file} does not exist.")
-        return
-    process = multiprocessing.Process(
-        target=play_audio,
-        args=(file, device_index, True, reverb, gong, left, right)
-    )
-    process.start()
+def apply_reverb(file: str, output_file: str):
+    sr, sound = wavfile.read(DIR + "/" + file)
+    if sound.ndim > 1:
+        sound = np.mean(sound, axis=1)
+    wet = fftconvolve(sound, ir, mode='full')  # Apply convolution reverb
+    wet = wet / np.max(np.abs(wet))
+    wet = (wet * 32767).astype(np.int16)
+    wavfile.write(DIR + "/" + output_file, sr, wet)
 
 
 if __name__ == '__main__':
-    # devices = sd.query_devices()
-    # for api in sd.query_hostapis():
-    #     print(api['name'], " ", "Default:", devices[api['default_output_device']]['name'])
-    #     for index in api['devices']:
-    #         device = devices[index]
-    #         if device['max_output_channels'] == 2:  # Filter only output devices
-    #             print('*', device['max_output_channels'], device['name'])
-    #
-    # selected_device = audio_device_by_name("Primary Sound Driver", api=1)
-    # print(selected_device)
-    # selected_device = device_with_name("Piano")['index']
-    # play_audio("../sound/ansagen/Gong.mp3", selected_device['index'], reverb=True)
-
-    # engine = pyttsx3.init()
-    # play_announcement("Hallo", side='right')
-
-    play_audio_async("Hallo dies ist ein test text")
-    time.sleep(5)
+    # apply_reverb("ansagen/gong.wav", "ansagen/gong_reverb.wav")
+    play_announcement("Gleis 3")
+    time.sleep(100)
