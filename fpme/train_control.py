@@ -244,8 +244,8 @@ class TrainControl:
 
     def set_functions_by_tag(self, tag: str, on: bool):
         self.global_status_by_tag[tag] = on
-        for train in self.trains:
-            self.set_train_functions_by_tag(train, tag, on and self[train].is_active)
+        for train, state in self.states.items():
+            self.set_train_functions_by_tag(train, tag, on and state.is_active)
 
     def set_train_functions_by_tag(self, train: Train, tag: str, on: bool):
         for func in train.functions:
@@ -270,6 +270,9 @@ class TrainControl:
     def activate(self, train: Train, cause: str):
         """ user: If no user specified, will auto-deactivate again soon. """
         state = self[train]
+        if state.is_active:
+            return
+        print(f"Activating {train} and applying functions {self.global_status_by_tag}")
         with state.modify_lock:
             if cause is None:
                 state.controllers.add('default')
