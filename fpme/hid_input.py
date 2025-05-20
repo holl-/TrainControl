@@ -32,6 +32,7 @@ class InputManager:
         # --- Remove disconnected controllers ---
         for path in tuple(self.connected):
             if path not in controllers:
+                print(f"Controller disconnected: {path}")
                 del self.connected[path]
                 self.disconnected.add(path)
                 self.control.remove_controller(path)
@@ -40,13 +41,16 @@ class InputManager:
             try:
                 device.open()
                 print(f"Opened new controller: {device.device_path}")
-                if device.device_path not in CONTROLS:
-                    print("This controller has not been assigned to any train! Copy the following Python path")
-                    print("'" + device.device_path.replace("\\", "\\\\") + "'")
                 device.set_raw_data_handler(partial(self.process_event, device_path=device.device_path))
                 if device.device_path in self.disconnected:
                     self.disconnected.remove(device.device_path)
                 self.last_events[device.device_path], self.connected[device.device_path] = (time.perf_counter(), 'connected'), device
+                if device.device_path in CONTROLS:
+                    train = CONTROLS[device.device_path]
+                    self.control.activate(train, device.device_path)
+                else:
+                    print("This controller has not been assigned to any train! Copy the following Python path")
+                    print("'" + device.device_path.replace("\\", "\\\\") + "'")
             except OSError as e:
                 print(f"Failed to open bluetooth controller: {e}")
                 self.connected[device.device_path] = None
@@ -66,7 +70,7 @@ class InputManager:
             return
         _, _, _, _, _, pressed, _, hat, _ = data
         hat_pos = VECTOR[hat]
-        self.control.set_acceleration_control(train, 'VR-Park', hat_pos[1], cause=device_path)
+        self.control.set_acceleration_control(train, device_path, hat_pos[1], cause=device_path)
         if pressed == 16:  # Button A / Trigger 2
             self.control.emergency_stop(train, cause=device_path)
             event_text = "A (stop)"

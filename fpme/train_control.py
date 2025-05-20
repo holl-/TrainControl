@@ -145,9 +145,9 @@ class TrainControl:
             return self.states[item]
         raise KeyError(item)
 
-    def reverse(self, train: Train, cause: str):
+    def reverse(self, train: Train, cause: str, auto_activate=True):
         state = self[train]
-        if not state.is_active:
+        if auto_activate and not state.is_active:
             self.activate(train, cause)
             return
         state.target_speed = - math.copysign(0, state.target_speed)
@@ -171,11 +171,11 @@ class TrainControl:
     #     new_target_speed = train.speeds[new_target_level]
     #     self.set_target_speed(train, -new_target_speed if in_reverse else new_target_speed, cause)
 
-    def set_acceleration_control(self, train: Train, controller: str, acc_input: float, cause: str):
+    def set_acceleration_control(self, train: Train, controller: str, acc_input: float, cause: str, auto_activate=True):
         state = self[train]
         with state.modify_lock:
             state.controllers.add(controller)
-            if not state.is_active:
+            if auto_activate and not state.is_active:
                 if acc_input <= 0:
                     self.activate(train, cause)
                     return
@@ -295,6 +295,11 @@ class TrainControl:
                         self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
                         self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
                         self.force_stop(train, 'deactivation')
+                    else:
+                        print(f"{train} will stay active as it is still controlled by {state.controllers}")
+                break
+        else:
+            print(f"Removed controller was not registered with any train: {controller}")
 
     # def deactivate(self, train: Train, cause: str):
     #     """ user: If `None`, will remove all users. """

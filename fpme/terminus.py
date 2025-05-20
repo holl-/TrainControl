@@ -173,7 +173,7 @@ class Terminus:
     def reverse_to_exit(self):
         for train in self.trains:
             if train.state.abs_distance == 0 and train.entered_forward != train.state.is_in_reverse:
-                self.control.reverse(train.train, 'terminus')
+                self.control.reverse(train.train, 'terminus', auto_activate=False)
 
     def get_train_position(self, train: Train):
         for t in self.trains:
@@ -208,7 +208,7 @@ class Terminus:
                         t.state.custom_acceleration_handler = self.handle_acceleration
 
     def handle_acceleration(self, train: Train, controller: str, acc_input: float, cause: str):
-        print(f"Terminus handling acceleration for {train}")
+        # print(f"Terminus handling acceleration for {train}")
         for t in self.trains:
             if t.train == train:
                 if acc_input > 0:
@@ -483,6 +483,7 @@ def play_terminus_announcement(train: Train, platform: int):
         speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
     else:
         speech = f"Vorsicht auf Gleis {platform}, ein Zug fährt ein."
+    print(f"Announcement: '{speech}'")
     play_announcement_async(speech)
 
 

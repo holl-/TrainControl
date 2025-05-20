@@ -85,11 +85,13 @@ def play_announcement(text: str, device_index: Optional[int] = None, language='G
     engine.save_to_file(text, file_path)
     engine.runAndWait()
     # sd.wait()
+    print(f"Announcement on side {side}")
     play_audio(file_path, device_index, blocking=True, reverb=True, gong=True, left=side=='left', right=side=='right')
     sd.wait()
 
 
 def play_audio(file: str, device_index: Optional[int] = None, blocking=True, reverb=False, gong=False, left=True, right=True):
+    print(f"Audio: {file} reverb={reverb}, left={left}, right={right}, gong={gong}, blocking={blocking}")
     audio = AudioSegment.from_file(file)
     audio_data = np.reshape(np.array(audio.get_array_of_samples(), dtype=np.float32) / (2**15), (-1, audio.channels))
     if audio_data.shape[-1] == 1:
