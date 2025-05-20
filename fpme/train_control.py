@@ -184,13 +184,15 @@ class TrainControl:
             if state.custom_acceleration_handler is not None:
                 state.custom_acceleration_handler(train, controller, acc_input, cause)
             else:
-                if acc_input != 0 and state.acc_input * acc_input <= 0:  # switching acceleration direction
-                    speed_idx = get_speed_index(train, state, acc_input, False, False)
-                    abs_speed = train.speeds[speed_idx]
-                    # prev_speed = state.speed
-                    state.speed = math.copysign(abs_speed + acc_input * 1e-2, state.target_speed)
-                    # print(f"Acceleration {train.name} = {acc_input} (speed = {prev_speed} ({speed_idx}) -> {state.speed}, target={state.target_speed})")
                 state.acc_input = acc_input
+                if acc_input != 0 and state.acc_input * acc_input <= 0:  # switching acceleration direction or was 0 -> jump to next level
+                    speed_idx = get_speed_index(train, state, acc_input, False, False)  # this rounds up/down depending on sign(acc_input)
+                    abs_speed = train.speeds[speed_idx]
+                    abs_speed = max(0, abs_speed + acc_input * 1e-2)
+                    prev_speed = state.speed
+                    state.speed = math.copysign(abs_speed, state.target_speed)
+                    prev_index = self._last_sent[train][1]
+                    print(f"Acceleration {train.name} = {acc_input} ({prev_speed:.2f} ({prev_index} | {speed_idx}) -> {state.speed:.2f} ({get_speed_index(train, state, acc_input, True)}), target={state.target_speed})")
 
     def emergency_stop_all(self, train: Optional[Train], cause: str):
         """Immediately stop all trains on the same track as `train`."""
@@ -380,18 +382,18 @@ def get_speed_index(train: Train, state: TrainState, abs_acceleration, limit_by_
     if state.speed is None:
         return 0
     abs_speed = abs(state.speed)
-    target_idx = int(numpy.argmin([abs(s - abs(state.target_speed)) for s in train.speeds]))  # ≥ 0
+    closest_idx = int(numpy.argmin([abs(s - abs(state.target_speed)) for s in train.speeds]))  # ≥ 0
     if abs_acceleration > 0:  # ceil level
         greater = [i for i, s in enumerate(train.speeds) if s >= abs_speed]
         speed_idx = greater[0] if greater else len(train.speeds) - 1
         if limit_by_target:
-            speed_idx = min(speed_idx, target_idx)
+            speed_idx = min(speed_idx, closest_idx)
     elif abs_acceleration < 0:  # floor level
         speed_idx = [i for i, s in enumerate(train.speeds) if s <= abs_speed][-1]
         if limit_by_target:
-            speed_idx = max(speed_idx, target_idx)
+            speed_idx = max(speed_idx, closest_idx)
     else:  # Equal
-        speed_idx = target_idx
+        speed_idx = closest_idx
     if round_up_to_first and abs_speed > 0 and speed_idx == 0:
         speed_idx = 1  # this ensures we don't wait for startup sound to finish
     return speed_idx
