@@ -4,6 +4,7 @@ import random
 import time
 import warnings
 from datetime import datetime, timedelta
+from functools import cached_property
 from random import choice
 from threading import Thread, Lock
 from typing import Optional, List
@@ -96,6 +97,10 @@ class ParkedTrain:
 
     def get_end_position(self):
         return self.get_position() - self.train_length
+
+    @cached_property
+    def delay_minutes(self):
+        return max(0, random.randint(int(-self.train.max_delay * (1 - self.train.delay_rate)), self.train.max_delay))
 
     def __repr__(self):
         status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
@@ -258,6 +263,8 @@ class Terminus:
             if any(t.train == train for t in self.trains):
                 t = [t for t in self.trains if t.train == train][0]
                 print(f"{train} is already in terminus: {t.platform} @ {t.get_position()}, cleared={t.has_cleared}")
+                if t.state.speed == 0:
+                    play_special_announcement(t.train, t.platform, t.delay_minutes)
                 return
             # --- prepare entry ---
             platform = self.select_track(train)
@@ -295,7 +302,7 @@ class Terminus:
             if (entering.state.speed > 0) != entering.entered_forward:
                 warnings.warn(f"Train switched direction while entering? driven={driven}, speed={entering.state.speed}")
             if self.control.sound >= 1:
-                play_terminus_announcement(train, platform)
+                play_terminus_announcement(train, platform, entering.delay_minutes)
             def red_when_entered():
                 while True:
                     time.sleep(0.1)
@@ -473,11 +480,10 @@ TARGETS = {
 }
 
 
-def play_terminus_announcement(train: Train, platform: int):
+def play_terminus_announcement(train: Train, platform: int, delay_minutes: int):
     if train in TARGETS:
         connection, target = TARGETS[train][platform]
-        delay = max(0, random.randint(int(-train.max_delay * (1 - train.delay_rate)), train.max_delay))
-        hour, minute, delay = delayed_now(delay)
+        hour, minute, delay = delayed_now(delay_minutes)
         delay_text = f", heute circa {delay} Minuten später." if delay else ". Vorsicht bei der Einfahrt."
         speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
     else:
@@ -511,7 +517,7 @@ def delayed_now(delay_minutes: int):
     return dt.hour, minute_text[dt.minute], delay_minutes
 
 
-def play_special_announcement():
+def play_special_announcement(train: Train, platform: int, delay_minutes: int):
     sentences = [
         "Information zu, Hoggworts Express, nach: Hoggworts: Heube ab Gleis 8 Drei Viertel, direkt gegenüber.",
         "I C E 397, nach: Atlantis, fällt heute aus.",
@@ -519,15 +525,148 @@ def play_special_announcement():
         "Information zu Orient Express: Der Zug verspätet sich aufgrund eines Mordes an Bord.",
         "Information zu: Thomas der kleinen Lokomotive: Heute ca. 20 Minuten später, da sie einem Freund auf die Gleise hilft.",
         "Information zu: Zeitreisezug, nach: 1955. Bitte vermeiden Sie Paradoxa",
-        # "Information zu I C E, 910, nach: Saarbrücken. Der Zug entfällt aufgrund mangelnder Nachfrage.",
         "Information zum Schienenersatzverkehr zwischen: München, und: Berlin. Bitte benutzen Sie eines der bereitstehenden Fahrräder.",
         "Information zu: I C E, 86, Heute pünktlich. Grund hierfür sind Personen im Gleis, die den Zug anschieben.",
         "Achtung Passagiere des I C E 987, nach: Gotham Sittie. Bitte benutzen Sie ausschließlich Abschnitte D bis F., Grund hierfür ist ein Auftritt des Jokers in Abteil A.",
         "Achtung Passagiere des I C E 456, nach: Wunderland. Bitte folgen Sie dem weißen Kaninchen zum Gleis",
-        # "Jim Knopf",
+        "Bitte lassen Sie Ihr Gepäck nicht unbeaufsichtigt. Sollte Ihnen alleinstehendes Gepäck auffallen, tragen Sie es bitte aus dem Bahnhof.",
+        "Letzter Aufruf für Passagier Hubert Bauer, gebucht auf ICE 410 nach Köln. Bitte begeben Sie sich umgehend zum Bahnsteig 3.",
+        # "Jim Knopf", / SEV / Tauben / Bordrestaurant teuer
+    ]
+    real_reasons = [
+        "sind Gegenstände im Gleis.",
+        "ist eine Störung im Betriebsablauf.",
+        "sind Verzögerungen im Betriebsablauf.",
+        "sind polizeiliche Ermittlungen.",
+        "ist ein Notarzteinsatz im Zug.",
+        "ist ein Notarzteinsatz auf der Strecke.",
+        "ist eine technische Störung an der Strecke.",
+        "ist eine technische Störung am Zug.",
+        "ist eine Signalstörung.",
+        "sind Personen im Gleis.",
+        "ist ein Unfall mit Personenschaden.",
+        "ist die ärztliche Versorgung eines Fahrgastes.",
+        "ist eine behördliche Maßnahme.",
+        "ist eine defekte Tür.",
+        "ist die Bereitstellung weiterer Wagen.",
+        "ist ein defektes Stellwerk.",
+        "ist eine Oberleitungsstörung.",
+        "ist ein Polizeieinsatz.",
+        "ist eine Reparatur am Zug.",
+        "ist eine Reparatur an der Oberleitung.",
+        "ist eine Reparatur an einem Signal.",
+        "ist die Reparatur an einer Weiche.",
+        "ist eine Reparatur an der Strecke.",
+        "ist eine Streckensperrung.",
+        "ist eine Weichenstörung.",
+        "sind Streikauswirkungen.",
+        "ist ein technischer Defekt an einem anderen Zug.",
+        "sind Tiere auf der Strecke.",
+        "sind unbefugte Personen auf der Strecke.",
+        "ist die Unterstützung beim Ein- und Ausstieg.",
+        "ist ein Unwetter.",
+        "ist die verspätete Bereitstellung des Zuges.",
+        "ist eine Verspätung aus vorheriger Fahrt.",
+        "ist die Verspätung eines vorausfahrenden Zuges.",
+        "ist eine Verspätung im Ausland.",
+        "ist die Vorfahrt eines anderen Zuges.",
+        "ist das Warten auf Anschlussreisende.",
+        "ist das Warten auf einen entgegenkommenden Zug.",
+        "sind witterungsbedingte Beeinträchtigungen.",
+        "sind Tiere im Gleis.",
+        "sind ausgebrochene Tiere im Gleis.",
+        "sind Bauarbeiten.",
+        "ist eine behobene Störung am Zug.",
+        "ist eine behobene Störung am Gleis.",
+        "ist ein zusätzlicher Halt zum Ein- und Ausstieg.",
+        "ist eine derzeit eingeschränkte Verfügbarkeit der Gleise.",
+        "ist die Entschärfung einer Fliegerbombe.",
+        "ist ein Feuerwehreinsatz auf der Strecke.",
+        "ist ein kurzfristiger Personalausfall.",
+        "ist eine Pass-und Zollkontrolle.",
+        "sind Streikauswirkungen.",
+        "ist eine technische Untersuchung am Zug.",
+        "ist ein technischer Defekt an einem anderen Zug.",
+        "ist die Umleitung des Zuges.",
+        "ist ein umgestürzter Baum auf der Strecke.",
+        "ist ein Unfall an einem Bahnübergang.",
+        "sind Unwetterauswirkungen.",
+        "ist verspätetes Personal aus vorheriger Fahrt.",
+        "ist die Verspätung eines vorausfahrenden Zuges.",
+    ]
+    fake_reasons = [
+        "ist die Sichtung eines unbekannten Flugobjekts auf der Strecke.",
+        # "ist die verspätete Bereitstellung von Gleisen.",
+        "ist ein fehlender Bahnhof auf der Strecke.",
+        "ist die Verspätung eines nachfolgenden Zuges.",
+        "ist eine Überschwemmung im Bordrestaurant.",
+        "ist ein Notarzteinsatz auf einem Schiff.",
+        "ein auf der Strecke verlorengegangener Wagen.",
+        "ist ein geplatzter Reifen.",
+        "ist eine Baustelle im Zug.",
+        "ist eine Verspätung der Gepäck-Umladung.",
+        "ist der Sommer.",
+        "ist der Herbst.",
+        "ist der Winter.",
+        "ist der Frühling.",
+        "ist ein umgestürzter Baumkuchen auf der Strecke.",
+        "ist ein Unfall in einer Zugtoilette.",
+        "ist ein Maulwurf auf der Strecke.",
+        "ist eine eingestürzte Brücke auf der Strecke.",
+        "ist eine Umleitung wegen eines eingestürzten Tunnels.",
+        "ist Gegenwind auf der Strecke.",
+        "ist ein Vogelschlag.",
+        "ist ein Stromausfall wegen Flügelbruchs einer Bahn-Windrads.",
+        "ist ein längeres Telefongespräch des Zugführers.",
+        "ist eine technische Untersuchung an einem Reisenden.",
+        "ist ein defektes Mobiltelefon.",
+        "ist ein Feuerwehreinsatz im Bordrestaurant.",
+        "ist eine Zollerhöhung.",
+        "ist ein Zwischenhalt zum Zustieg des Schwagers der Zugbegleiterin.",
+        "ist eine auf der Streck  abgefallene Ein- und Ausstiegstüre.",
+        "ist die Betätigung des Nothalt-Knopfes durch einen Fahrgast.",
+        "ist die fehlende Bereitschaft eines Fahrgastes, zuzusteigen.",
+        "ist ein Meteoriteneinschlag auf er Strecke.",
+        "ist der Fund einer Fliegerbombe.",
+        "ist eine Toilettenpause.",
+        "sind Beeinträchtigungen aufgrund des Klimawandels.",
+        "ist ein Fahrrad in Wagen drei.",
+        "sind Verzögerung beim Ausrollen eines roten Teppichs für den Bürgermeister.",
+        "ist eine Signalstörungs-Behebungs-Planungs-Besprechung am Gleis.",
+        "ist eine Verzögerung bei der Untersuchung von Stellwerk-Störungen.",
+        "ist eine Blaskapelle.",
+        "ist eine vorübergehenden Sperrung aller Bordtoiletten.",
+        "ist die verfrühte Bereitstellung des Zuges.",
+        "ist eine Oberleitungsanordnung.",
+        "ist die tierärztliche Versorgung eines an Bord befindlichen Hundes.",
+        "ist die Landung eines Passagierflugzeugs auf der Strecke.",
+        "ist fehlendes Toilettenpapier wegen Hamsterkäufen.",
+        "ist die verspätete Pizza-Lieferung des Zugführers.",
+        "die Suche nach der EC-Karte eines Mitreisenden.",
+        "der Raketenstart für einen GPS-Satelliten.",
+        "die blendende Sonne.",
+        "ist der Ausfall eines Feuerwehreinsatzes.",
+        "ist ein Übersetzungsfehler auf der Speisekarte.",
+        "ist eine Aussage des Bundeskanzlers.",
+        "ist die Beschädigung einer Kommunikationsleitung der Bahn durch einen Bagger.",
+        "ist ein Marderschaden.",
+        "ist ein Defekt an der Klimaanlage.",
+        "bist du.",
+        "sind archäologische Ausgrabungen.",
+        "ist die Warnung eines Hellsehers.",
+        "ist eine Taube auf dem Zug.",
     ]
     # play_announcement_async(sentences[0])
-    play_announcement(random.choice(sentences))
+    if train in TARGETS:
+        connection, target = TARGETS[train][platform]
+        hour, minute, delay = delayed_now(delay_minutes)
+        # delay_text = f", heute circa {delay} Minuten später." if delay else ". Vorsicht bei der Einfahrt."
+        # speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
+        reasons = fake_reasons if random.random() < .3 else real_reasons
+        speech = f"Bitte beachten Sie: Die Weiterfahrt des {connection}, verzögert sich um circa {delay} Minuten. Grund dafür " + random.choice(reasons)
+    else:
+        speech = random.choice(sentences)
+    play_announcement(speech)
 
 # ToDo sounds only if enabled
 READY_SOUNDS = {
@@ -557,14 +696,6 @@ DEPARTURE_SOUNDS = {  # , "e-train1.wav"
 }
 
 if __name__ == '__main__':
-    # play_background_loop(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'ambient', 'station1.mp3')))
-    # set_background_volume(.5)
-    play_terminus_announcement(ICE, 4)
-    time.sleep(2)
-    play_terminus_announcement(S, 3)
-    time.sleep(2)
-    play_terminus_announcement(E40_RE_BLAU, 2)
-    time.sleep(100)
     # play_departure(ICE)
     # relays = RelayManager()
     # def main(relay: Relay8):
@@ -579,6 +710,5 @@ if __name__ == '__main__':
             # relay.close_channel(8)
             # time.sleep(1)
     # relays.on_connected(main)
-    # time.sleep(1)
-    # play_terminus_announcement(S, 1)
-    # play_special_announcement()
+    play_special_announcement(ICE, 5, 20)
+    time.sleep(100)
