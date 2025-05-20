@@ -103,6 +103,7 @@ class TrainControl:
         self.last_power_on = (0., "")
         for train in trains:
             self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
+        self._last_sent = {train: (train.address, 0, False, {}) for train in trains}
         schedule_at_fixed_rate(self.update_trains, period=.03)
         self.generator.setup()
 
@@ -359,7 +360,12 @@ class TrainControl:
         functions = {f.id: on for f, on in state.active_functions.items()}
         direction = math.copysign(1, state.speed if state.speed != 0 else state.target_speed)
         currently_in_reverse = direction < 0
-        self.generator.set(train.address, speed_code, currently_in_reverse, functions, get_preferred_protocol(train))
+        data = (train.address, speed_code, currently_in_reverse, functions)
+        if data != self._last_sent[train]:
+            self._last_sent[train] = data
+            protocol = get_preferred_protocol(train)
+            print(f"Sending {train}: {'-' if currently_in_reverse else '+'}{speed_code} {functions} via {protocol}")
+            self.generator.set(train.address, speed_code, currently_in_reverse, functions, protocol)
 
 
 def get_speed_index(train: Train, state: TrainState, abs_acceleration, limit_by_target: bool, round_up_to_first=True):
