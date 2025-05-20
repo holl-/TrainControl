@@ -57,7 +57,7 @@ class Train:
         self.stop_by_mm1_reverse = stop_by_mm1_reverse
         self.img_path = img_path
         self.image = Image.open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', img_path)) if img_path else None
-        self.regional_fac = regional_fac
+        self.regional_prob = regional_fac
         self.functions = functions
         self.max_delay = max_delay
         self.delay_rate = delay_rate
