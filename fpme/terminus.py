@@ -406,28 +406,17 @@ class Terminus:
         can_enter = [p for p, c in can_enter.items() if c]
         if not can_enter:
             return None
-        future_collision_cost = .1
-        cost_regional = 1 - train.regional_fac
-        cost_far_distance = train.regional_fac
+        regional = random.random() < train.regional_prob
+        cost_regional = int(not regional)
+        cost_far_distance = int(regional)
         base_cost = {
             1: cost_regional,
-            2: cost_regional + future_collision_cost,
-            3: cost_regional + 2 * future_collision_cost,
-            4: cost_far_distance + future_collision_cost,
+            2: cost_regional + .1,
+            3: cost_regional + .2,
+            4: cost_far_distance + .1,
             5: cost_far_distance,
         }
         cost = {p: base_cost[p] for p in can_enter}
-        # cost = {}
-        # for track in [t for t, c in can_enter.items() if c]:
-        #     wait_cost = 0
-        #     for waiting_track in PREVENT_EXIT[track]:
-        #         if state[waiting_track] == 'parked':
-        #             controlled = get_train(waiting_track).has_driver()
-        #             if controlled:
-        #                 parking_duration = time.perf_counter() - parking_time[waiting_track]
-        #                 wait_cost += ...  # ToDo maximum cost at 5-10 seconds after parking
-        #     # ToDo check that trains currently on the track (not in terminus) can be assigned a proper track (e.g. keep 4/5 open for ICE) Weighted by expected arrival time.
-        #     cost[track] = base_cost[track] + wait_cost
         best = min(cost, key=cost.get)
         print(f"{train.name} -> platform {best},  costs={cost} (others cannot be entered due to occupancy or currently exiting trains)")
         return best

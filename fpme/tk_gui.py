@@ -203,8 +203,6 @@ class TKGUI:
                 label = self.last_action_labels[device]
                 if device in self.inputs.disconnected:
                     label.config(text='disconnected', bg=tk_rgb(255, 0, 0))
-                    train = CONTROLS[device]
-                    self.control.deactivate(train, device)
                 else:
                     fac = int(255 * (1 - math.exp(t - now)))
                     if not (fac >= 0 and fac <= 255):

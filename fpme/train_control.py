@@ -103,6 +103,7 @@ class TrainControl:
         self.last_power_on = (0., "")
         for train in trains:
             self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
+        self._last_sent = {train: (train.address, 0, False, {}) for train in trains}
         schedule_at_fixed_rate(self.update_trains, period=.03)
         self.generator.setup()
 
@@ -243,8 +244,8 @@ class TrainControl:
 
     def set_functions_by_tag(self, tag: str, on: bool):
         self.global_status_by_tag[tag] = on
-        for train in self.trains:
-            self.set_train_functions_by_tag(train, tag, on and self[train].is_active)
+        for train, state in self.states.items():
+            self.set_train_functions_by_tag(train, tag, on and state.is_active)
 
     def set_train_functions_by_tag(self, train: Train, tag: str, on: bool):
         for func in train.functions:
@@ -269,6 +270,9 @@ class TrainControl:
     def activate(self, train: Train, cause: str):
         """ user: If no user specified, will auto-deactivate again soon. """
         state = self[train]
+        if state.is_active:
+            return
+        print(f"Activating {train} and applying functions {self.global_status_by_tag}")
         with state.modify_lock:
             if cause is None:
                 state.controllers.add('default')
@@ -280,27 +284,21 @@ class TrainControl:
             for tag, on in self.global_status_by_tag.items():
                 self.set_train_functions_by_tag(train, tag, on)
 
-    def deactivate(self, train: Train, cause: str):
-        """ user: If `None`, will remove all users. """
-        state = self[train]
-        with state.modify_lock:
-            if cause is None:
-                state.controllers.clear()
-            else:
-                if cause in state.controllers:
-                    state.controllers.remove(cause)
-                elif state.controllers:
-                    warnings.warn(f"Trying to remove unregistered cause from {train}: {cause}.\nRegistered: {state.controllers}")
-            if not state.controllers:
-                self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
-                self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
-                self.force_stop(train, 'deactivation')
-
     def remove_controller(self, controller: str):
         for train in self.trains:
             state = self[train]
             if controller in state.controllers:
-                self.deactivate(train, controller)
+                with state.modify_lock:
+                    state.controllers.remove(controller)
+                    if not state.controllers:
+                        print(f"Deactivating {train} because it has no more controllers (triggered by removal of {controller})")
+                        self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
+                        self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
+                        self.force_stop(train, 'deactivation')
+
+    # def deactivate(self, train: Train, cause: str):
+    #     """ user: If `None`, will remove all users. """
+    #     state = self[train]
 
     def update_trains(self, dt):  # repeatedly called from setup()
         if self.paused:
@@ -365,7 +363,12 @@ class TrainControl:
         functions = {f.id: on for f, on in state.active_functions.items()}
         direction = math.copysign(1, state.speed if state.speed != 0 else state.target_speed)
         currently_in_reverse = direction < 0
-        self.generator.set(train.address, speed_code, currently_in_reverse, functions, get_preferred_protocol(train))
+        data = (train.address, speed_code, currently_in_reverse, functions)
+        if data != self._last_sent[train]:
+            self._last_sent[train] = data
+            protocol = get_preferred_protocol(train)
+            print(f"Sending {train}: {'-' if currently_in_reverse else '+'}{speed_code} {functions} via {protocol}")
+            self.generator.set(train.address, speed_code, currently_in_reverse, functions, protocol)
 
 
 def get_speed_index(train: Train, state: TrainState, abs_acceleration, limit_by_target: bool, round_up_to_first=True):
