@@ -262,7 +262,7 @@ class Terminus:
             if any(t.train == train for t in self.trains):
                 t = [t for t in self.trains if t.train == train][0]
                 print(f"{train} is already in terminus: {t.platform} @ {t.get_position()}, cleared={t.has_cleared}")
-                if t.state.speed == 0:
+                if t.state.speed == 0 and self.control.sound >= 1:
                     play_special_announcement(t.train, t.platform, t.delay_minutes)
                 return
             # --- prepare entry ---
