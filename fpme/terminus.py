@@ -487,7 +487,7 @@ def play_terminus_announcement(train: Train, platform: int, delay_minutes: int):
     else:
         speech = f"Vorsicht auf Gleis {platform}, ein Zug fährt ein."
     print(f"Announcement: '{speech}'")
-    play_announcement(speech)
+    play_announcement(speech, left_vol=int(platform <= 3), right_vol=int(platform>3))
 
 
 def delayed_now(delay_minutes: int):
@@ -662,10 +662,10 @@ def play_special_announcement(train: Train, platform: int, delay_minutes: int):
         # speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
         reasons = fake_reasons if random.random() < .3 else real_reasons
         of = {S: 'der', E_RB: 'der'}.get(train, 'des')
-        speech = f"Bitte beachten Sie: Die Weiterfahrt {of} {connection}, verzögert sich um circa {delay} Minuten. Grund dafür " + random.choice(reasons)
+        speech = f"Bitte beachten Sie: Die Weiterfahrt {of} {connection} verzögert sich um circa {delay} Minuten. Grund dafür " + random.choice(reasons)
     else:
         speech = random.choice(sentences)
-    play_announcement(speech)
+    play_announcement(speech, left_vol=int(platform <= 3), right_vol=int(platform>3))
 
 # ToDo sounds only if enabled
 READY_SOUNDS = {
