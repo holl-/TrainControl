@@ -97,7 +97,7 @@ class ParkedTrain:
             delta = -delta  # make sure positive in station
         if self.has_reversed:  # here it's hard to know which direction the train is going.
             since_rev = self.state.abs_distance - self.dist_reverse
-            return min(250., delta) - since_rev
+            return min(300., delta) - since_rev * .8  # safety margin
         return delta
 
     def get_end_position(self):
