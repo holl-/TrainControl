@@ -31,8 +31,8 @@ class TKGUI:
         self.shown_trains: List[Train] = []
 
         self.window.title("Modellbahn Steuerung")
-        self.window.geometry('800x840')
-        tk.Label(text="Press F11 to enter fullscreen mode").pack()
+        self.window.geometry('800x750')
+        # tk.Label(text="Press F11 to enter fullscreen mode").pack()
         if fullscreen:
             self.window.attributes("-fullscreen", True)
         for info in infos:
@@ -71,12 +71,11 @@ class TKGUI:
         self.power_on_highlight = tk.Label(event_pane, text="Power on")
         self.power_on_highlight.pack()
         # --- Trains ---
-        tk.Label(text="Controls", font='Helvetica 14 bold').pack()
+        # tk.Label(text="Controls", font='Helvetica 14 bold').pack()
         controls_pane = tk.Frame(self.window)
         controls_pane.pack()
         self.last_action_labels = {}
         self.photos = []
-        row = 0
         def add_progress_bar(train: Train):
             progress_bar = ttk.Progressbar(controls_pane, value=50, length=100)
             progress_bar.grid(row=row, column=4)
@@ -85,6 +84,7 @@ class TKGUI:
             direction_label.grid(row=row, column=5)
             self.direction_labels[train] = direction_label
         for device_path, train in CONTROLS.items():
+            row = self.control.trains.index(train)
             self.shown_trains.append(train)
             self.active_vars[train] = is_active = tk.IntVar(value=1)
             active = tk.Checkbutton(controls_pane, text=f"{row+1}", variable=is_active)
@@ -103,13 +103,14 @@ class TKGUI:
             row += 1
         for train in control.trains:
             if train not in CONTROLS.values():
+                row = self.control.trains.index(train)
                 tk.Label(controls_pane, text=train.name).grid(row=row, column=2)
                 add_progress_bar(train)
                 row += 1
                 self.shown_trains.append(train)
         # --- Status ---
         tk.Label(status_pane, text="State", font='Helvetica 14 bold').grid(row=0, column=2)
-        tk.Label(text="Status (P/R)", font='Helvetica 14 bold').pack()
+        # tk.Label(text="Status (P/R)", font='Helvetica 14 bold').pack()
         state_pane = tk.Frame(status_pane)
         state_pane.grid(row=1, column=2)
         tk.Label(state_pane, text="Status (P/R)").grid(row=0, column=0)
