@@ -123,7 +123,7 @@ class Train:
 GUETER =            TrainInfo(None, "🚂/🛲", 1, 0, 0, can_reverse=False)
 # --- Rail cars ---
 ICE_ =              TrainInfo("ICE", "🚅", .33, max_delay=95, delay_rate=.35)
-S_ =                TrainInfo("S", "Ⓢ", .75, max_delay=30, delay_rate=.3)
+S_ =                TrainInfo("S", "Ⓢ", .75, max_delay=30, delay_rate=.2)
 BUS_ =              TrainInfo("Bus", "🚌", .8, max_delay=10, delay_rate=0.1)
 # --- Wagons ---
 INTERREGIO_BLAU =   TrainInfo("IC", "🚉", .3)
