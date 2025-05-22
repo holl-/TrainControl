@@ -1,7 +1,8 @@
+import json
 import math
+import os
 import threading
 import time
-import warnings
 from threading import Thread
 from typing import Sequence, Optional, Dict, Set, Tuple, Callable
 
@@ -106,6 +107,23 @@ class TrainControl:
         self._last_sent = {train: (train.address, 0, False, {}) for train in trains}
         schedule_at_fixed_rate(self.update_trains, period=.03)
         self.generator.setup()
+
+    def save_state(self):
+        data = {
+            'light': self.light,
+            'sound': self.sound,
+        }
+        with open("control.json", 'w', encoding='utf-8') as file:
+            json.dump(data, file, indent=2)
+
+    def load_state(self):
+        if not os.path.isfile("control.json"):
+            return
+        with open("control.json", 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        if isinstance(data['light'], bool):
+            self.set_lights_on(data['light'])
+        self.sound = data['sound']
 
     def add_rs232_generator(self, serial_port: str, trains: Sequence[Train] = None):
         self.generator.open_port(serial_port, None if trains is None else tuple([train.address for train in trains]))

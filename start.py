@@ -11,14 +11,13 @@ from fpme import train_control, tk_gui, signal_gen
 
 if __name__ == '__main__':
     control = train_control.TrainControl()
+    control.load_state()
     ports = [p for p in signal_gen.list_com_ports(include_bluetooth=False) if 'Prolific' in p[1]]
     for port, desc, _ in ports:
         control.add_rs232_generator(port)
     if not control.generator.get_open_ports():
         control.add_rs232_generator('debug1:on')
         # control.add_rs232_generator('debug2:off')
-    control.set_lights_on(True)
-    control.set_sound_on(False)
     control.power_on(None, 'launch')
     inputs = InputManager(control)
     inputs.start_detection()

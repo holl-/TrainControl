@@ -282,6 +282,7 @@ class TKGUI:
 
     def terminate(self):
         self.control.generator.terminate()
+        self.control.save_state()
         time.sleep(.5)
         if self.terminus:
             self.terminus.save_state()
