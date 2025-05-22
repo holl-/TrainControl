@@ -559,7 +559,7 @@ def play_connections(platform: int, connections: List[Tuple[Train, int]]):
         connections = random.sample(connections, 2)
     texts = []
     for train, pl in connections:
-        name, target = TARGETS[train][platform]
+        name, target = TARGETS[train][pl]
         texts.append(f"{name}, nach: {target} von Gleis {PL_NUM[pl]}{', direkt gegenüber' if OPPOSITE[platform] == pl else ''}.")
     play_announcement(' '.join(texts), left_vol=int(platform <= 3), right_vol=int(platform > 3), cue='anschlüsse', cue_vol=1.)
     return 2 + 4.5 * len(texts)
@@ -787,5 +787,5 @@ if __name__ == '__main__':
             # relay.close_channel(8)
             # time.sleep(1)
     # relays.on_connected(main)
-    play_connections(1, [(ICE, 2), (S, 4)])
+    play_connections(2, [(E_RB, 1), (S, 3)])
     time.sleep(20)
