@@ -111,6 +111,10 @@ class Train:
     def deceleration(self):
         return self.custom_deceleration if self.custom_deceleration is not None else 2 * self.acceleration
 
+    @property
+    def is_passenger_train(self):
+        return self.info is not GUETER
+
 
 GUETER =            TrainInfo(None, "🚂/🛲", 1, 0, 0, can_reverse=False)
 # --- Rail cars ---

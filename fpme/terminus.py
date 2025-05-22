@@ -5,9 +5,8 @@ import time
 import warnings
 from datetime import datetime, timedelta
 from functools import cached_property
-from random import choice
 from threading import Thread, Lock
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from dataclasses import dataclass
 
@@ -45,12 +44,15 @@ class ParkedTrain:
     dist_request: float = None  # Signed distance when enter request was sent. None for trains set through the UI.
     dist_trip: float = None  # Signed distance when entering the switches
     dist_clear: float = None  # Signed distance when leaving the sensor, now fully on switches
-    # --- For
     dist_reverse: float = None  # Abs distance when the 'reverse' button is clicked for the fist time
     # --- For departure sound ---
     time_stopped: float = None  # perf_counter() when train was first reversed in station. Used to determine whether people could get on/off.
     doors_closing: bool = False
     time_departed: float = None  # Track departure so we don't play sounds multiple times
+    # --- For special announcements ---
+    announcements_played = []  # can contain 'connections', 'delay/real', 'delay/fake', 'general/real', 'general/fake'
+    time_last_announcement = -100  # start time of last train announcement. Must be at least 15 seconds until next one.
+    duration_last_announcement = 0  # 15s for delay reasons, 15? seconds for connections
 
     @property
     def has_tripped(self):
@@ -105,6 +107,17 @@ class ParkedTrain:
     def __repr__(self):
         status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
         return f"{self.train.name} on platform {self.platform} ({status})."
+
+
+# @dataclass
+# class TrackedTrain:
+#     train: Train
+#     state: TrainState
+#     track: str
+#     dist_start: float
+#     num_reverse: int
+#
+#     def
 
 
 class Terminus:
@@ -239,7 +252,7 @@ class Terminus:
             self.control[train].custom_acceleration_handler = None
             self.control.set_acceleration_control(train, controller, acc_input, cause)
 
-    def request_entry(self, train: Train):
+    def request_entry(self, train: Train):  # Button C
         print(self.trains)
         with self._request_lock:
             print(f"entering = {self.entering}")
@@ -262,8 +275,19 @@ class Terminus:
             if any(t.train == train for t in self.trains):
                 t = [t for t in self.trains if t.train == train][0]
                 print(f"{train} is already in terminus: {t.platform} @ {t.get_position()}, cleared={t.has_cleared}")
-                if t.state.speed == 0 and self.control.sound >= 1:
-                    play_special_announcement(t.train, t.platform, t.delay_minutes)
+                # --- Play sound if parked ---
+                if t.state.speed == 0 and self.control.sound >= 1 and len(t.announcements_played) <= 2 and time.perf_counter() > t.time_last_announcement + t.duration_last_announcement:
+                    if 'connections' not in t.announcements_played and time.perf_counter() < t.time_stopped + 15:  # first announcement is about other trains in station (only if any)
+                        passenger_trains = [t_ for t_ in self.trains if t_.train.is_passenger_train and (t_.state.speed == 0 or (t_.state.speed > 0) == t_.entered_forward)]
+                        if passenger_trains:
+                            connections = [(t_.train, t_.platform) for t_ in passenger_trains]
+                            t.announcements_played.append('connections')
+                            t.time_last_announcement = time.perf_counter()
+                            t.duration_last_announcement = play_connections(t.platform, connections)
+                    else:
+                        t.announcements_played.append('delay')
+                        t.time_last_announcement = time.perf_counter()
+                        t.duration_last_announcement = play_special_announcement(t.train, t.platform, t.delay_minutes)
                 return
             # --- prepare entry ---
             platform = self.select_track(train)
@@ -301,7 +325,7 @@ class Terminus:
             if (entering.state.speed > 0) != entering.entered_forward:
                 warnings.warn(f"Train switched direction while entering? driven={driven}, speed={entering.state.speed}")
             if self.control.sound >= 1:
-                play_terminus_announcement(train, platform, entering.delay_minutes)
+                play_entry_announcement(train, platform, entering.delay_minutes)
             def red_when_entered():
                 while True:
                     time.sleep(0.1)
@@ -478,41 +502,44 @@ TARGETS = {
 }
 
 
-def play_terminus_announcement(train: Train, platform: int, delay_minutes: int):
+def play_entry_announcement(train: Train, platform: int, delay_minutes: int):
     if train in TARGETS:
-        connection, target = TARGETS[train][platform]
+        name, target = TARGETS[train][platform]
         hour, minute, delay = delayed_now(delay_minutes)
         delay_text = f", heute circa {delay} Minuten später." if delay else ". Vorsicht bei der Einfahrt."
-        speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
+        speech = f"Gleis {PL_NUM[platform]}, Einfahrt. {name}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
     else:
         speech = f"Vorsicht auf Gleis {platform}, ein Zug fährt ein."
     print(f"Announcement: '{speech}'")
-    play_announcement(speech, left_vol=int(platform <= 3), right_vol=int(platform>3))
+    play_announcement(speech, left_vol=int(platform <= 3), right_vol=int(platform > 3))
 
 
-def delayed_now(delay_minutes: int):
-    dt = datetime.now()
-    delay_minutes = (delay_minutes // 5) * 5
-    minutes = round(dt.minute / 5) * 5
-    if minutes >= 60:
-        dt += timedelta(hours=1)
-        minutes = 0
-    minute_text = {
-        0: "",
-        5: "fünf",
-        10: "zehn",
-        15: "fünfzehn",
-        20: "zwanzig",
-        25: "fünfundzwanzig",
-        30: "dreißig",
-        35: "fünfunddreißig",
-        40: "vierzig",
-        45: "fünfundvierzig",
-        50: "fünfzig",
-        55: "fünfundfünfzig",
-    }
-    dt = dt.replace(minute=minutes, second=0, microsecond=0) - timedelta(minutes=delay_minutes)
-    return dt.hour, minute_text[dt.minute], delay_minutes
+OPPOSITE = {
+    1: 2,
+    2: 1,
+    3: 4,
+    4: 3,
+    5: None,
+}
+PL_NUM = {
+    1: "eins",
+    2: "zwo",
+    3: "drei",
+    4: "vier",
+    5: "fünf"
+}
+
+
+def play_connections(platform: int, connections: List[Tuple[Train, int]]):
+    if len(connections) > 2:
+        connections = random.sample(connections, 2)
+    texts = []
+    for train, pl in connections:
+        name, target = TARGETS[train][platform]
+        texts.append(f"{name}, nach: {target} von Gleis {PL_NUM[pl]}{', direkt gegenüber' if OPPOSITE[platform] == pl else ''}.")
+    speech = "Ihre nächsten Anschlüsse: " + ' '.join(texts)
+    play_announcement(speech, left_vol=int(platform <= 3), right_vol=int(platform > 3), gong=False)
+    return 3 + 10 * len(texts)
 
 
 def play_special_announcement(train: Train, platform: int, delay_minutes: int):
@@ -656,16 +683,43 @@ def play_special_announcement(train: Train, platform: int, delay_minutes: int):
     ]
     # play_announcement_async(sentences[0])
     if train in TARGETS:
-        connection, target = TARGETS[train][platform]
+        name, target = TARGETS[train][platform]
         hour, minute, delay = delayed_now(max(5, delay_minutes))
         # delay_text = f", heute circa {delay} Minuten später." if delay else ". Vorsicht bei der Einfahrt."
         # speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
         reasons = fake_reasons if random.random() < .3 else real_reasons
         of = {S: 'der', E_RB: 'der'}.get(train, 'des')
-        speech = f"Bitte beachten Sie: Die Weiterfahrt {of} {connection} verzögert sich um circa {delay} Minuten. Grund dafür " + random.choice(reasons)
+        speech = f"Bitte beachten Sie: Die Weiterfahrt {of} {name} verzögert sich um circa {delay} Minuten. Grund dafür " + random.choice(reasons)
     else:
         speech = random.choice(sentences)
     play_announcement(speech, left_vol=int(platform <= 3), right_vol=int(platform>3))
+    return 15
+
+
+def delayed_now(delay_minutes: int):
+    dt = datetime.now()
+    delay_minutes = (delay_minutes // 5) * 5
+    minutes = round(dt.minute / 5) * 5
+    if minutes >= 60:
+        dt += timedelta(hours=1)
+        minutes = 0
+    minute_text = {
+        0: "",
+        5: "fünf",
+        10: "zehn",
+        15: "fünfzehn",
+        20: "zwanzig",
+        25: "fünfundzwanzig",
+        30: "dreißig",
+        35: "fünfunddreißig",
+        40: "vierzig",
+        45: "fünfundvierzig",
+        50: "fünfzig",
+        55: "fünfundfünfzig",
+    }
+    dt = dt.replace(minute=minutes, second=0, microsecond=0) - timedelta(minutes=delay_minutes)
+    return dt.hour, minute_text[dt.minute], delay_minutes
+
 
 # ToDo sounds only if enabled
 READY_SOUNDS = {
@@ -709,5 +763,6 @@ if __name__ == '__main__':
             # relay.close_channel(8)
             # time.sleep(1)
     # relays.on_connected(main)
-    play_special_announcement(ICE, 5, 20)
-    time.sleep(100)
+    # play_special_announcement(ICE, 5, 20)
+    play_connections(1, [(ICE, 2), (S, 4)])
+    time.sleep(20)
