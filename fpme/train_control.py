@@ -124,6 +124,7 @@ class TrainControl:
         if isinstance(data['light'], bool):
             self.set_lights_on(data['light'])
         self.sound = data['sound']
+        self.set_functions_by_tag(TAG_DEFAULT_SOUND, self.sound >= 2)
 
     def add_rs232_generator(self, serial_port: str, trains: Sequence[Train] = None):
         self.generator.open_port(serial_port, None if trains is None else tuple([train.address for train in trains]))
