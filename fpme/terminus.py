@@ -105,7 +105,10 @@ class ParkedTrain:
 
     @cached_property
     def delay_minutes(self):
-        return max(0, random.randint(int(-self.train.info.max_delay * (1 - self.train.info.delay_rate)), self.train.info.max_delay))
+        if random.random() < self.train.info.delay_rate:
+            return random.randint(1, self.train.info.max_delay)
+        else:
+            return 0
 
     def __repr__(self):
         status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
