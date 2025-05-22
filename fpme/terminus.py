@@ -557,8 +557,8 @@ def play_connections(platform: int, connections: List[Tuple[Train, int]]):
     for train, pl in connections:
         name, target = TARGETS[train][platform]
         texts.append(f"{name}, nach: {target} von Gleis {PL_NUM[pl]}{', direkt gegenüber' if OPPOSITE[platform] == pl else ''}.")
-    play_announcement(' '.join(texts), left_vol=int(platform <= 3), right_vol=int(platform > 3), cue='anschlüsse')
-    return 2 + 7 * len(texts)
+    play_announcement(' '.join(texts), left_vol=int(platform <= 3), right_vol=int(platform > 3), cue='anschlüsse', cue_vol=1.)
+    return 2 + 6.5 * len(texts)
 
 
 def play_special_announcement(train: Train, platform: int, delay_minutes: int, entered_seconds_ago: float):
