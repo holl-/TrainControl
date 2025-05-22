@@ -15,7 +15,7 @@ from fpme.audio import play_announcement, play_background_loop, async_play, set_
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl, TrainState
-from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW_IC, E40_RE_BLAU, DAMPF, BEIGE_218, ROT_218, DIESEL, BUS
+from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW, E40, DAMPF, BEIGE, ROT, DIESEL, BUS
 
 SWITCH_STATE = {  # True -> open_channel, False -> close_channel
     1: {6: False, 8: True},
@@ -454,7 +454,7 @@ TARGETS = {
         4: ('S 2', "Radeburg"),
         5: ('S 4', "Böblingen"),
     },
-    E_BW_IC: {
+    E_BW: {
         1: ("Intercity", "Neuffen"),
         2: ("Intercity", "Neuffen"),
         3: ("Intercity", "Neuffen"),
@@ -468,7 +468,7 @@ TARGETS = {
         4: ("Regionalbahn", "Radeburg"),
         5: ("Regionalbahn", "Waldbrunn"),
     },
-    E40_RE_BLAU: {
+    E40: {
         1: ("Regional-Express", "Neuffen"),
         2: ("Regional-Express", "Neuffen"),
         3: ("Regional-Express", "Neuffen"),
@@ -671,12 +671,12 @@ def play_special_announcement(train: Train, platform: int, delay_minutes: int):
 READY_SOUNDS = {
     ICE: ("whistle1.wav", 1.5),
     S: ("door-beep-S-Bahn.wav", 5.),
-    E_BW_IC: ("whistle2.wav", 1.5),
+    E_BW: ("whistle2.wav", 1.5),
     E_RB: ("door-beep-RE.wav", 5.),
     DAMPF: ("steam-horn.wav", 3.5),  # oder Horn vom Zug
-    E40_RE_BLAU: ("whistle-and-train1.wav", 1.5),
-    BEIGE_218: ("diesel-steam.wav", 0.),
-    ROT_218: ("diesel-steam.wav", 2.),
+    E40: ("whistle-and-train1.wav", 1.5),
+    BEIGE: ("diesel-steam.wav", 0.),
+    ROT: ("diesel-steam.wav", 2.),
     DIESEL: ("diesel-steam.wav", 2.),
     BUS: ("doors-tram.wav", 4.),
 }
@@ -684,12 +684,12 @@ READY_SOUNDS = {
 DEPARTURE_SOUNDS = {  # , "e-train1.wav"
     ICE: "e-train1.wav",
     # S: None,  # sound from train
-    E_BW_IC: "e-train1.wav",
+    E_BW: "e-train1.wav",
     E_RB: "e-train1.wav",
     # DAMPF: None,  # sound from train
-    E40_RE_BLAU: "e-train1.wav",
-    BEIGE_218: "diesel-departure.mp3",
-    # ROT_218: None,
+    E40: "e-train1.wav",
+    BEIGE: "diesel-departure.mp3",
+    # ROT: None,
     DIESEL: "diesel-departure.mp3",
     BUS: "e-drive1.wav",
 }
