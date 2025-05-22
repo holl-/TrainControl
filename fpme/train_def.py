@@ -158,5 +158,3 @@ E40 = Train(GUETER, "BR E40", "Märklin 39140", 23, (*np.linspace(0, 220, 15),),
 TRAINS = [ICE, S, BUS, E_RB, E_BW, ROT, BEIGE,   E40, DIESEL, DAMPF]
 
 TRAINS_BY_NAME = {train.id: train for train in TRAINS}
-for key, t in TRAINS_BY_NAME.items():
-    print(key, "    ", t.img_path)
