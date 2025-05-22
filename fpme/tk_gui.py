@@ -187,7 +187,7 @@ class TKGUI:
             return
         if self.selected_platform is None:
             return
-        train = self.shown_trains[train_id]
+        train = self.control.trains[train_id]
         if self.terminus is not None:
             self.terminus.set_occupied(self.selected_platform, train)
         self.selected_platform = None

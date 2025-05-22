@@ -115,6 +115,10 @@ class Train:
     def is_passenger_train(self):
         return self.info is not GUETER
 
+    @property
+    def id(self):
+        return self.locomotive + " / " + self.product_number
+
 
 GUETER =            TrainInfo(None, "🚂/🛲", 1, 0, 0, can_reverse=False)
 # --- Rail cars ---
@@ -153,4 +157,6 @@ E40 = Train(GUETER, "BR E40", "Märklin 39140", 23, (*np.linspace(0, 220, 15),),
 
 TRAINS = [ICE, S, BUS, E_RB, E_BW, ROT, BEIGE,   E40, DIESEL, DAMPF]
 
-TRAINS_BY_NAME = {train.name: train for train in TRAINS}
+TRAINS_BY_NAME = {train.id: train for train in TRAINS}
+for key, t in TRAINS_BY_NAME.items():
+    print(key, "    ", t.img_path)

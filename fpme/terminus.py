@@ -50,9 +50,12 @@ class ParkedTrain:
     doors_closing: bool = False
     time_departed: float = None  # Track departure so we don't play sounds multiple times
     # --- For special announcements ---
-    announcements_played = []  # can contain 'connections', 'delay/real', 'delay/fake', 'general/real', 'general/fake'
+    announcements_played = ()  # can contain 'connections', 'delay/real', 'delay/fake', 'general/real', 'general/fake'
     time_last_announcement = -100  # start time of last train announcement. Must be at least 15 seconds until next one.
     duration_last_announcement = 0  # 15s for delay reasons, 15? seconds for connections
+
+    def __post_init__(self):
+        print(f"Creating ParkedTrain for {self.train}")
 
     @property
     def has_tripped(self):
@@ -102,7 +105,7 @@ class ParkedTrain:
 
     @cached_property
     def delay_minutes(self):
-        return max(0, random.randint(int(-self.train.max_delay * (1 - self.train.delay_rate)), self.train.max_delay))
+        return max(0, random.randint(int(-self.train.info.max_delay * (1 - self.train.info.delay_rate)), self.train.info.max_delay))
 
     def __repr__(self):
         status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
@@ -146,7 +149,7 @@ class Terminus:
         data = {
             'switches': [],
             'trains': [{
-                'name': t.train.name,
+                'name': t.train.id,
                 'platform': t.platform,
                 'sgn_dist': t.state.signed_distance,
                 'abs_dist': t.state.abs_distance,
@@ -253,7 +256,7 @@ class Terminus:
             self.control.set_acceleration_control(train, controller, acc_input, cause)
 
     def request_entry(self, train: Train):  # Button C
-        print(self.trains)
+        print(f"{train} requrests entry. Already registered: ", self.trains)
         with self._request_lock:
             print(f"entering = {self.entering}")
             if self.entering:
@@ -276,18 +279,21 @@ class Terminus:
                 t = [t for t in self.trains if t.train == train][0]
                 print(f"{train} is already in terminus: {t.platform} @ {t.get_position()}, cleared={t.has_cleared}")
                 # --- Play sound if parked ---
-                if t.state.speed == 0 and self.control.sound >= 1 and len(t.announcements_played) <= 2 and time.perf_counter() > t.time_last_announcement + t.duration_last_announcement:
+                if t.state.speed == 0 and self.control.sound >= 1 and len(t.announcements_played) < 2 and time.perf_counter() > t.time_last_announcement + t.duration_last_announcement:
+                    print(f"Previous announcements: {t.announcements_played}")
                     if 'connections' not in t.announcements_played and time.perf_counter() < t.time_stopped + 15:  # first announcement is about other trains in station (only if any)
-                        passenger_trains = [t_ for t_ in self.trains if t_.train.is_passenger_train and (t_.state.speed == 0 or (t_.state.speed > 0) == t_.entered_forward)]
+                        passenger_trains = [t_ for t_ in self.trains if t_ != t and t_.train.is_passenger_train and (t_.state.speed == 0 or (t_.state.speed > 0) == t_.entered_forward)]
                         if passenger_trains:
                             connections = [(t_.train, t_.platform) for t_ in passenger_trains]
-                            t.announcements_played.append('connections')
+                            t.announcements_played += ('connections',)
                             t.time_last_announcement = time.perf_counter()
                             t.duration_last_announcement = play_connections(t.platform, connections)
                     else:
-                        t.announcements_played.append('delay')
+                        t.announcements_played += ('delay',)
                         t.time_last_announcement = time.perf_counter()
                         t.duration_last_announcement = play_special_announcement(t.train, t.platform, t.delay_minutes)
+                else:
+                    print(f"Cannot play announcement. sound={self.control.sound}, speed={t.state.speed}, previous={t.announcements_played}, time={time.perf_counter() - t.time_last_announcement - t.duration_last_announcement}")
                 return
             # --- prepare entry ---
             platform = self.select_track(train)
@@ -371,6 +377,7 @@ class Terminus:
                 if exited:
                     self.trains.remove(t)
                     self.control.set_speed_limit(t.train, 'terminus', None)
+                    print(f"{t} left the station.")
                 # else:
                     # print(f"{t} still in station")
 
@@ -434,7 +441,7 @@ class Terminus:
         can_enter = [p for p, c in can_enter.items() if c]
         if not can_enter:
             return None
-        regional = random.random() < train.regional_prob
+        regional = random.random() < train.info.regional_prob
         cost_regional = int(not regional)
         cost_far_distance = int(regional)
         base_cost = {
@@ -462,7 +469,6 @@ def set_switches_for(relay, platform: int):
             relay.set_channel_open(channel, req_open)
             time.sleep(.1)
 
-
 TARGETS = {
     ICE: {
         1: ('I C E, 86',  'Neuffen'),
@@ -478,6 +484,13 @@ TARGETS = {
         4: ('S 2', "Radeburg"),
         5: ('S 4', "Böblingen"),
     },
+    BUS: {
+        1: ('Schienenbus', "Neuenbürg"),
+        2: ('Schienenbus', "Neuffen"),
+        3: ('Schienenbus', "Waldbrunn"),
+        4: ('Schienenbus', "Radeburg"),
+        5: ('Schienenbus', "Böblingen"),
+    },
     E_BW: {
         1: ("Intercity", "Neuffen"),
         2: ("Intercity", "Neuffen"),
@@ -492,14 +505,22 @@ TARGETS = {
         4: ("Regionalbahn", "Radeburg"),
         5: ("Regionalbahn", "Waldbrunn"),
     },
-    E40: {
+    ROT: {
         1: ("Regional-Express", "Neuffen"),
         2: ("Regional-Express", "Neuffen"),
         3: ("Regional-Express", "Neuffen"),
         4: ("Regional-Express", "Radeburg"),
         5: ("Regional-Express", "Wiesbaden"),
-    }
+    },
+    BEIGE: {
+        1: ("Nahverkehrszug", "Neuffen"),
+        2: ("Nahverkehrszug", "Neuffen"),
+        3: ("Nahverkehrszug", "Neuffen"),
+        4: ("Eilzug", "Radeburg"),
+        5: ("Eilzug", "Wiesbaden"),
+    },
 }
+
 
 
 def play_entry_announcement(train: Train, platform: int, delay_minutes: int):
@@ -539,7 +560,7 @@ def play_connections(platform: int, connections: List[Tuple[Train, int]]):
         texts.append(f"{name}, nach: {target} von Gleis {PL_NUM[pl]}{', direkt gegenüber' if OPPOSITE[platform] == pl else ''}.")
     speech = "Ihre nächsten Anschlüsse: " + ' '.join(texts)
     play_announcement(speech, left_vol=int(platform <= 3), right_vol=int(platform > 3), gong=False)
-    return 3 + 10 * len(texts)
+    return 2 + 7 * len(texts)
 
 
 def play_special_announcement(train: Train, platform: int, delay_minutes: int):
