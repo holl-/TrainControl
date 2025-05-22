@@ -481,7 +481,7 @@ TARGETS = {
         1: ('S 3', "Neuenbürg"),
         2: ('S 5', "Neuffen"),
         3: ('S 1', "Waldbrunn"),
-        4: ('S 2', "Radeburg"),
+        4: ('S zwo', "Radeburg"),
         5: ('S 4', "Böblingen"),
     },
     BUS: {
@@ -522,7 +522,6 @@ TARGETS = {
 }
 
 
-
 def play_entry_announcement(train: Train, platform: int, delay_minutes: int):
     if train in TARGETS:
         name, target = TARGETS[train][platform]
@@ -558,8 +557,7 @@ def play_connections(platform: int, connections: List[Tuple[Train, int]]):
     for train, pl in connections:
         name, target = TARGETS[train][platform]
         texts.append(f"{name}, nach: {target} von Gleis {PL_NUM[pl]}{', direkt gegenüber' if OPPOSITE[platform] == pl else ''}.")
-    speech = "Ihre nächsten Anschlüsse: " + ' '.join(texts)
-    play_announcement(speech, left_vol=int(platform <= 3), right_vol=int(platform > 3), gong=False)
+    play_announcement(' '.join(texts), left_vol=int(platform <= 3), right_vol=int(platform > 3), cue='anschlüsse')
     return 2 + 7 * len(texts)
 
 

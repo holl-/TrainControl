@@ -29,6 +29,7 @@ if ir.ndim > 1:
 ir = ir / np.max(np.abs(ir))
 
 GONG = pygame.mixer.Sound(DIR + "/ansagen/gong-reverb.wav")
+ANSCHLUESSE = pygame.mixer.Sound(DIR + "/ansagen/anschluesse-reverb.wav")
 
 
 def play_background_loop(file: str):
@@ -48,14 +49,20 @@ def async_play(sound: Union[str, pygame.mixer.SoundType], left_vol=1., right_vol
     channel.play(sound)
 
 
-def play_announcement(text: str, language='German', left_vol=1., right_vol=1., gong=True):
-    Thread(target=_play_announcement, args=(text, language, left_vol, right_vol, gong)).start()
+def play_announcement(text: str, language='German', speed=140, left_vol=1., right_vol=1., cue='gong', cue_vol=.4):
+    Thread(target=_play_announcement, args=(text, language, speed, left_vol, right_vol, cue, cue_vol)).start()
 
 
-def _play_announcement(text: str, language='German', left_vol=1., right_vol=1., gong=True):
+def _play_announcement(text: str, language='German', speed=140, left_vol=1., right_vol=1., cue='gong', cue_vol=.4):
     t0 = time.perf_counter()
-    if gong:
-        async_play(GONG, left_vol=left_vol * .4, right_vol=right_vol * .4)
+    if cue == 'gong':
+        async_play(GONG, left_vol=left_vol * cue_vol, right_vol=right_vol * cue_vol)
+        cue_duration = 1.9
+    elif cue == 'anschlüsse':
+        async_play(ANSCHLUESSE, left_vol=left_vol * cue_vol, right_vol=right_vol * cue_vol)
+        cue_duration = 1.9
+    else:
+        cue_duration = 0
     # --- Generate speech ---
     voices = engine.getProperty('voices')
     german_voices = [voice for voice in voices if language in voice.name]
@@ -63,7 +70,7 @@ def _play_announcement(text: str, language='German', left_vol=1., right_vol=1., 
         engine.setProperty('voice', german_voices[0].id)
     else:
         print("No German voice found. Using default voice.")
-    engine.setProperty('rate', 140)  # Speed of speech
+    engine.setProperty('rate', speed)  # Speed of speech
     engine.setProperty('volume', 1.0)  # Volume (0.0 to 1.0)
     if not os.path.exists('output'):
         os.makedirs('output')
@@ -72,7 +79,7 @@ def _play_announcement(text: str, language='German', left_vol=1., right_vol=1., 
     # --- Reverb and play ---
     apply_reverb("speech.wav", "speech-reverb.wav")
     sound = pygame.mixer.Sound(DIR + "/speech-reverb.wav")  # pre-load sound file
-    time.sleep(max(0, 1.9 - t0 + time.perf_counter()))  # wait for gong to subside
+    time.sleep(max(0, cue_duration - t0 + time.perf_counter()))  # wait for gong to subside
     async_play(sound, left_vol=left_vol, right_vol=right_vol)
 
 
@@ -88,5 +95,5 @@ def apply_reverb(file: str, output_file: str):
 
 if __name__ == '__main__':
     # apply_reverb("ansagen/gong.wav", "ansagen/gong-reverb-reduced.wav")
-    play_announcement("Gleis 3, Ankunft: I C E 512 nach: Böblingen.")
+    play_announcement("S 1", cue='anschlüsse', cue_vol=1)
     time.sleep(100)
