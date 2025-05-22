@@ -91,8 +91,8 @@ class ParkedTrain:
             return None
         delta = self.state.signed_distance - self.dist_trip
         if not self.was_entry_recorded:
-            default_position = 200  # ~middle of platform
-            delta = default_position - abs(delta - 200)
+            default_position = 220  # ~middle of platform
+            delta = default_position - abs(delta - 220)
         elif not self.entered_forward:  # entered_forward only available if was_entry_recorded
             delta = -delta  # make sure positive in station
         if self.has_reversed:  # here it's hard to know which direction the train is going.
@@ -362,7 +362,7 @@ class Terminus:
                     entering.dist_clear = entering.state.signed_distance
                     print(f"Max train length reached. Setting as cleared. End = {entering.get_end_position()}")
                 # --- cleared switches ---
-                if self.entering.dist_clear is not None and entering.get_end_position() > 40:  # approx. 57 cm
+                if self.entering.dist_clear is not None and entering.get_end_position() > 60:  # approx. 57 cm
                     print("Train cleared switches.")
                     self.free_exit()
                     self.entering = None
@@ -385,7 +385,7 @@ class Terminus:
                     # print(f"{t} still in station")
 
     def update(self, *_):
-        set_background_volume(.2 if self.control.sound >= 2 else 0)
+        set_background_volume(.5 if self.control.sound >= 2 else 0)
         for train in self.trains:
             if train.time_stopped is None and not train.state.speed and train.has_cleared:
                 print(f"{train} came to a stop in terminus")
@@ -561,7 +561,7 @@ def play_connections(platform: int, connections: List[Tuple[Train, int]]):
         name, target = TARGETS[train][platform]
         texts.append(f"{name}, nach: {target} von Gleis {PL_NUM[pl]}{', direkt gegenüber' if OPPOSITE[platform] == pl else ''}.")
     play_announcement(' '.join(texts), left_vol=int(platform <= 3), right_vol=int(platform > 3), cue='anschlüsse', cue_vol=1.)
-    return 2 + 6.5 * len(texts)
+    return 2 + 5.5 * len(texts)
 
 
 def play_special_announcement(train: Train, platform: int, delay_minutes: int, entered_seconds_ago: float):

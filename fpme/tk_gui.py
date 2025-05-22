@@ -250,6 +250,8 @@ class TKGUI:
         if self.terminus:
             for train, img_id in self.canvas_ids.items():
                 platform, pos = self.terminus.get_train_position(train)
+                if pos is not None:
+                    pos -= 20  # 0 is at track outside board
                 if platform:
                     y = {1: 15, 2: 65, 3: 115, 4: 170, 5: 220}[platform]
                     x = pos * (800/250) + 50 if pos is not None else 10
