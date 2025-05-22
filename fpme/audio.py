@@ -1,6 +1,7 @@
 import os
 import time
 from threading import Thread
+from typing import Union
 
 import numpy as np
 from scipy.io import wavfile
@@ -27,7 +28,7 @@ if ir.ndim > 1:
     ir = np.mean(ir, axis=1)
 ir = ir / np.max(np.abs(ir))
 
-gong = pygame.mixer.Sound(DIR + "/ansagen/gong-reverb.wav")
+GONG = pygame.mixer.Sound(DIR + "/ansagen/gong-reverb.wav")
 
 
 def play_background_loop(file: str):
@@ -39,7 +40,7 @@ def set_background_volume(volume):
     pygame.mixer.music.set_volume(volume)
 
 
-def async_play(sound: str, left_vol=1., right_vol=1.):
+def async_play(sound: Union[str, pygame.mixer.SoundType], left_vol=1., right_vol=1.):
     if isinstance(sound, str):
         sound = pygame.mixer.Sound(DIR + "/" + sound)
     channel = pygame.mixer.find_channel()
@@ -47,13 +48,14 @@ def async_play(sound: str, left_vol=1., right_vol=1.):
     channel.play(sound)
 
 
-def play_announcement(text: str, language='German', left_vol=1., right_vol=1.):
-    Thread(target=_play_announcement, args=(text, language, left_vol, right_vol)).start()
+def play_announcement(text: str, language='German', left_vol=1., right_vol=1., gong=True):
+    Thread(target=_play_announcement, args=(text, language, left_vol, right_vol, gong)).start()
 
 
-def _play_announcement(text: str, language='German', left_vol=1., right_vol=1.):
+def _play_announcement(text: str, language='German', left_vol=1., right_vol=1., gong=True):
     t0 = time.perf_counter()
-    async_play(gong, left_vol=left_vol * .4, right_vol=right_vol * .4)
+    if gong:
+        async_play(GONG, left_vol=left_vol * .4, right_vol=right_vol * .4)
     # --- Generate speech ---
     voices = engine.getProperty('voices')
     german_voices = [voice for voice in voices if language in voice.name]
