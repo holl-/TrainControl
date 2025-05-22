@@ -74,7 +74,7 @@ class Train:
         return self.info.name or ""
 
     def __repr__(self):
-        return self.name
+        return self.name or f"{self.locomotive} ({self.info.name})"
 
     @cached_property
     def speeds(self) -> Tuple[float, ...]:

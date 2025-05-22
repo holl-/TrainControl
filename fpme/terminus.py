@@ -112,7 +112,7 @@ class ParkedTrain:
 
     def __repr__(self):
         status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
-        return f"{self.train.name} on platform {self.platform} ({status})."
+        return f"{self.train} on platform {self.platform} ({status})."
 
 
 # @dataclass
@@ -206,9 +206,12 @@ class Terminus:
 
     def set_occupied(self, platform: int, train: Train):
         state = self.control[train]
+        if self.entering.train == train:
+            self.entering = None
         if any([t.train == train for t in self.trains]):
             t = [t for t in self.trains if t.train == train][0]
             t.platform = platform
+            print(f"Moved {train} to platform {platform}")
         else:
             dist = state.signed_distance
             abs_dist = state.abs_distance
@@ -216,9 +219,14 @@ class Terminus:
             train_length = 50
             t = ParkedTrain(train, state, platform, None, dist_trip=dist - position, dist_clear=dist - position + train_length + 0.18, dist_reverse=abs_dist, time_stopped=-100)
             self.trains.append(t)
+            print(f"Added {t}")
+        print(self.trains)
 
     def set_empty(self, platform: int):
         self.trains = [t for t in self.trains if t.platform != platform]
+        if self.entering.platform == platform:
+            self.entering = None
+        print(self.trains)
 
     def on_reversed(self, train: Train):
         for t in self.trains:
