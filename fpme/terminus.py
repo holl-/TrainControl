@@ -291,7 +291,7 @@ class Terminus:
                     else:
                         t.announcements_played += ('delay',)
                         t.time_last_announcement = time.perf_counter()
-                        t.duration_last_announcement = play_special_announcement(t.train, t.platform, t.delay_minutes)
+                        t.duration_last_announcement = play_special_announcement(t.train, t.platform, t.delay_minutes, time.perf_counter() - t.time_stopped)
                 else:
                     print(f"Cannot play announcement. sound={self.control.sound}, speed={t.state.speed}, previous={t.announcements_played}, time={time.perf_counter() - t.time_last_announcement - t.duration_last_announcement}")
                 return
@@ -561,7 +561,7 @@ def play_connections(platform: int, connections: List[Tuple[Train, int]]):
     return 2 + 7 * len(texts)
 
 
-def play_special_announcement(train: Train, platform: int, delay_minutes: int):
+def play_special_announcement(train: Train, platform: int, delay_minutes: int, entered_seconds_ago: float):
     sentences = [
         "Information zu, Hoggworts Express, nach: Hoggworts: Heube ab Gleis 8 Drei Viertel, direkt gegenüber.",
         "I C E 397, nach: Atlantis, fällt heute aus.",
@@ -708,7 +708,8 @@ def play_special_announcement(train: Train, platform: int, delay_minutes: int):
         # speech = f"Gleis {platform}, Einfahrt. {connection}, nach: {target}, Abfahrt {hour} Uhr {minute}{delay_text}"
         reasons = fake_reasons if random.random() < .3 else real_reasons
         of = {S: 'der', E_RB: 'der'}.get(train, 'des')
-        speech = f"Bitte beachten Sie: Die Weiterfahrt {of} {name} verzögert sich um circa {delay} Minuten. Grund dafür " + random.choice(reasons)
+        exit_type = "Abfahrt" if entered_seconds_ago > 45 else "Weiterfahrt"
+        speech = f"Bitte beachten Sie: Die {exit_type} {of} {name} verzögert sich um circa {delay} Minuten. Grund dafür " + random.choice(reasons)
     else:
         speech = random.choice(sentences)
     play_announcement(speech, left_vol=int(platform <= 3), right_vol=int(platform>3))
@@ -782,6 +783,5 @@ if __name__ == '__main__':
             # relay.close_channel(8)
             # time.sleep(1)
     # relays.on_connected(main)
-    # play_special_announcement(ICE, 5, 20)
     play_connections(1, [(ICE, 2), (S, 4)])
     time.sleep(20)
