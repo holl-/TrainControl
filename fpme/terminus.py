@@ -146,7 +146,7 @@ class Terminus:
         schedule_at_fixed_rate(self.save_state, 5.)
         schedule_at_fixed_rate(self.check_exited, 1.)
         schedule_at_fixed_rate(self.update, 0.1)
-        play_background_loop(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'ambient', 'station1.mp3')))
+        play_background_loop(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'assets', 'sound', 'ambient', 'station.mp3')))
 
     def save_state(self, *_args):
         data = {
