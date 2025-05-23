@@ -33,7 +33,7 @@ PREVENT_EXIT = {  # when entering platform x, train on platforms y must wait
 ENTRY_SIGNAL = 3
 ENTRY_POWER = 4  # no power when open
 
-SPEED_LIMIT = 60.
+SPEED_LIMIT = 50.
 
 
 @dataclass
@@ -210,7 +210,7 @@ class Terminus:
 
     def set_occupied(self, platform: int, train: Train):
         state = self.control[train]
-        if self.entering.train == train:
+        if self.entering is not None and self.entering.train == train:
             self.clear_entering()
         if any([t.train == train for t in self.trains]):
             t = [t for t in self.trains if t.train == train][0]

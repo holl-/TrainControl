@@ -79,6 +79,14 @@ class TrainState:
             else:
                 self.target_speed = math.copysign(min(abs(target_speed), *self.speed_limits.values()), target_speed)
 
+    def set_speed(self, speed):
+        with self.modify_lock:
+            if not self.speed_limits:
+                self.speed = speed
+            else:
+                self.speed = math.copysign(min(abs(speed), *self.speed_limits.values()), speed)
+
+
     @property
     def can_use_primary_ability(self):
         ability = self.train.primary_ability
@@ -210,9 +218,8 @@ class TrainControl:
                     abs_speed = train.speeds[speed_idx]
                     abs_speed = max(0, abs_speed + acc_input * 1e-2)
                     prev_speed = state.speed
-                    state.speed = math.copysign(abs_speed, state.target_speed)
-                    prev_index = self._last_sent[train][1]
-                    print(f"Acceleration {train.name} = {acc_input} ({prev_speed} ({prev_index} | {speed_idx}) -> {state.speed:.2f} ({get_speed_index(train, state, acc_input, True)}), target={state.target_speed})")
+                    state.set_speed(math.copysign(abs_speed, state.target_speed))
+                    print(f"Acceleration {train.name} = {acc_input} ({prev_speed} ({self._last_sent[train][1]} | {speed_idx}) -> {state.speed:.2f} ({get_speed_index(train, state, acc_input, True)}), target={state.target_speed})")
                 state.acc_input = acc_input
 
     def emergency_stop_all(self, train: Optional[Train], cause: str):
@@ -366,7 +373,7 @@ class TrainControl:
             elif state.acc_input != 0:
                 acc = train.acceleration if state.acc_input > 0 else train.deceleration
                 abs_target = max(0., abs(state.speed or 0.) + dt * acc * state.acc_input)
-                state.target_speed = abs_target * (-1. if state.is_in_reverse else 1.)
+                state.set_target_speed(abs_target * (-1. if state.is_in_reverse else 1.))
             # --- Compute new speed ---
             speed = state.speed
             if speed is None:
