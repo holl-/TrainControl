@@ -102,9 +102,9 @@ class TrainControl:
         self.last_emergency_break_all = (0., "")
         self.last_power_off = (0., "")
         self.last_power_on = (0., "")
+        self._last_sent = {t: None for t in trains}
         for train in trains:
-            self.generator.set(train.address, 0, False, {}, get_preferred_protocol(train))
-        self._last_sent = {train: (train.address, 0, False, {}) for train in trains}
+            self._send(train, 0, False, {})
         schedule_at_fixed_rate(self.update_trains, period=.03)
         self.generator.setup()
 
@@ -203,7 +203,7 @@ class TrainControl:
             if state.custom_acceleration_handler is not None:
                 state.custom_acceleration_handler(train, controller, acc_input, cause)
             else:
-                print(acc_input, state.acc_input)
+                # print("Input", train, acc_input, state.acc_input)
                 if acc_input != 0 and state.acc_input * acc_input <= 0:  # switching acceleration direction or was 0 -> jump to next level
                     speed_idx = get_speed_index(train, state, acc_input, False, False)  # this rounds up/down depending on sign(acc_input)
                     abs_speed = train.speeds[speed_idx]
@@ -227,6 +227,7 @@ class TrainControl:
 
     def emergency_stop(self, train: Train, cause: str):
         """Immediately stop `train`."""
+        print(f"Emergency stop {train}, mm1={train.stop_by_mm1_reverse}")
         state = self[train]
         with state.modify_lock:
             state.target_speed *= 0.
@@ -235,9 +236,9 @@ class TrainControl:
             functions = {f.id: on for f, on in state.active_functions.items()}
             state.last_emergency_break = (time.perf_counter(), cause)
         if train.stop_by_mm1_reverse:
-            self.generator.set(train.address, None, False, functions, get_preferred_protocol(train))
+            self._send(train, None, False, functions)
         else:
-            self.generator.set(train.address, 0, not currently_in_reverse, functions, get_preferred_protocol(train))
+            self._send(train, 0, not currently_in_reverse, functions)
 
     def set_global_speed_limit(self, limit: Optional[float]):
         self.speed_limit = limit
@@ -391,11 +392,14 @@ class TrainControl:
         functions = {f.id: on for f, on in state.active_functions.items()}
         direction = math.copysign(1, state.speed if state.speed != 0 else state.target_speed)
         currently_in_reverse = direction < 0
+        self._send(train, speed_code, currently_in_reverse, functions)
+
+    def _send(self, train: Train, speed_code: Optional[int], currently_in_reverse: bool, functions: dict):
         data = (train.address, speed_code, currently_in_reverse, functions)
         if data != self._last_sent[train]:
             self._last_sent[train] = data
             protocol = get_preferred_protocol(train)
-            # print(f"Sending {train}: {'-' if currently_in_reverse else '+'}{speed_code} {functions} via {protocol}")
+            print(f"Sending {train}: {'-' if currently_in_reverse else '+'}{speed_code} {functions} via {protocol}")
             self.generator.set(train.address, speed_code, currently_in_reverse, functions, protocol)
 
 
