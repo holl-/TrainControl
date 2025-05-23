@@ -61,6 +61,7 @@ class TrainState:
         return len(self.controllers) > 0 and self.inactive_time <= 30.
 
     def set_speed_limit(self, name: str, limit: Optional[float], jerk=True):
+        print(f"{self.train}: Speed-limit '{name}'={limit}")
         with self.modify_lock:
             if limit is None:
                 if name in self.speed_limits:
@@ -203,7 +204,7 @@ class TrainControl:
             if state.custom_acceleration_handler is not None:
                 state.custom_acceleration_handler(train, controller, acc_input, cause)
             else:
-                # print("Input", train, acc_input, state.acc_input)
+                print("Input", train, acc_input, state.acc_input)
                 if acc_input != 0 and state.acc_input * acc_input <= 0:  # switching acceleration direction or was 0 -> jump to next level
                     speed_idx = get_speed_index(train, state, acc_input, False, False)  # this rounds up/down depending on sign(acc_input)
                     abs_speed = train.speeds[speed_idx]
