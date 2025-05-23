@@ -43,10 +43,12 @@ class ParkedTrain:
     platform: int
     dist_request: float = None  # Signed distance when enter request was sent. None for trains set through the UI.
     dist_trip: float = None  # Signed distance when entering the switches
+    time_trip: float = None
     dist_clear: float = None  # Signed distance when leaving the sensor, now fully on switches
     dist_reverse: float = None  # Abs distance when the 'reverse' button is clicked for the fist time
     # --- For departure sound ---
-    time_stopped: float = None  # perf_counter() when train was first reversed in station. Used to determine whether people could get on/off.
+    time_stopped: float = None  # perf_counter() when train came to rest in station. Can be updated.
+    dist_stopped: float = None  # Signed distance when last stopped.
     doors_closing: bool = False
     time_departed: float = None  # Track departure so we don't play sounds multiple times
     # --- For special announcements ---
@@ -58,11 +60,11 @@ class ParkedTrain:
         print(f"Creating ParkedTrain for {self.train}")
 
     @property
-    def has_tripped(self):
+    def has_tripped_contact(self):
         return self.dist_trip is not None
 
     @property
-    def has_cleared(self):
+    def has_cleared_contact(self):
         return self.dist_clear is not None
 
     @property
@@ -87,7 +89,7 @@ class ParkedTrain:
 
     def get_position(self):
         """Positive towards station."""
-        if not self.has_tripped:
+        if not self.has_tripped_contact:
             return None
         delta = self.state.signed_distance - self.dist_trip
         if not self.was_entry_recorded:
@@ -111,7 +113,7 @@ class ParkedTrain:
             return 0
 
     def __repr__(self):
-        status = 'cleared' if self.has_cleared else ('tripped' if self.has_tripped else 'requested')
+        status = 'cleared' if self.has_cleared_contact else ('tripped' if self.has_tripped_contact else 'requested')
         return f"{self.train} on platform {self.platform} ({status})."
 
 
@@ -183,9 +185,11 @@ class Terminus:
             self.trains.append(ParkedTrain(train, state, platform,
                                            dist_request=dist_request + sgn_delta if dist_request is not None else None,
                                            dist_trip=dist_trip + sgn_delta if dist_trip is not None else None,
+                                           time_trip=-100,
                                            dist_clear=dist_clear + sgn_delta if dist_clear is not None else None,
                                            dist_reverse=dist_reverse + abs_delta if dist_reverse is not None else state.abs_distance,  # train could be reversed by restart
                                            doors_closing=False,
+                                           dist_stopped=state.signed_distance,
                                            time_stopped=-100,))
             if train in READY_SOUNDS:
                 state.custom_acceleration_handler = self.handle_acceleration
@@ -273,7 +277,7 @@ class Terminus:
             if self.entering:
                 if train == self.entering.train:  # clicked again, no effect
                     return
-                elif self.entering.has_tripped:
+                elif self.entering.has_tripped_contact:
                     print(f"Terminus: {train} cannot enter until {self.entering} has cleared switches")
                     self.control.force_stop(train, "wait for previous train")  # Wait until previous train has passed
                     return
@@ -288,7 +292,7 @@ class Terminus:
                     return
             if any(t.train == train for t in self.trains):
                 t = [t for t in self.trains if t.train == train][0]
-                print(f"{train} is already in terminus: {t.platform} @ {t.get_position()}, cleared={t.has_cleared}")
+                print(f"{train} is already in terminus: {t.platform} @ {t.get_position()}, cleared={t.has_cleared_contact}")
                 # --- Play sound if parked ---
                 if t.state.speed == 0 and self.control.sound >= 1 and len(t.announcements_played) < 2 and time.perf_counter() > t.time_last_announcement + t.duration_last_announcement:
                     print(f"Previous announcements: {t.announcements_played}")
@@ -336,6 +340,7 @@ class Terminus:
                 return
             # --- Contact tripped ---
             entering.dist_trip = entering.state.signed_distance
+            entering.time_trip = time.perf_counter()
             if entering.dist_trip == entering.dist_request:
                 entering.dist_request -= -1e-3 if entering.state.is_in_reverse else 1e-3
             driven = entering.dist_trip - entering.dist_request
@@ -382,7 +387,7 @@ class Terminus:
     def check_exited(self, *_):
         # print(f"Check exited for {self.trains}")
         for t in tuple(self.trains):
-            if t.has_cleared:
+            if t.has_cleared_contact:
                 pos = t.get_position()
                 exited = pos < 0
                 if exited:
@@ -395,9 +400,17 @@ class Terminus:
     def update(self, *_):
         set_background_volume(.2 if self.control.sound >= 2 else 0)
         for train in self.trains:
-            if train.time_stopped is None and not train.state.speed and train.has_cleared:
-                print(f"{train} came to a stop in terminus")
-                train.time_stopped = time.perf_counter()
+            if not train.state.speed and train.has_cleared_contact:  # stopped after contact
+                if train.time_stopped is None:
+                    print(f"{train} came to a stop in terminus")
+                    train.time_stopped = time.perf_counter()
+                    train.dist_stopped = train.state.signed_distance
+                    if self.entering == train:
+                        self.entering = None
+                elif not train.has_reversed and train.state.signed_distance != train.dist_stopped:  # Continued a bit further and stopped again
+                    print(f"{train} came to a stop in terminus again, distance from previous: {abs(train.state.signed_distance - train.dist_stopped)}")
+                    train.time_stopped = time.perf_counter()
+                    train.dist_stopped = train.state.signed_distance
             elif train.time_departed is None and train.time_stopped is not None and train.has_reversed and train.state.speed:
                 print(f"{train} is departing")
                 train.time_departed = time.perf_counter()
@@ -406,6 +419,9 @@ class Terminus:
                         sound = DEPARTURE_SOUNDS[train.train]
                         is_left = train.platform <= 3
                         async_play("departure/"+sound, int(is_left), 1 - int(is_left))
+        if self.entering is not None and time.perf_counter() - self.entering.time_trip > 20:
+            print(f"{self.entering} has entered contact {time.perf_counter() - self.entering.time_trip} seconds ago and is still entering. Assuming this was a mistake and clearing entry.")
+            self.entering = None
 
     def prevent_exit(self, entering_platform):
         if entering_platform == 1:
