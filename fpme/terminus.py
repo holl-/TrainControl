@@ -228,7 +228,7 @@ class Terminus:
 
     def set_empty(self, platform: int):
         self.trains = [t for t in self.trains if t.platform != platform]
-        if self.entering.platform == platform:
+        if self.entering is not None and self.entering.platform == platform:
             self.entering = None
         print(self.trains)
 
@@ -375,7 +375,7 @@ class Terminus:
                     entering.dist_clear = entering.state.signed_distance
                     print(f"Max train length reached. Setting as cleared. End = {entering.get_end_position()}")
                 # --- cleared switches ---
-                if self.entering.dist_clear is not None and entering.get_end_position() > 60:  # approx. 57 cm
+                if self.entering is not None and self.entering.dist_clear is not None and entering.get_end_position() > 60:  # approx. 57 cm
                     print("Train cleared switches.")
                     self.free_exit()
                     self.entering = None
@@ -419,7 +419,7 @@ class Terminus:
                         sound = DEPARTURE_SOUNDS[train.train]
                         is_left = train.platform <= 3
                         async_play("departure/"+sound, int(is_left), 1 - int(is_left))
-        if self.entering is not None and time.perf_counter() - self.entering.time_trip > 20:
+        if self.entering is not None and self.entering.time_trip and time.perf_counter() - self.entering.time_trip > 20:
             print(f"{self.entering} has entered contact {time.perf_counter() - self.entering.time_trip} seconds ago and is still entering. Assuming this was a mistake and clearing entry.")
             self.entering = None
 
