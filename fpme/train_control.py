@@ -36,7 +36,7 @@ class TrainState:
     force_stopping: Optional[str] = None
     signed_distance: float = 0.  # distance travelled in cm
     abs_distance: float = 0.  # distance travelled in cm
-    primary_ability_last_used = 0.
+    primary_ability_last_used = 0.  # time as measured by perf_counter()
     modify_lock = threading.RLock()
     custom_acceleration_handler: Callable = None
 
@@ -248,6 +248,7 @@ class TrainControl:
         self[train].set_speed_limit(cause, limit)
 
     def force_stop(self, train: Train, cause: str):
+        print(f"Stopping {train}. cause={cause}")
         state = self[train]
         with state.modify_lock:
             state.force_stopping = cause
@@ -359,7 +360,7 @@ class TrainControl:
             if state.force_stopping:
                 state.target_speed = math.copysign(0, state.target_speed)
                 if abs(state.speed) == 0:
-                    state.force_stopping = False
+                    state.force_stopping = None
             elif state.acc_input != 0:
                 acc = train.acceleration if state.acc_input > 0 else train.deceleration
                 abs_target = max(0., abs(state.speed or 0.) + dt * acc * state.acc_input)
