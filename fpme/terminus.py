@@ -782,17 +782,17 @@ READY_SOUNDS = {
     BUS: ("doors-tram.wav", 4.),
 }
 
-DEPARTURE_SOUNDS = {  # , "e-train1.wav"
-    ICE: "e-train1.wav",
+DEPARTURE_SOUNDS = {  # , "e-train.mp3"
+    ICE: "e-train.mp3",
     # S: None,  # sound from train
-    E_BW: "e-train1.wav",
-    E_RB: "e-train1.wav",
+    E_BW: "e-train.mp3",
+    E_RB: "e-train.mp3",
     # DAMPF: None,  # sound from train
-    E40: "e-train1.wav",
+    E40: "e-train.mp3",
     BEIGE: "diesel-departure.mp3",
     # ROT: None,
     DIESEL: "diesel-departure.mp3",
-    BUS: "e-drive1.wav",
+    BUS: "tram.mp3",
 }
 
 if __name__ == '__main__':
