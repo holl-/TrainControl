@@ -211,7 +211,7 @@ class Terminus:
     def set_occupied(self, platform: int, train: Train):
         state = self.control[train]
         if self.entering.train == train:
-            self.entering = None
+            self.clear_entering()
         if any([t.train == train for t in self.trains]):
             t = [t for t in self.trains if t.train == train][0]
             t.platform = platform
@@ -229,7 +229,7 @@ class Terminus:
     def set_empty(self, platform: int):
         self.trains = [t for t in self.trains if t.platform != platform]
         if self.entering is not None and self.entering.platform == platform:
-            self.entering = None
+            self.clear_entering()
         print(self.trains)
 
     def on_reversed(self, train: Train):
@@ -285,10 +285,7 @@ class Terminus:
                     print(f"Terminus: Conflict between {train} and {self.entering}")
                     self.control.emergency_stop(train, f"Contested terminus entry: {train} vs {self.entering.train}")
                     self.control.emergency_stop(self.entering.train, f"Contested terminus entry: {train} vs {self.entering.train}")
-                    self.relay.close_channel(ENTRY_SIGNAL)
-                    self.relay.open_channel(ENTRY_POWER)
-                    self.entering = None
-                    self.free_exit()
+                    self.clear_entering()
                     return
             if any(t.train == train for t in self.trains):
                 t = [t for t in self.trains if t.train == train][0]
@@ -332,10 +329,8 @@ class Terminus:
                     break
                 time.sleep(interval)
             else:  # --- not tripped - maybe button pressed on accident or train too far ---
-                self.relay.close_channel(ENTRY_SIGNAL)
-                self.relay.open_channel(ENTRY_POWER)
+                self.clear_entering()
                 self.control.emergency_stop(train, "train did not enter terminus")
-                self.entering = None
                 self.trains.remove(entering)
                 return
             # --- Contact tripped ---
@@ -377,9 +372,7 @@ class Terminus:
                 # --- cleared switches ---
                 if self.entering is not None and self.entering.dist_clear is not None and entering.get_end_position() > 60:  # approx. 57 cm
                     print("Train cleared switches.")
-                    self.free_exit()
-                    self.entering = None
-                    self.relay.open_channel(ENTRY_POWER)
+                    self.clear_entering()
                     return
 
         Thread(target=process_entry, args=(entering,)).start()
@@ -406,7 +399,7 @@ class Terminus:
                     train.time_stopped = time.perf_counter()
                     train.dist_stopped = train.state.signed_distance
                     if self.entering == train:
-                        self.entering = None
+                        self.clear_entering()
                 elif not train.has_reversed and train.state.signed_distance != train.dist_stopped:  # Continued a bit further and stopped again
                     print(f"{train} came to a stop in terminus again, distance from previous: {abs(train.state.signed_distance - train.dist_stopped)}")
                     train.time_stopped = time.perf_counter()
@@ -421,7 +414,7 @@ class Terminus:
                         async_play("departure/"+sound, int(is_left), 1 - int(is_left))
         if self.entering is not None and self.entering.time_trip and time.perf_counter() - self.entering.time_trip > 20:
             print(f"{self.entering} has entered contact {time.perf_counter() - self.entering.time_trip} seconds ago and is still entering. Assuming this was a mistake and clearing entry.")
-            self.entering = None
+            self.clear_entering()
 
     def prevent_exit(self, entering_platform):
         if entering_platform == 1:
@@ -435,6 +428,12 @@ class Terminus:
             if (t.state.speed < 0) == t.entered_forward:
                 self.control.emergency_stop(t.train, 'terminus-conflict')
                 self.control.set_speed_limit(t.train, 'terminus-wait', 0)
+
+    def clear_entering(self):
+        self.entering = None
+        self.relay.close_channel(ENTRY_SIGNAL)
+        self.relay.open_channel(ENTRY_POWER)
+        self.free_exit()
 
     def free_exit(self):
         self.relay.open_channel(1)  # Platforms 2, 3
