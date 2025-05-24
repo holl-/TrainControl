@@ -775,7 +775,7 @@ READY_SOUNDS = {
     E_BW: ("whistle2.wav", 1.5, 1.),
     E_RB: ("door-beep-RE.wav", 5., 1.),
     DAMPF: ("steam-horn.wav", 3.5, 1.),  # oder Horn vom Zug
-    E40: ("whistle-and-train1.wav", 1.5, .5),
+    E40: ("whistle-and-train1.wav", 1.5, .2),
     BEIGE: ("diesel-steam.wav", 0., 1.),
     ROT: ("diesel-steam.wav", 2., 1.),
     DIESEL: ("diesel-steam.wav", 2., 1.),
@@ -783,12 +783,12 @@ READY_SOUNDS = {
 }
 
 DEPARTURE_SOUNDS = {  # (filename, volume)
-    ICE: ("e-train.mp3", .5),
+    ICE: ("e-train.mp3", .3),
     # S: None,  # sound from train
-    E_BW: ("e-train.mp3", .5),
-    E_RB: ("e-train.mp3", .5),
+    E_BW: ("e-train.mp3", .3),
+    E_RB: ("e-train.mp3", .3),
     # DAMPF: None,  # sound from train
-    E40: ("e-train.mp3", .5),
+    E40: ("e-train.mp3", .3),
     BEIGE: ("diesel-departure.mp3", 1.),
     # ROT: None,
     DIESEL: ("diesel-departure.mp3", 1.),
