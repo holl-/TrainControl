@@ -328,6 +328,7 @@ class Terminus:
                     break
                 time.sleep(interval)
             else:  # --- not tripped - maybe button pressed on accident or train too far ---
+                self.control.set_speed_limit(entering.train, 'terminus', None)
                 self.clear_entering()
                 self.control.emergency_stop(train, "train did not enter terminus")
                 self.trains.remove(entering)
