@@ -199,7 +199,7 @@ class Terminus:
 
     def reverse_to_exit(self):
         for train in self.trains:
-            if train.state.abs_distance == 0 and train.entered_forward != train.state.is_in_reverse:
+            if train.dist_trip is not None and train.state.abs_distance == 0 and train.entered_forward != train.state.is_in_reverse:
                 self.control.reverse(train.train, 'terminus', auto_activate=False)
 
     def get_train_position(self, train: Train):
@@ -219,7 +219,7 @@ class Terminus:
         else:
             dist = state.signed_distance
             abs_dist = state.abs_distance
-            position = 200
+            position = 300
             train_length = 50
             t = ParkedTrain(train, state, platform, None, dist_trip=dist - position, dist_clear=dist - position + train_length + 0.18, dist_reverse=abs_dist, time_stopped=-100)
             self.trains.append(t)
@@ -272,9 +272,10 @@ class Terminus:
 
     def request_entry(self, train: Train):  # Button C
         print(f"{train} requrests entry. Already registered: ", self.trains)
+        is_in_station = any(t.train == train for t in self.trains)
         with self._request_lock:
             print(f"entering = {self.entering}")
-            if self.entering:
+            if not is_in_station and self.entering:
                 if train == self.entering.train:  # clicked again, no effect
                     return
                 elif self.entering.has_tripped_contact:
@@ -287,11 +288,11 @@ class Terminus:
                     self.control.emergency_stop(self.entering.train, f"Contested terminus entry: {train} vs {self.entering.train}")
                     self.clear_entering()
                     return
-            if any(t.train == train for t in self.trains):
+            if is_in_station:
                 t = [t for t in self.trains if t.train == train][0]
                 print(f"{train} is already in terminus: {t.platform} @ {t.get_position()}, cleared={t.has_cleared_contact}")
                 # --- Play sound if parked ---
-                if t.state.speed == 0 and self.control.sound >= 1 and len(t.announcements_played) < 2 and time.perf_counter() > t.time_last_announcement + t.duration_last_announcement:
+                if t.state.speed == 0 and self.control.sound >= 1 and len(t.announcements_played) < 2 and time.perf_counter() > t.time_last_announcement + t.duration_last_announcement and t.time_stopped is not None:
                     print(f"Previous announcements: {t.announcements_played}")
                     if 'connections' not in t.announcements_played and time.perf_counter() < t.time_stopped + 15:  # first announcement is about other trains in station (only if any)
                         passenger_trains = [t_ for t_ in self.trains if t_ != t and t_.train.is_passenger_train and (t_.state.speed == 0 or (t_.state.speed > 0) == t_.entered_forward)]

@@ -199,7 +199,7 @@ class TKGUI:
     def update_ui(self):
         now = time.perf_counter()
         # --- Highlight recent inputs and detect disconnected devices ---
-        for device, (t, text) in self.inputs.last_events.items():
+        for device, (t, text) in dict(self.inputs.last_events).items():
             if device in self.last_action_labels:
                 label = self.last_action_labels[device]
                 if device in self.inputs.disconnected:

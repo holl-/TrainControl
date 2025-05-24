@@ -140,7 +140,7 @@ E_BW = Train(INTERREGIO_BLAU, "BR 101", "Märklin 37394", 1, (0, 13, 25, 46, 67,
 E_RB = Train(RB_ROT, "BR 146.1", "Märklin 29475", 24, (0, 2, 20, 33, 49, 63, 77, 94, 109, 124, 137, 155, 169, 182, 183), 30., supports_mm2=False, stop_by_mm1_reverse=False, img_path="E-Lok DB.png")
 S = Train(S_, "BR 648.2 (LINT 41)", "Märklin 37730", 48, (0, 2, 5, 10, 15, 22, 30, 41, 51, 64, 77, 91, 106, 120, 136), 35., img_path="S-Bahn.png",
           functions=(LIGHT, TrainFunction("Innenbeleuchtung", 1, False, (TAG_DEFAULT_LIGHT,)), SOUND, TrainFunction("Horn", 3, False, (TAG_SPECIAL_SOUND,)), INSTANT_ACCELERATION))
-BEIGE = Train(SILBERLING, "BR 218", "Märklin 3074", 73, (0, None, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220), 25., img_path="Thumb_BR218_Beige.png",
+BEIGE = Train(SILBERLING, "BR 218", "Märklin 3074", 73, (0, None, 13, 20, 34, 60, 85, 100, 120, 141, 157, 172, 188, 204, 220), 25., img_path="Thumb_BR218_Beige.png",
               functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
 ROT = Train(RE_TUERKIS, 'BR 218', "Märklin 3075", 74, (0, 15, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220), 40., img_path="Thumb_BR218_Rot.png",
             functions=(LIGHT, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,), warmup_time=19.5, reverse_time=4.), TrainFunction("Horn 1", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Horn 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Lüfter", 4, False, (TAG_SPECIAL_SOUND,))))
