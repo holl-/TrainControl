@@ -239,7 +239,7 @@ class Terminus:
                     t.dist_reverse = t.state.abs_distance
                     print(f"Reversed: {train}")
                     if t.train in READY_SOUNDS:
-                        print(f"Blocking input for sound {READY_SOUNDS[t.train]}")
+                        print(f"Blocking input for {t}, sound={READY_SOUNDS[t.train]}")
                         t.state.custom_acceleration_handler = self.handle_acceleration
 
     def handle_acceleration(self, train: Train, controller: str, acc_input: float, cause: str):
@@ -254,9 +254,8 @@ class Terminus:
                         t.state.custom_acceleration_handler = None
                         break
                     # --- Play sound ---
-                    sound, duration = READY_SOUNDS[t.train]
-                    is_left = t.platform <= 3
-                    async_play('departure-effects/' + sound, int(is_left), 1-int(is_left))
+                    sound, duration, vol = READY_SOUNDS[t.train]
+                    async_play('departure-effects/' + sound, int(t.platform <= 3) * vol, int(t.platform > 3) * vol)
                     # --- Wait, then release control ---
                     def release_block(t=t):
                         time.sleep(duration)
@@ -409,9 +408,8 @@ class Terminus:
                 train.time_departed = time.perf_counter()
                 if self.control.sound >= 2 and train.train in DEPARTURE_SOUNDS:
                     if time.perf_counter() - train.time_stopped > 4.:
-                        sound = DEPARTURE_SOUNDS[train.train]
-                        is_left = train.platform <= 3
-                        async_play("departure/"+sound, int(is_left), 1 - int(is_left))
+                        sound, vol = DEPARTURE_SOUNDS[train.train]
+                        async_play("departure/"+sound, int(train.platform <= 3) * vol, int(train.platform > 3) * vol)
         if self.entering is not None and self.entering.time_trip and time.perf_counter() - self.entering.time_trip > 20:
             print(f"{self.entering} has entered contact {time.perf_counter() - self.entering.time_trip} seconds ago and is still entering. Assuming this was a mistake and clearing entry.")
             self.clear_entering()
@@ -770,29 +768,29 @@ def delayed_now(delay_minutes: int):
 
 # ToDo sounds only if enabled
 READY_SOUNDS = {
-    ICE: ("whistle1.wav", 1.5),
-    S: ("door-beep-S-Bahn.wav", 5.),
-    E_BW: ("whistle2.wav", 1.5),
-    E_RB: ("door-beep-RE.wav", 5.),
-    DAMPF: ("steam-horn.wav", 3.5),  # oder Horn vom Zug
-    E40: ("whistle-and-train1.wav", 1.5),
-    BEIGE: ("diesel-steam.wav", 0.),
-    ROT: ("diesel-steam.wav", 2.),
-    DIESEL: ("diesel-steam.wav", 2.),
-    BUS: ("doors-tram.wav", 4.),
+    ICE: ("whistle1.wav", 1.5, 1.),
+    S: ("door-beep-S-Bahn.wav", 5., 1.),
+    E_BW: ("whistle2.wav", 1.5, 1.),
+    E_RB: ("door-beep-RE.wav", 5., 1.),
+    DAMPF: ("steam-horn.wav", 3.5, 1.),  # oder Horn vom Zug
+    E40: ("whistle-and-train1.wav", 1.5, .5),
+    BEIGE: ("diesel-steam.wav", 0., 1.),
+    ROT: ("diesel-steam.wav", 2., 1.),
+    DIESEL: ("diesel-steam.wav", 2., 1.),
+    BUS: ("doors-tram.wav", 4., 1.),
 }
 
-DEPARTURE_SOUNDS = {  # , "e-train.mp3"
-    ICE: "e-train.mp3",
+DEPARTURE_SOUNDS = {  # (filename, volume)
+    ICE: ("e-train.mp3", .5),
     # S: None,  # sound from train
-    E_BW: "e-train.mp3",
-    E_RB: "e-train.mp3",
+    E_BW: ("e-train.mp3", .5),
+    E_RB: ("e-train.mp3", .5),
     # DAMPF: None,  # sound from train
-    E40: "e-train.mp3",
-    BEIGE: "diesel-departure.mp3",
+    E40: ("e-train.mp3", .5),
+    BEIGE: ("diesel-departure.mp3", 1.),
     # ROT: None,
-    DIESEL: "diesel-departure.mp3",
-    BUS: "tram.mp3",
+    DIESEL: ("diesel-departure.mp3", 1.),
+    BUS: ("tram.mp3", 1.),
 }
 
 if __name__ == '__main__':
