@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 from multiprocessing import Value, Process, Queue, Manager
 from ctypes import c_char_p
-from typing import List, Dict, Tuple, Callable, Sequence
+from typing import List, Dict, Tuple, Callable, Sequence, Optional
 
 import serial
 from serial import SerialException
@@ -64,6 +64,9 @@ class Motorola1(RS232Protocol):
         f0 = functions.get(0, True)
         packet = ALL_ADDRESSES[address] + (T[1] if f0 else T[0]) + T[1] + T[0] + T[0] + T[0]
         return bytes(packet)
+
+    def __repr__(self):
+        return "MM1"
 
 
 class Motorola2(RS232Protocol):
@@ -135,6 +138,9 @@ class Motorola2(RS232Protocol):
     def turn_packet(self, address: int, functions: Dict[int, bool]) -> None:
         return None
 
+    def __repr__(self):
+        return "MM2"
+
 
 MM1 = Motorola1()
 MM2 = Motorola2()
@@ -150,6 +156,10 @@ class GeneratorState:
     contacts: Tuple[Value, ...]  # 3 entries
     last_stopped: float = None  # mutable
 
+    def __repr__(self):
+        contacts = ", ".join(f"C{i}={'closed' if c.value else 'open'}" for i, c in enumerate(self.contacts))
+        return f"{self.serial_port}: {'active' if self.active.value else 'inactive'}{' (no power' if self.short_circuited.value else ''} {self.error_message.value} {contacts}"
+
 
 def list_com_ports(include_bluetooth=False):
     ports = serial.tools.list_ports.comports()
@@ -160,6 +170,7 @@ def list_com_ports(include_bluetooth=False):
 
 
 class SubprocessGenerator:
+    """Main part of the signal generation API. Launches a sub-process computing and sending the RS232 packets."""
 
     def __init__(self, max_generators=1):
         self.max_generators = max_generators
@@ -167,7 +178,7 @@ class SubprocessGenerator:
         self._process = None
         self._manager = None
         self._generator_states: Dict[str, GeneratorState] = {}  # serial port -> state
-        self._address_states: Dict[int, tuple] = {}  # address -> state
+        self._address_states: Dict[int, Tuple[int, bool, dict, Optional[RS232Protocol], str]] = {}  # address -> state
         self._manager = Manager()
         self._all_active = [Value('b', False) for _ in range(max_generators)]
         self._all_short_circuited = [Value('b', False) for _ in range(max_generators)]
@@ -195,8 +206,8 @@ class SubprocessGenerator:
     def get_open_ports(self) -> Tuple[str]:
         return tuple(self._generator_states.keys())
 
-    def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None):
-        if address in self._address_states and self._address_states[address] == (speed, reverse, functions, protocol):
+    def set(self, address: int, speed: int or None, reverse: bool, functions: Dict[int, bool], protocol: RS232Protocol = None, name: str = None):
+        if address in self._address_states and self._address_states[address][:4] == (speed, reverse, functions, protocol):
             return  # already set
         assert isinstance(address, int)
         assert isinstance(speed, int) or speed is None
@@ -204,7 +215,7 @@ class SubprocessGenerator:
         assert isinstance(functions, dict), "functions must be a Dict[int, bool]"
         assert all(isinstance(f, int) for f in functions.keys()), "functions must be a Dict[int, bool]"
         assert all(isinstance(v, bool) for v in functions.values()), "functions must be a Dict[int, bool]"
-        self._address_states[address] = (speed, reverse, functions, protocol)
+        self._address_states[address] = (speed, reverse, functions, protocol, name)
         self._subprocess_run.put(('set', address, speed, reverse, functions, protocol))
 
     def start(self, serial_port: str):
@@ -248,8 +259,27 @@ class SubprocessGenerator:
         else:
             return time.perf_counter() - state.last_stopped
 
-    def is_in_reverse(self, address: int):
+    def get_speed(self, address: int) -> int:
+        return self._address_states[address][0]
+
+    def is_in_reverse(self, address: int) -> bool:
         return self._address_states[address][1]
+
+    def get_function_states(self, address: int) -> Dict[int, bool]:
+        return self._address_states[address][2]
+
+    def get_protocol(self, address):
+        return self._address_states[address][3]
+
+    def format_state(self):
+        generators = "\n".join(f"- {g}" for g in self._generator_states.values())
+        signals = "\n".join([f"{addr}:\t{'-' if rev else '+'}{speed}\t{repr(ptcl).lower()}  {name[:11] + ' '*(max(1, 12-len(name))) if name else ''}{funs}" for addr, (speed, rev, funs, ptcl, name) in self._address_states.items()])
+        return f"""--- RS232 Signal Generator ---
+Generators:
+{generators}
+Signals:
+{signals}
+"""
 
 
 # ------------------ Executed in subprocess from here on --------------------
@@ -263,6 +293,7 @@ def subprocess_main(queue: Queue, active, short_circuited, error, contacts):
 
 
 class SignalGenProcessInterface:
+    """Orchestrator for signal generation inside the sub-process. All commands go through this singleton object."""
 
     def __init__(self, all_active, all_short_circuited, all_error, all_contact1, all_contact2, all_contact3):
         self.all_active = list(all_active)

@@ -408,7 +408,7 @@ class TrainControl:
             self._last_sent[train] = data
             protocol = get_preferred_protocol(train)
             print(f"Sending {train}: {'-' if currently_in_reverse else '+'}{speed_code} {functions} via {protocol}")
-            self.generator.set(train.address, speed_code, currently_in_reverse, functions, protocol)
+            self.generator.set(train.address, speed_code, currently_in_reverse, functions, protocol, train.name or train.locomotive)
 
 
 def get_speed_index(train: Train, state: TrainState, abs_acceleration, limit_by_target: bool, round_up_to_first=True):

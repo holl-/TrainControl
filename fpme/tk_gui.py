@@ -169,6 +169,7 @@ class TKGUI:
         self.window.bind("<Control-Key-4>", lambda e: self.terminus_select(4))
         self.window.bind("<Control-Key-5>", lambda e: self.terminus_select(5))
         self.window.bind("<BackSpace>", lambda e: self.clear_platform())
+        self.window.bind("<d>", lambda e: print(self.control.generator.format_state()))
         self.window.protocol("WM_DELETE_WINDOW", lambda: self.terminate())
 
     def launch(self):
