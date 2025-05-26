@@ -90,7 +90,7 @@ class TrainState:
     @property
     def can_use_primary_ability(self):
         ability = self.train.primary_ability
-        if ability is None:
+        if ability is None:    # Schienenbus has no primary ability
             return False
         if not self.primary_ability_last_used:
             return True
@@ -287,8 +287,11 @@ class TrainControl:
                 with state.modify_lock:
                     state.active_functions[func] = on
 
-    def use_ability(self, train: Train, cause: str):
-        func = train.primary_ability
+    def use_ability(self, train: Train, ability=1, cause: str = None):
+        if ability == 1:
+            func = train.primary_ability
+        else:
+            return  # ToDo support F2, F3
         state = self[train]
         with state.modify_lock:
             state.active_functions[func] = True

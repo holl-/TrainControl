@@ -152,7 +152,7 @@ DAMPF = Train(GUETER, "BR 81", "Märklin 29185", 78, (0, 0.1, 0.2, 0.3, 48, 80, 
 DIESEL = Train(GUETER, "V 60 (BR 360)", "Märklin 29155", 72, (*np.linspace(0, 180, 15),), 25., img_path="Diesel.png",
                functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
 E40 = Train(GUETER, "BR E40", "Märklin 39140", 23, (*np.linspace(0, 220, 15),), 30., img_path="Thumb_E40.png", stop_by_mm1_reverse=False,
-            functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction('Horn', -1, False, (TAG_SPECIAL_SOUND,))))  # ToDo which ID?
+            functions=(LIGHT, INSTANT_ACCELERATION, TrainFunction('Horn', 1, False, (TAG_SPECIAL_SOUND,))))  # ToDo which ID is Horn?
 
 
 TRAINS = [ICE, S, BUS, E_RB, E_BW, ROT, BEIGE,   E40, DIESEL, DAMPF]
