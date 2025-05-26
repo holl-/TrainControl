@@ -4,9 +4,10 @@ Requires VR-Park controllers to be in mode C.
 Cross-platform unlike winusb. Both can read messages from VR-Park controllers in mode C.
 """
 import time
+import warnings
 from functools import partial
 from threading import Thread
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Tuple
 
 import pywinusb.hid as hid
 
@@ -24,6 +25,7 @@ class InputManager:
         self.connected: Dict[str, Optional[hid.HidDevice]] = {}
         self.disconnected: Set[str] = set()
         self.last_events: Dict[str, Tuple[float, str]] = {}  # (time, text)
+        self.button_states: Dict[str, Dict[str, Tuple[bool, float]]] = {}  # (pressed, time_last_pressed)
 
     def set_terminus(self, terminus: Terminus):
         self.terminus = terminus
@@ -31,6 +33,7 @@ class InputManager:
     def check_for_new_devices(self, vid=0x05AC, pid=0x022C):  # 1452, 556
         devices = hid.find_all_hid_devices()
         controllers = {dev.device_path: dev for dev in devices if self.product_names is None or dev.product_name in self.product_names}
+        controllers = {p: dev for p, dev in controllers.items() if 'col0' not in p or 'col01' in p}
         # --- Remove disconnected controllers ---
         for path in tuple(self.connected):
             if path not in controllers:
@@ -40,7 +43,7 @@ class InputManager:
                 if self.control is not None:
                     self.control.remove_controller(path)
         # --- Add new controllers ---
-        for device in [dev for path, dev in controllers.items() if path not in self.connected]:  # ToDo can add double entries
+        for device in [dev for path, dev in controllers.items() if path not in self.connected]:
             try:
                 device.open()
                 print(f"Opened new controller: {device.product_name} @ {device.device_path}")
@@ -66,58 +69,111 @@ class InputManager:
         Thread(target=detection_loop).start()
 
     def process_event(self, data: List, device_path: str):
-        device_name = self.connected[device_path].product_name if device_path in self.connected else device_path
-        # data is always [4, 127, 127, 127, 128, button_id, 0, hat, 0]
+        t = time.perf_counter()
         train = CONTROLS.get(device_path)
-        if self.control is None or train is None:
-            self.last_events[device_path] = (time.perf_counter(), str(data))
+        device_name = self.connected[device_path].product_name if device_path in self.connected else device_path
+        if device_name == "@input.inf,%hid_device_system_game%;HID-compliant game controller":
+            acc, buttons = get_vr_park_state(data)
+            bindings = VR_PARK_BIND
+        elif device_name == "Twin USB Joystick":
+            acc, buttons = get_twin_joystick_state(data)
+            bindings = TWIN_JOYSTICK_BIND
+        else:
+            warnings.warn(f"Unknown input device: {device_name} @ {device_path}")
+            self.last_events[device_path] = (time.perf_counter(), int_list_to_binary_visual(data))
             return
-        _, _, _, _, _, pressed, _, hat, _ = data
-        hat_pos = VECTOR[hat]
-        self.control.set_acceleration_control(train, device_path, hat_pos[1], cause=device_path)
-        if pressed == 16:  # Button A / Trigger 2
-            self.control.emergency_stop(train, cause=device_path)
-            event_text = "A (stop)"
-        elif pressed == 1:  # Button B / Trigger 1
-            self.control.reverse(train, cause=device_path)
-            if self.terminus is not None:
+        # --- Evaluate presses, double clicks ---
+        prev = self.button_states.setdefault(device_path, {b: (False, -1) for b in buttons})
+        self.button_states[device_path] = {b: (p, t if p else self.button_states[device_path][b][1]) for b, p in buttons.items()}
+        presses = {b: 'double' if t - prev[b][1] < 0.4 else 'press' for b, p in buttons.items() if p and not prev[b][0]}
+        actions = {bindings[b]: p for b, p in presses.items()}  # e.g. {'stop': 'press'}
+        # --- Apply control ---
+        if self.control is not None and train is not None:
+            self.control.set_acceleration_control(train, device_path, acc, cause=device_path)
+            if 'stop' in actions:
+                if actions['stop'] == 'press':
+                    self.control.emergency_stop(train, cause=device_path)
+                else:  # double-click
+                    self.control.emergency_stop_all(train, cause=device_path)
+            if 'reverse' in actions and actions['reverse'] == 'press':
                 self.terminus.on_reversed(train)
-            event_text = "B (reverse)"
-        elif pressed == 8:  # Button C
-            if self.terminus:
-                self.terminus.request_entry(train)
-                # self.control.emergency_stop_all(train, cause=device_path)
-            else:
-                print("no terminus set")
-            event_text = "C (terminus)"
-        elif pressed == 2:  # Button D
-            if train.primary_ability is not None:
+            if 'terminus' in actions and actions['terminus'] == 'press':
+                if self.terminus:
+                    self.terminus.request_entry(train)
+                else:
+                    print("no terminus set")
+            if 'F1' in actions and actions['F1'] == 'press':
                 if self.control[train].can_use_primary_ability:
                     self.control.use_ability(train, cause=device_path)
-            else:  # Schienenbus
-                play_special_announcement()
-            # self.control.power_on(None, cause=device_path)
-            event_text = "D (Ability)"
-        else:
-            if hat_pos != (0, 0):
-                event_text = str(hat_pos)
-            else:
-                event_text = ""
-        if event_text:
+        # --- Remember event ---
+        if presses:
+            event_text = ','.join([f"{a}-{p} ({b})" for (b, p), a in zip(presses.items(), actions)])
+            self.last_events[device_path] = (time.perf_counter(), event_text)
+        elif acc:
+            event_text = f'a={acc}'
             self.last_events[device_path] = (time.perf_counter(), event_text)
 
 
-VECTOR = {
-    0: (0, 0),
-    7: (0, 1),
-    3: (0, -1),
-    1: (1, 0),
-    5: (-1, 0),
-    8: (1, 1),
-    2: (1, -1),
-    4: (-1, -1),
-    6: (-1, 1),
+def get_twin_joystick_state(data: List) -> Tuple[float, Dict[str, bool]]:
+    # assume in mode RED
+    left_y = data[4]  # 0 up, 128 center, 255 down  left joystick or up/down buttons
+    rlb_pressed = data[6] & 3  # reverse: either left or right button (upper trigger)
+    rlt_pressed = data[6] & 12  # stop: either left or right lower trigger
+    y_pressed = data[5] & 16  # Terminus
+    a_pressed = data[5] & 64  # F1
+    x_pressed = data[5] & 128  # F2
+    b_pressed = data[5] & 32  # F3
+    state = {'A': a_pressed, 'B': b_pressed, 'X': x_pressed, 'Y': y_pressed, 'R/LT': rlt_pressed, 'R/LB': rlb_pressed}
+    joystick = {0: 1., 128: 0., 255: -1.}[left_y]
+    return joystick, state
+
+
+TWIN_JOYSTICK_BIND = {
+    'A': 'F1',
+    'B': 'F3',
+    'X': 'F2',
+    'Y': 'terminus',
+    'R/LT': 'stop',
+    'R/LB': 'reverse',
 }
+
+
+def get_vr_park_state(data: List) -> Tuple[float, Dict[str, bool]]:
+    # data is always [4, 127, 127, 127, 128, button_id, 0, hat, 0]
+    _, _, _, _, _, pressed, _, hat, _ = data
+    hat_pos = {
+        0: (0, 0),
+        7: (0, 1),
+        3: (0, -1),
+        1: (1, 0),
+        5: (-1, 0),
+        8: (1, 1),
+        2: (1, -1),
+        4: (-1, -1),
+        6: (-1, 1),
+    }[hat][1]
+    state = {'A/T': pressed == 16, 'B/B': pressed == 1, 'C': pressed == 8, 'D': pressed == 2}
+    return hat_pos, state
+
+
+VR_PARK_BIND = {
+    'A/T': 'stop',
+    'B/B': 'reverse',
+    'C': 'terminus',
+    'D': 'F1',
+}
+
+
+def int_list_to_binary_visual(numbers):
+    """Convert a list of integers [0, 255] to 8-bit binary representation using X for 1 and _ for 0."""
+    binary_codes = []
+    for num in numbers:
+        # Convert to 8-bit binary string
+        binary_str = f"{num:08b}"
+        # Replace 1 with X and 0 with _
+        visual_binary = binary_str.replace('1', 'X').replace('0', '_')
+        binary_codes.append(visual_binary)
+    return ", ".join(binary_codes)
 
 
 from fpme.train_def import *
