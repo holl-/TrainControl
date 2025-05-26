@@ -16,9 +16,11 @@ from fpme.train_control import TrainControl
 
 class InputManager:
 
-    def __init__(self, control: Optional[TrainControl]):
+    def __init__(self, control: Optional[TrainControl], product_names=("@input.inf,%hid_device_system_game%;HID-compliant game controller",
+                                                                       "Twin USB Joystick")):
         self.control = control
         self.terminus = None
+        self.product_names = product_names
         self.connected: Dict[str, Optional[hid.HidDevice]] = {}
         self.disconnected: Set[str] = set()
         self.last_events: Dict[str, Tuple[float, str]] = {}  # (time, text)
@@ -28,19 +30,20 @@ class InputManager:
 
     def check_for_new_devices(self, vid=0x05AC, pid=0x022C):  # 1452, 556
         devices = hid.find_all_hid_devices()
-        controllers = {dev.device_path: dev for dev in devices if dev.product_name == "@input.inf,%hid_device_system_game%;HID-compliant game controller"}
+        controllers = {dev.device_path: dev for dev in devices if self.product_names is None or dev.product_name in self.product_names}
         # --- Remove disconnected controllers ---
         for path in tuple(self.connected):
             if path not in controllers:
                 print(f"Controller disconnected: {path}")
                 del self.connected[path]
                 self.disconnected.add(path)
-                self.control.remove_controller(path)
+                if self.control is not None:
+                    self.control.remove_controller(path)
         # --- Add new controllers ---
-        for device in [dev for path, dev in controllers.items() if path not in self.connected]:
+        for device in [dev for path, dev in controllers.items() if path not in self.connected]:  # ToDo can add double entries
             try:
                 device.open()
-                print(f"Opened new controller: {device.device_path}")
+                print(f"Opened new controller: {device.product_name} @ {device.device_path}")
                 device.set_raw_data_handler(partial(self.process_event, device_path=device.device_path))
                 if device.device_path in self.disconnected:
                     self.disconnected.remove(device.device_path)
@@ -63,6 +66,7 @@ class InputManager:
         Thread(target=detection_loop).start()
 
     def process_event(self, data: List, device_path: str):
+        device_name = self.connected[device_path].product_name if device_path in self.connected else device_path
         # data is always [4, 127, 127, 127, 128, button_id, 0, hat, 0]
         train = CONTROLS.get(device_path)
         if self.control is None or train is None:
