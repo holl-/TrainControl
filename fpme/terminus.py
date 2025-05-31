@@ -34,6 +34,7 @@ ENTRY_SIGNAL = 3
 ENTRY_POWER = 4  # no power when open
 
 SPEED_LIMIT = 50.
+CONTACT_OFFSET = -20
 
 
 @dataclass
@@ -101,7 +102,7 @@ class ParkedTrain:
         if self.has_reversed:  # here it's hard to know which direction the train is going.
             since_rev = self.state.abs_distance - self.dist_reverse
             return min(300., delta) - since_rev * .8  # safety margin
-        return delta
+        return CONTACT_OFFSET + delta
 
     def get_end_position(self):
         return self.get_position() - self.train_length
@@ -370,12 +371,12 @@ class Terminus:
                         print("Sensor clear. Waiting for possible next wheel...")
                         entering.dist_clear = entering.state.signed_distance
                         # self.relay.open_channel(ENTRY_POWER)
-                elif entering.dist_clear is not None and entering.get_end_position() < 30:  # another wheel entered
+                elif entering.dist_clear is not None and entering.get_end_position() < CONTACT_OFFSET + 30:  # another wheel entered
                     print("Another wheel entered")
                     entering.dist_clear = None  # enable above block to re-trigger
                     # self.relay.close_channel(ENTRY_POWER)
                     continue
-                if entering.get_position() > max_train_length and entering.dist_clear is None:
+                if entering.dist_clear is None and entering.get_position() > CONTACT_OFFSET + max_train_length:
                     entering.dist_clear = entering.state.signed_distance
                     print(f"Max train length reached. Setting as cleared. End = {entering.get_end_position()}")
                 # --- cleared switches ---
