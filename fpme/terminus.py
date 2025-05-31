@@ -425,7 +425,7 @@ class Terminus:
             elif train.time_departed is None and train.time_stopped is not None and train.has_reversed and train.state.speed:
                 print(f"{train} is departing")
                 train.time_departed = time.perf_counter()
-                if self.control.sound >= 2 and train.train in DEPARTURE_SOUNDS:
+                if self.control.sound >= 2 and self.control.is_power_on(train.train) and train.train in DEPARTURE_SOUNDS:
                     if time.perf_counter() - train.time_stopped > 4.:
                         sound, vol = DEPARTURE_SOUNDS[train.train]
                         async_play("departure/"+sound, int(train.platform <= 3) * vol, int(train.platform > 3) * vol)
