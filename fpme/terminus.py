@@ -239,6 +239,14 @@ class Terminus:
             self.clear_entering()
         print(self.trains)
 
+    def remove_train(self, train: Train):
+        if self.entering.train == train:
+            self.entering.state.track = self.entering.prev_track
+            self.clear_entering()
+            print(f"Removed entering train {train}")
+        else:
+            print(f"Didn't remove {train} from terminus")
+
     def on_reversed(self, train: Train):
         for t in self.trains:
             if t.train == train:

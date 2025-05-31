@@ -98,9 +98,12 @@ class InputManager:
                     # self.control.power_off(train, cause=device_path)
             if 'reverse' in actions and actions['reverse'] == 'press':
                 self.terminus.on_reversed(train)
-            if 'terminus' in actions and actions['terminus'] == 'press':
+            if 'terminus' in actions:
                 if self.terminus:
-                    self.terminus.request_entry(train)
+                    if actions['terminus'] == 'press':
+                        self.terminus.request_entry(train)
+                    else:
+                        self.terminus.remove_train(train)
                 else:
                     print("no terminus set")
             if 'F1' in actions and actions['F1'] == 'press':
