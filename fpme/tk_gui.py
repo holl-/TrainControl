@@ -76,6 +76,7 @@ class TKGUI:
         controls_pane.pack()
         self.last_action_labels = {}
         self.photos = []
+        self.track_labels = {}
         def add_progress_bar(train: Train):
             progress_bar = ttk.Progressbar(controls_pane, value=50, length=100)
             progress_bar.grid(row=row, column=4)
@@ -102,12 +103,15 @@ class TKGUI:
             self.last_action_labels[device_path] = last_action_label
             row += 1
         for train in control.trains:
+            row = self.control.trains.index(train)
             if train not in CONTROLS.values():
-                row = self.control.trains.index(train)
                 tk.Label(controls_pane, text=train.name).grid(row=row, column=2)
                 add_progress_bar(train)
                 row += 1
                 self.shown_trains.append(train)
+            track = tk.Label(controls_pane, text="?")
+            track.grid(row=row, column=1)
+            self.track_labels[train] = track
         # --- Status ---
         tk.Label(status_pane, text="State", font='Helvetica 14 bold').grid(row=0, column=2)
         # tk.Label(text="Status (P/R)", font='Helvetica 14 bold').pack()
@@ -225,6 +229,9 @@ class TKGUI:
         for train, var in self.active_vars.items():
             if bool(var.get()) != self.control[train].is_active:
                 var.set(int(self.control[train].is_active))
+        for train, label in self.track_labels.items():
+            track = self.control[train].track
+            label.config(text="?" if track is None else track)
         # --- Update status displays ---
         for port in self.control.generator.get_open_ports():
             error = self.control.generator.get_error(port)

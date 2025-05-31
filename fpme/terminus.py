@@ -40,6 +40,7 @@ SPEED_LIMIT = 50.
 class ParkedTrain:
     train: Train
     state: TrainState
+    prev_track: Optional[str]
     platform: int
     dist_request: float = None  # Signed distance when enter request was sent. None for trains set through the UI.
     dist_trip: float = None  # Signed distance when entering the switches
@@ -144,7 +145,7 @@ class Terminus:
         relay.open_channel(ENTRY_POWER)
         self.load_state()
         for t in self.trains:
-            control.set_speed_limit(t.train, 'terminus', SPEED_LIMIT)
+            t.state.set_speed_limit('terminus', SPEED_LIMIT, new_track='terminus')
         schedule_at_fixed_rate(self.save_state, 5.)
         schedule_at_fixed_rate(self.check_exited, 1.)
         schedule_at_fixed_rate(self.update, 0.1)
@@ -182,7 +183,7 @@ class Terminus:
             dist_reverse = train_data['dist_reverse']
             sgn_delta = state.signed_distance - train_data['sgn_dist']
             abs_delta = state.abs_distance - train_data['abs_dist']  # typically < 0
-            self.trains.append(ParkedTrain(train, state, platform,
+            self.trains.append(ParkedTrain(train, state, 'terminus', platform,
                                            dist_request=dist_request + sgn_delta if dist_request is not None else None,
                                            dist_trip=dist_trip + sgn_delta if dist_trip is not None else None,
                                            time_trip=-100,
@@ -210,6 +211,7 @@ class Terminus:
 
     def set_occupied(self, platform: int, train: Train):
         state = self.control[train]
+        state.track = 'terminus'
         if self.entering is not None and self.entering.train == train:
             self.clear_entering()
         if any([t.train == train for t in self.trains]):
@@ -221,14 +223,18 @@ class Terminus:
             abs_dist = state.abs_distance
             position = 300
             train_length = 50
-            t = ParkedTrain(train, state, platform, None, dist_trip=dist - position, dist_clear=dist - position + train_length + 0.18, dist_reverse=abs_dist, time_stopped=-100)
+            t = ParkedTrain(train, state, state.track, platform, None, dist_trip=dist - position, dist_clear=dist - position + train_length + 0.18, dist_reverse=abs_dist, time_stopped=-100)
             self.trains.append(t)
             print(f"Added {t}")
         print(self.trains)
 
     def set_empty(self, platform: int):
+        trains = [t for t in self.trains if t.platform == platform]
+        for t in trains:
+            t.state.track = 'regional' if t.platform <= 3 else 'high-speed'
         self.trains = [t for t in self.trains if t.platform != platform]
         if self.entering is not None and self.entering.platform == platform:
+            self.entering.state.track = self.entering.prev_track
             self.clear_entering()
         print(self.trains)
 
@@ -313,7 +319,8 @@ class Terminus:
             if platform is None:  # cannot enter
                 self.control.force_stop(train, "no platform")
                 return
-            self.entering = entering = ParkedTrain(train, self.control[train], platform)
+            state = self.control[train]
+            self.entering = entering = ParkedTrain(train, state, state.track, platform)
             entering.dist_request = entering.state.signed_distance
             self.trains.append(entering)
         self.control.set_speed_limit(train, 'terminus', SPEED_LIMIT)
@@ -329,7 +336,7 @@ class Terminus:
                     break
                 time.sleep(interval)
             else:  # --- not tripped - maybe button pressed on accident or train too far ---
-                self.control.set_speed_limit(entering.train, 'terminus', None)
+                entering.state.set_speed_limit('terminus', None, new_track=entering.prev_track)
                 self.clear_entering()
                 self.control.emergency_stop(train, "train did not enter terminus")
                 self.trains.remove(entering)
@@ -337,6 +344,7 @@ class Terminus:
             # --- Contact tripped ---
             entering.dist_trip = entering.state.signed_distance
             entering.time_trip = time.perf_counter()
+            entering.state.track = 'terminus'
             if entering.dist_trip == entering.dist_request:
                 entering.dist_request -= -1e-3 if entering.state.is_in_reverse else 1e-3
             driven = entering.dist_trip - entering.dist_request
@@ -386,7 +394,7 @@ class Terminus:
                 exited = pos < 0
                 if exited:
                     self.trains.remove(t)
-                    self.control.set_speed_limit(t.train, 'terminus', None)
+                    t.state.set_speed_limit('terminus', None, new_track='regional' if t.platform <= 3 else 'high-speed')
                     print(f"{t} left the station.")
                 # else:
                     # print(f"{t} still in station")
@@ -427,7 +435,7 @@ class Terminus:
         for t in trains:
             if (t.state.speed < 0) == t.entered_forward:
                 self.control.emergency_stop(t.train, 'terminus-conflict')
-                self.control.set_speed_limit(t.train, 'terminus-wait', 0)
+                t.state.set_speed_limit('terminus-wait', 0)
 
     def clear_entering(self):
         self.entering = None
@@ -439,7 +447,7 @@ class Terminus:
         self.relay.open_channel(1)  # Platforms 2, 3
         self.relay.open_channel(2)  # Platform 4
         for t in self.trains:
-            self.control.set_speed_limit(t.train, 'terminus-wait', None)
+            t.state.set_speed_limit('terminus-wait', SPEED_LIMIT)
 
     def get_platform_state(self):
         """For each platform returns one of (empty, parked, entering, exiting) """

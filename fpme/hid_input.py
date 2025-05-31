@@ -95,6 +95,7 @@ class InputManager:
                     self.control.emergency_stop(train, cause=device_path)
                 else:  # double-click
                     self.control.emergency_stop_all(train, cause=device_path)
+                    # self.control.power_off(train, cause=device_path)
             if 'reverse' in actions and actions['reverse'] == 'press':
                 self.terminus.on_reversed(train)
             if 'terminus' in actions and actions['terminus'] == 'press':

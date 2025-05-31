@@ -39,6 +39,7 @@ class TrainState:
     primary_ability_last_used = 0.  # time as measured by perf_counter()
     modify_lock = threading.RLock()
     custom_acceleration_handler: Callable = None
+    track: str = None  # Which part of the tracks the train is on, e.g. 'high-speed', 'regional', None=Unknown
 
     def __repr__(self):
         return f"{self.train.name} {self.speed:.0f} -> {self.target_speed:.0f} func={self.active_functions} controlled by {len(self.controllers)}"
@@ -60,7 +61,7 @@ class TrainState:
     def is_active(self):
         return len(self.controllers) > 0 and self.inactive_time <= 30.
 
-    def set_speed_limit(self, name: str, limit: Optional[float], jerk=True):
+    def set_speed_limit(self, name: str, limit: Optional[float], jerk=True, cause: str = None, new_track: str = None):
         print(f"{self.train}: Speed-limit '{name}'={limit}")
         with self.modify_lock:
             if limit is None:
@@ -71,6 +72,8 @@ class TrainState:
                 if jerk and self.speed is not None and abs(self.speed) > limit:
                     self.speed *= limit / abs(self.speed)
                 self.set_target_speed(self.target_speed)
+            if new_track is not None:
+                self.track = new_track
 
     def set_target_speed(self, target_speed):
         with self.modify_lock:
@@ -228,11 +231,11 @@ class TrainControl:
     def emergency_stop_all(self, train: Optional[Train], cause: str):
         """Immediately stop all trains on the same track as `train`."""
         self.last_emergency_break_all = (time.perf_counter(), cause)
-        if train is None:
-            trains = self.trains
-        else:
-            ports: Set[str] = self[train].ports
-            trains = {t for t in self.trains if self[t].ports & ports}
+        trains = self.trains
+        if train is not None:
+            track = self[train].track
+            if track is not None:
+                trains = {t for t in self.trains if self[t].track == track}
         for t in trains:
             self.emergency_stop(t, cause)
 
@@ -257,7 +260,7 @@ class TrainControl:
             self[train].set_speed_limit('global', limit)
 
     def set_speed_limit(self, train: Train, cause: str, limit: Optional[float]):
-        self[train].set_speed_limit(cause, limit)
+        self[train].set_speed_limit(cause, limit, cause=cause)
 
     def force_stop(self, train: Train, cause: str):
         print(f"Stopping {train}. cause={cause}")
