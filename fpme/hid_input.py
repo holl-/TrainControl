@@ -108,6 +108,8 @@ class InputManager:
                     print("no terminus set")
             if 'F1' in actions and actions['F1'] == 'press':
                 self.control.use_ability(train, 1, cause=device_path)
+            if 'F1' in actions and actions['F1'] == 'double':
+                self.control.power_on(train, 'Button')
             if 'F2' in actions and actions['F2'] == 'press':
                 self.control.use_ability(train, 2, cause=device_path)
             if 'F3' in actions and actions['F3'] == 'press':
