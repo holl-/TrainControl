@@ -263,8 +263,8 @@ class TKGUI:
                 if platform:
                     y = {1: 15, 2: 65, 3: 115, 4: 170, 5: 220}[platform]
                     x = pos * (800/250) + 50 if pos is not None else 10
-                    x = max(0, min(x, 750))
-                    label = str(pos)
+                    x = max(-20, min(x, 750))
+                    label = format(pos, '.1f') if pos is not None else "?"
                 else:
                     x, y = -100, -100
                     label = ""

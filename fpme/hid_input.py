@@ -17,11 +17,9 @@ from fpme.train_control import TrainControl
 
 class InputManager:
 
-    def __init__(self, control: Optional[TrainControl], product_names=("@input.inf,%hid_device_system_game%;HID-compliant game controller",
-                                                                       "Twin USB Joystick")):
+    def __init__(self, control: Optional[TrainControl]):
         self.control = control
         self.terminus = None
-        self.product_names = product_names
         self.connected: Dict[str, Optional[hid.HidDevice]] = {}
         self.disconnected: Set[str] = set()
         self.last_events: Dict[str, Tuple[float, str]] = {}  # (time, text)
@@ -32,8 +30,7 @@ class InputManager:
 
     def check_for_new_devices(self, vid=0x05AC, pid=0x022C):  # 1452, 556
         devices = hid.find_all_hid_devices()
-        controllers = {dev.device_path: dev for dev in devices if self.product_names is None or dev.product_name in self.product_names}
-        controllers = {p: dev for p, dev in controllers.items() if 'col0' not in p or 'col01' in p}
+        controllers = {dev.device_path: dev for dev in devices if is_controller(dev)}
         # --- Remove disconnected controllers ---
         for path in tuple(self.connected):
             if path not in controllers:
@@ -53,7 +50,8 @@ class InputManager:
                 self.last_events[device.device_path], self.connected[device.device_path] = (time.perf_counter(), 'connected'), device
                 if device.device_path in CONTROLS:
                     train = CONTROLS[device.device_path]
-                    self.control.activate(train, device.device_path)
+                    if self.control is not None:
+                        self.control.activate(train, device.device_path)
                 else:
                     print("This controller has not been assigned to any train! Copy the following Python path")
                     print("'" + device.device_path.replace("\\", "\\\\") + "'")
@@ -97,7 +95,9 @@ class InputManager:
                     self.control.emergency_stop_all(train, cause=device_path)
                     # self.control.power_off(train, cause=device_path)
             if 'reverse' in actions and actions['reverse'] == 'press':
-                self.terminus.on_reversed(train)
+                self.control.reverse(train, cause=device_path)
+                if self.terminus:
+                    self.terminus.on_reversed(train)
             if 'terminus' in actions:
                 if self.terminus:
                     if actions['terminus'] == 'press':
@@ -121,6 +121,14 @@ class InputManager:
         elif acc:
             event_text = f'a={acc}'
             self.last_events[device_path] = (time.perf_counter(), event_text)
+
+
+def is_controller(dev: hid.HidDevice):
+    if dev.product_name == "@input.inf,%hid_device_system_game%;HID-compliant game controller":
+        return 'vid&0205ac_pid&022c' in dev.device_path  # VR Park (Bluetooth)
+    elif dev.product_name == "Twin USB Joystick":
+        return 'col01' in dev.device_path  # Controller (wireless USB)
+    return False
 
 
 def get_twin_joystick_state(data: List) -> Tuple[float, Dict[str, bool]]:

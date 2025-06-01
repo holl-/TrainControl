@@ -93,11 +93,10 @@ class ParkedTrain:
         """Positive towards station."""
         if not self.has_tripped_contact:
             return None
+        if not self.was_entry_recorded:  # added by UI
+            return 220 - (self.state.abs_distance - self.dist_reverse)  # from middle of platform
         delta = self.state.signed_distance - self.dist_trip
-        if not self.was_entry_recorded:
-            default_position = 220  # ~middle of platform
-            delta = default_position - abs(delta - 220)
-        elif not self.entered_forward:  # entered_forward only available if was_entry_recorded
+        if not self.entered_forward:  # entered_forward only available if was_entry_recorded
             delta = -delta  # make sure positive in station
         if self.has_reversed:  # here it's hard to know which direction the train is going.
             since_rev = self.state.abs_distance - self.dist_reverse
@@ -224,7 +223,7 @@ class Terminus:
             abs_dist = state.abs_distance
             position = 300
             train_length = 50
-            t = ParkedTrain(train, state, state.track, platform, None, dist_trip=dist - position, dist_clear=dist - position + train_length + 0.18, dist_reverse=abs_dist, time_stopped=-100)
+            t = ParkedTrain(train, state, state.track, platform, None, dist_trip=dist - position - CONTACT_OFFSET, dist_clear=dist - position - train_length - 0.36 - CONTACT_OFFSET, dist_reverse=abs_dist, time_stopped=-100)
             self.trains.append(t)
             print(f"Added {t}")
         print(self.trains)
@@ -456,7 +455,7 @@ class Terminus:
         self.relay.open_channel(1)  # Platforms 2, 3
         self.relay.open_channel(2)  # Platform 4
         for t in self.trains:
-            t.state.set_speed_limit('terminus-wait', SPEED_LIMIT)
+            t.state.set_speed_limit('terminus-wait', None)
 
     def get_platform_state(self):
         """For each platform returns one of (empty, parked, entering, exiting) """

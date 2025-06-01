@@ -62,7 +62,7 @@ class TrainState:
         return len(self.controllers) > 0 and self.inactive_time <= 30.
 
     def set_speed_limit(self, name: str, limit: Optional[float], jerk=True, cause: str = None, new_track: str = None):
-        print(f"{self.train}: Speed-limit '{name}'={limit}")
+        print(f"{self.train}: Speed-limit '{name}'={limit}" if limit is not None else f"{self.train}: Speed-limit '{name}' removed. From: {self.speed_limits}")
         with self.modify_lock:
             if limit is None:
                 if name in self.speed_limits:
@@ -298,6 +298,8 @@ class TrainControl:
             func = train.primary_ability
         else:
             return  # ToDo support F2, F3
+        if func is None:
+            return
         state = self[train]
         with state.modify_lock:
             state.active_functions[func] = True

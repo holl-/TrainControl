@@ -148,7 +148,7 @@ BEIGE = Train(SILBERLING, "BR 218", "Märklin 3074", 73, (0, None, 13, 20, 34, 6
               functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
 ROT = Train(RE_TUERKIS, 'BR 218', "Märklin 3075", 74, (0, 15, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220), 40., img_path="Thumb_BR218_Rot.png",
             functions=(LIGHT, TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,), warmup_time=19.5, reverse_time=4.), TrainFunction("Horn 1", 3, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Horn 2", 2, False, (TAG_SPECIAL_SOUND,)), TrainFunction("Lüfter", 4, False, (TAG_SPECIAL_SOUND,))))
-BUS = Train(BUS_, "VT95", "Märklin H0 3016", 62, (0, .1, .2, *np.linspace(0, 190, 12)), 40., img_path="Thumb_Schienenbus.png", stop_by_mm1_reverse=False, functions=())
+BUS = Train(BUS_, "VT95", "Märklin H0 3016", 62, (0, .1, *np.linspace(5, 190, 13)), 25., img_path="Thumb_Schienenbus.png", stop_by_mm1_reverse=False, functions=())
 
 # --- Freight trains ---
 DAMPF = Train(GUETER, "BR 81", "Märklin 29185", 78, speeds(210), 30., img_path="Dampf.png",
