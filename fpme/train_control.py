@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from .helper import schedule_at_fixed_rate
 from .signal_gen import SubprocessGenerator, MM1, MM2
-from .train_def import TRAINS, Train, TAG_DEFAULT_LIGHT, TAG_DEFAULT_SOUND, TAG_SPECIAL_SOUND
+from .train_def import TRAINS, Train, TAG_DEFAULT_LIGHT, TAG_DEFAULT_SOUND, TAG_SPECIAL_SOUND, TrainFunction
 
 
 def get_preferred_protocol(train: Train):
@@ -36,7 +36,7 @@ class TrainState:
     force_stopping: Optional[str] = None
     signed_distance: float = 0.  # distance travelled in cm
     abs_distance: float = 0.  # distance travelled in cm
-    primary_ability_last_used = 0.  # time as measured by perf_counter()
+    last_effect_uses: Dict[TrainFunction, float] = field(default_factory=dict)  # time as measured by perf_counter()
     modify_lock = threading.RLock()
     custom_acceleration_handler: Callable = None
     track: str = None  # Which part of the tracks the train is on, e.g. 'high-speed', 'regional', None=Unknown
@@ -88,7 +88,6 @@ class TrainState:
                 self.speed = speed
             else:
                 self.speed = math.copysign(min(abs(speed), *self.speed_limits.values()), speed)
-
 
     @property
     def can_use_primary_ability(self):
@@ -293,20 +292,20 @@ class TrainControl:
                 with state.modify_lock:
                     state.active_functions[func] = on
 
-    def use_ability(self, train: Train, ability=1, cause: str = None):
-        if ability == 1:
-            func = train.primary_ability
-        else:
-            return  # ToDo support F2, F3
-        if func is None:
-            return
+    def use_ability(self, train: Train, effect_idx=0, cause: str = None, check_cooldown: bool = False):
+        if effect_idx >= len(train.effects):
+            return False
+        func = train.effects[effect_idx]
         state = self[train]
+        if check_cooldown and func.cooldown and func in state.last_effect_uses:
+            if time.perf_counter() < state.last_effect_uses[func] + func.cooldown:
+                return False
         with state.modify_lock:
             state.active_functions[func] = True
-            state.primary_ability_last_used = time.perf_counter()
-            if TAG_SPECIAL_SOUND in func.tags:
+            state.last_effect_uses[func] = time.perf_counter()
+            if func.default_duration:
                 def deactivate():
-                    time.sleep(1.1)
+                    time.sleep(func.default_duration)
                     state.active_functions[func] = False
                 Thread(target=deactivate).start()
 
