@@ -27,7 +27,6 @@ class TKGUI:
         self.window = tk.Tk()
         self.speed_bars: Dict[Train, ttk.Progressbar] = {}
         self.direction_labels: Dict[Train, tk.Label] = {}
-        self.active_vars: Dict[Train, tk.IntVar] = {}
         self.shown_trains: List[Train] = []
 
         self.window.title("Modellbahn Steuerung")
@@ -77,6 +76,7 @@ class TKGUI:
         self.last_action_labels = {}
         self.photos = []
         self.track_labels = {}
+        self.train_images = {}
         def add_progress_bar(train: Train):
             progress_bar = ttk.Progressbar(controls_pane, value=50, length=100)
             progress_bar.grid(row=row, column=4)
@@ -87,19 +87,19 @@ class TKGUI:
         for device_path, train in CONTROLS.items():
             row = self.control.trains.index(train)
             self.shown_trains.append(train)
-            self.active_vars[train] = is_active = tk.IntVar(value=1)
-            active = tk.Checkbutton(controls_pane, text=f"{row+1}", variable=is_active)
-            active.grid(row=row, column=3)
             photo = ImageTk.PhotoImage(train.image.resize(fit_image_size(train.img_res, 80, 30)))
-            self.photos.append(photo)
-            tk.Label(controls_pane, text=train.name, image=photo, compound=tk.LEFT).grid(row=row, column=2)
+            photo_bw = ImageTk.PhotoImage(greyscale(train.image.resize(fit_image_size(train.img_res, 80, 30))))
+            self.photos.extend([photo, photo_bw])
+            image_label = tk.Label(controls_pane, text=train.name, image=photo, compound=tk.LEFT)
+            image_label.grid(row=row, column=2)
+            self.train_images[train] = (image_label, photo, photo_bw)
             if train in control.trains:
                 add_progress_bar(train)
             else:
                 tk.Label(controls_pane, text="not managed").grid(row=row, column=3)
             last_action_label = tk.Label(controls_pane, text='nothing')
-            last_action_label.grid(row=row, column=6)
-            last_action_label.config(width=9, height=2)
+            last_action_label.grid(row=row, column=1)
+            last_action_label.config(width=13, height=2)
             self.last_action_labels[device_path] = last_action_label
             row += 1
         for train in control.trains:
@@ -110,7 +110,7 @@ class TKGUI:
                 row += 1
                 self.shown_trains.append(train)
             track = tk.Label(controls_pane, text="?")
-            track.grid(row=row, column=1)
+            track.grid(row=row, column=6)
             self.track_labels[train] = track
         # --- Status ---
         tk.Label(status_pane, text="State", font='Helvetica 14 bold').grid(row=0, column=2)
@@ -134,12 +134,12 @@ class TKGUI:
         terminus_pane.pack()
         self.canvas = tk.Canvas(terminus_pane, width=800, height=300)
         self.canvas.pack()
-        image = Image.open("assets/Kopfbahnhof final.jpg")
-        image = image.resize((800, 300))
-        photo_image = ImageTk.PhotoImage(image)  # Keep a reference to the image to prevent garbage collection
+        terminus_img = Image.open("assets/Kopfbahnhof final.jpg")
+        terminus_img = terminus_img.resize((800, 300))
+        photo_image = ImageTk.PhotoImage(terminus_img)
         self.canvas.create_image(0, 0, anchor=tk.NW, image=photo_image)
         self.sel_platform = self.canvas.create_rectangle(0, 0, 300, 10, fill='blue')
-        self.canvas_images = {'__bg__': photo_image}
+        self.canvas_images = {'__bg__': photo_image}  # Keep a reference to images to prevent garbage collection
         self.canvas_ids = {}
         self.canvas_texts = {}
         for train in control.trains:
@@ -226,9 +226,8 @@ class TKGUI:
         for train in self.control.trains:
             self.speed_bars[train].config(value=abs(100 * (self.control[train].speed or 0.) / train.max_speed))
             self.direction_labels[train].config(text='🡄' if self.control[train].is_in_reverse else '🡆')
-        for train, var in self.active_vars.items():
-            if bool(var.get()) != self.control[train].is_active:
-                var.set(int(self.control[train].is_active))
+        for train, (label, img, img_bw) in self.train_images.items():
+            label.config(image=img if self.control[train].is_active else img_bw)
         for train, label in self.track_labels.items():
             track = self.control[train].track
             label.config(text="?" if track is None else track)
@@ -256,6 +255,7 @@ class TKGUI:
         self.speed_limit.config(text=str(self.control.speed_limit))
         # --- Terminus plan ---
         if self.terminus:
+            self.canvas.pack()
             for train, img_id in self.canvas_ids.items():
                 platform, pos = self.terminus.get_train_position(train)
                 if pos is not None:
@@ -277,6 +277,8 @@ class TKGUI:
             else:
                 y = {1: 12, 2: 68, 3: 118, 4: 177, 5: 224}[self.selected_platform]
                 self.canvas.coords(self.sel_platform, 600, y, 800, y+10)
+        else:
+            self.canvas.pack_forget()
         # --- Schedule next update ---
         self.window.after(10, self.update_ui)
 
@@ -301,3 +303,9 @@ class TKGUI:
 
 def tk_rgb(r, g, b):
     return "#%02x%02x%02x" % (r, g, b)
+
+
+def greyscale(img: Image):
+    r, g, b, a = img.split()
+    grey = Image.merge("RGB", (r, g, b)).convert('L')
+    return Image.merge("LA", (grey, a)).convert('RGBA')
