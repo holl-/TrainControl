@@ -29,7 +29,7 @@ class TrainState:
     speed: float = 0.  # signed speed in kmh, set to EMERGENCY_STOP while train is braking
     target_speed: float = 0.  # signed speed in kmh, -0 means parked in reverse
     acc_input: float = 0.
-    inactive_time: float = 0.
+    inactive_time: float = 999.
     controllers: Set[str] = field(default_factory=set)
     last_emergency_break: Tuple[float, str] = (0., "")
     speed_limits: Dict[str, float] = field(default_factory=dict)

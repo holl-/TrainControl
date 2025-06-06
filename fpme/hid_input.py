@@ -24,11 +24,12 @@ class InputManager:
         self.disconnected: Set[str] = set()
         self.last_events: Dict[str, Tuple[float, str]] = {}  # (time, text)
         self.button_states: Dict[str, Dict[str, Tuple[bool, float]]] = {}  # (pressed, time_last_pressed)
+        self.check_for_new_devices(auto_activate=False)
 
     def set_terminus(self, terminus: Terminus):
         self.terminus = terminus
 
-    def check_for_new_devices(self, vid=0x05AC, pid=0x022C):  # 1452, 556
+    def check_for_new_devices(self, auto_activate=True):  # 1452, 556
         devices = hid.find_all_hid_devices()
         controllers = {dev.device_path: dev for dev in devices if is_controller(dev)}
         # --- Remove disconnected controllers ---
@@ -50,7 +51,7 @@ class InputManager:
                 self.last_events[device.device_path], self.connected[device.device_path] = (time.perf_counter(), 'connected'), device
                 if device.device_path in CONTROLS:
                     train = CONTROLS[device.device_path]
-                    if self.control is not None:
+                    if auto_activate and self.control is not None:
                         self.control.activate(train, device.device_path)
                 else:
                     print("This controller has not been assigned to any train! Copy the following Python path")
