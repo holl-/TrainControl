@@ -205,7 +205,7 @@ class TrainControl:
         state = self[train]
         with state.modify_lock:
             state.controllers.add(controller)
-            if auto_activate and not state.is_active:
+            if auto_activate and not state.is_active and acc_input:
                 if acc_input <= 0:
                     self.activate(train, cause)
                     return

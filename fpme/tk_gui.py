@@ -99,7 +99,7 @@ class TKGUI:
                 tk.Label(controls_pane, text="not managed").grid(row=row, column=3)
             last_action_label = tk.Label(controls_pane, text='nothing')
             last_action_label.grid(row=row, column=1)
-            last_action_label.config(width=13, height=2)
+            last_action_label.config(width=16, height=2)
             self.last_action_labels[device_path] = last_action_label
             row += 1
         for train in control.trains:
