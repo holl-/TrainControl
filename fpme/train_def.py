@@ -75,7 +75,7 @@ class Train:
         return tuple(i for i, s in enumerate(self.masked_speeds) if s is not None)
 
     @cached_property
-    def image(self):
+    def image(self) -> Image:
         return Image.open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', self.img_path)) if self.img_path else None
 
     @property
