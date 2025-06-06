@@ -49,11 +49,11 @@ def async_play(sound: Union[str, pygame.mixer.SoundType], left_vol=1., right_vol
     channel.play(sound)
 
 
-def play_announcement(text: str, language='German', speed=140, left_vol=1., right_vol=1., cue='gong', cue_vol=.4):
+def play_announcement(text: str, language='German', speed=160, left_vol=1., right_vol=1., cue='gong', cue_vol=.4):
     Thread(target=_play_announcement, args=(text, language, speed, left_vol, right_vol, cue, cue_vol)).start()
 
 
-def _play_announcement(text: str, language='German', speed=140, left_vol=1., right_vol=1., cue='gong', cue_vol=.4):
+def _play_announcement(text: str, language: str, speed: int, left_vol: float, right_vol: float, cue: str, cue_vol: float):
     t0 = time.perf_counter()
     if cue == 'gong':
         async_play(GONG, left_vol=left_vol * cue_vol, right_vol=right_vol * cue_vol)
@@ -95,5 +95,5 @@ def apply_reverb(file: str, output_file: str):
 
 if __name__ == '__main__':
     # apply_reverb("ansagen/gong.wav", "ansagen/gong-reverb-reduced.wav")
-    play_announcement("S 1", cue='anschlüsse', cue_vol=1)
+    play_announcement("S 1 nach Radeburg von Gleis 5", cue='anschlüsse', cue_vol=1)
     time.sleep(100)
