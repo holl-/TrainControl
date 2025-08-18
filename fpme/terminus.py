@@ -33,7 +33,7 @@ PREVENT_EXIT = {  # when entering platform x, train on platforms y must wait
 ENTRY_SIGNAL = 3
 ENTRY_POWER = 4  # no power when open
 
-SPEED_LIMIT = 50.
+SPEED_LIMIT = 60.
 CONTACT_OFFSET = -20
 
 
@@ -232,6 +232,7 @@ class Terminus:
         trains = [t for t in self.trains if t.platform == platform]
         for t in trains:
             t.state.track = 'regional' if t.platform <= 3 else 'high-speed'
+            self.control.set_speed_limit(t.train, 'terminus', None)
         self.trains = [t for t in self.trains if t.platform != platform]
         if self.entering is not None and self.entering.platform == platform:
             self.entering.state.track = self.entering.prev_track
@@ -239,11 +240,18 @@ class Terminus:
         print(self.trains)
 
     def remove_train(self, train: Train):
-        if self.entering.train == train:
+        if self.entering and self.entering.train == train:
             self.entering.state.track = self.entering.prev_track
             self.clear_entering()
             print(f"Removed entering train {train}")
         else:
+            trains = [t for t in self.trains if t.train == train]
+            if trains:
+                for t in trains:
+                    t.state.track = t.prev_track
+                    self.control.set_speed_limit(t.train, 'terminus', None)
+                self.trains = [t for t in self.trains if t.train != train]
+                print(f"Removed train {train}")
             print(f"Didn't remove {train} from terminus")
 
     def on_reversed(self, train: Train):
