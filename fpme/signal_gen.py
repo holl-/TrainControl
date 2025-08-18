@@ -387,7 +387,7 @@ class SignalGenerator:
         self._contact1 = contact1
         self._contact2 = contact2
         self._contact3 = contact3
-        self.stop_on_short_circuit = True
+        self.stop_on_short_circuit = False
         self.on_short_circuit = lambda: print("Short circuit detected")  # function without parameters
         self._time_started_sending = None  # wait a bit before detecting short circuits
         self._ser = None
@@ -461,6 +461,7 @@ class SignalGenerator:
                 short_circuited = self._short_circuited.value
             else:
                 short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
+                short_circuited = False
                 self._contact1.value = not self._ser.getRI()
                 self._contact2.value = not self._ser.getCD()
                 self._contact3.value = not self._ser.getDSR()
@@ -507,9 +508,9 @@ if __name__ == '__main__':
     #     if gen.is_short_circuited(PORT):
     #         print("no power")
     #     time.sleep(.1)
-    while True:
-        time.sleep(.2)
-        print(gen.contact_status(PORT))
+    # while True:
+    #     time.sleep(.2)
+    #     print(gen.contact_status(PORT))
 
     # for i in range(10):
     #     for f in [0, 1, 2, 3, 4]:
