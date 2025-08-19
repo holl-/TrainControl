@@ -357,7 +357,7 @@ class ThreadScheduler:
         threading.Thread(target=thread_fun, name=name).start()
 
     def sleep(self, source, for_time: float):
-        """Blocks until task is done"""
+        """Blocks until task is done. Custom sleep because time.sleep() is not precise enough"""
         now = time.perf_counter()
         if source in self.events:
             event = self.events[source]
@@ -472,24 +472,31 @@ class SignalGenerator:
                 if self.stop_on_short_circuit:
                     self._active.value = False
                     return
-            # --- Send data on serial port ---
+            # --- Send dummy signal ---
             if not self._data:
-                self._send(self._idle_packet)
-            for address, status_packets in dict(self._packets).items():
-                for packet in status_packets:
-                    self._send(packet)  # Sends each packet twice, else trains will ignore it
-                    # print(' '.join('{:02x}'.format(x) for x in packet))
-
-    def _send(self, packet):
-        while self._priority_packets:
-            packet = self._priority_packets.pop(0)
-            for i in range(2):
-                self._ser is not None and self._ser.write(packet)
+                self._ser is not None and self._ser.write(self._idle_packet)
                 self.scheduler.sleep(self, 5.944e-3)
-        for i in range(2):
-            self._ser is not None and self._ser.write(packet)
-            self.scheduler.sleep(self, 5.944e-3)  # custom sleep, time.sleep() is not precise enough
-            # Measured: 1.7 ms between equal packets in pair, 6 ms between different pairs
+            # --- Send data on serial port ---
+            for address in tuple(self._packets):
+                while self._priority_packets:
+                    prio_packet = self._priority_packets.pop(0)
+                    for i in range(2):
+                        self._ser is not None and self._ser.write(prio_packet)
+                        self.scheduler.sleep(self, REPEAT_TIME)
+                    self.scheduler.sleep(self, EXTRA_GAP)
+                packet = self._packets.get(address)  # get most up-to-date data
+                if packet is None:
+                    continue  # train has been removed
+                # print(' '.join('{:02x}'.format(x) for x in packet))
+                for i in range(2):
+                    self._ser is not None and self._ser.write(packet)
+                    self.scheduler.sleep(self, REPEAT_TIME)
+                self.scheduler.sleep(self, EXTRA_GAP)
+
+
+REPEAT_TIME = 1.7e-3  # 1.7 ms empty between packet repetitions
+PACKET_GAP = 6e-3  # 6 ms between different pairs
+EXTRA_GAP = 2e-3
 
 
 if __name__ == '__main__':
