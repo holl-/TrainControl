@@ -3,7 +3,7 @@ import os
 import time
 import tkinter as tk
 import tkinter.ttk as ttk
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from PIL import ImageTk, Image
 
@@ -13,7 +13,7 @@ from .relay8 import RelayManager
 from .signal_gen import list_com_ports
 from .terminus import Terminus
 from .train_control import TrainControl
-from .train_def import Train
+from .train_def import Train, TrainInfo
 
 
 class TKGUI:
@@ -167,6 +167,7 @@ class TKGUI:
         self.window.bind("8", lambda e: self.terminus_set(7))
         self.window.bind("9", lambda e: self.terminus_set(8))
         self.window.bind("0", lambda e: self.terminus_set(9))
+        self.window.bind("O", lambda e: self.terminus_set(-1))
         self.window.bind("<Control-Key-1>", lambda e: self.terminus_select(1))
         self.window.bind("<Control-Key-2>", lambda e: self.terminus_select(2))
         self.window.bind("<Control-Key-3>", lambda e: self.terminus_select(3))
@@ -187,12 +188,16 @@ class TKGUI:
         if self.terminus is not None:
             self.selected_platform = platform
 
-    def terminus_set(self, train_id: int):
+    def terminus_set(self, train_id: Optional[int]):
         if train_id >= len(self.shown_trains):
             return
         if self.selected_platform is None:
             return
-        train = self.control.trains[train_id]
+        if train_id == -1:  # Obstacle
+            # GESPERRT = TrainInfo("Gesperrt", )
+            train = Train(None, "Gesperrt", "", -1, None, 0., img_path="Baustelle.png", functions=())
+        else:
+            train = self.control.trains[train_id]
         if self.terminus is not None:
             self.terminus.set_occupied(self.selected_platform, train)
         self.selected_platform = None

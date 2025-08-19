@@ -210,7 +210,7 @@ class Terminus:
         return None, None
 
     def set_occupied(self, platform: int, train: Train):
-        state = self.control[train]
+        state = self.control[train] if train in self.control else TrainState(train, set(), {})
         state.track = 'terminus'
         if self.entering is not None and self.entering.train == train:
             self.clear_entering()

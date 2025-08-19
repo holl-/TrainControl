@@ -175,6 +175,9 @@ class TrainControl:
             return self.states[item]
         raise KeyError(item)
 
+    def __contains__(self, item):
+        return item in self.states
+
     def reverse(self, train: Train, cause: str, auto_activate=True):
         state = self[train]
         if auto_activate and not state.is_active:
