@@ -1,15 +1,16 @@
 import sys
 import os
 
-from fpme.hid_input import InputManager
-from fpme.relay8 import RelayManager, Relay8
-from fpme.terminus import Terminus
-
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-from fpme import train_control, tk_gui, signal_gen
-
 
 if __name__ == '__main__':
+    from fpme.hid_input import InputManager
+    from fpme.relay8 import RelayManager, Relay8
+    from fpme.terminus import Terminus
+
+    sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+    from fpme import train_control, tk_gui, signal_gen
+
+
     control = train_control.TrainControl()
     control.load_state()
     ports = [p for p in signal_gen.list_com_ports(include_bluetooth=False) if 'Prolific' in p[1]]
