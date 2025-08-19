@@ -1,17 +1,21 @@
 import sys
 import os
 
+from fpme.train_control import TrainControl
+from fpme.train_def import TRAINS, GUETER
 
 if __name__ == '__main__':
     from fpme.hid_input import InputManager
     from fpme.relay8 import RelayManager, Relay8
-    from fpme.terminus import Terminus
+    from fpme.terminus import Terminus  # this imports PyGame
 
     sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-    from fpme import train_control, tk_gui, signal_gen
+    from fpme import tk_gui, signal_gen
 
-
-    control = train_control.TrainControl()
+    control = TrainControl()
+    for train in TRAINS:
+        if train.info == GUETER:
+            control[train].track = 'regional'
     control.load_state()
     ports = [p for p in signal_gen.list_com_ports(include_bluetooth=False) if 'Prolific' in p[1]]
     for port, desc, _ in ports:
