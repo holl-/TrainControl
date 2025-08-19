@@ -13,7 +13,7 @@ from .relay8 import RelayManager
 from .signal_gen import list_com_ports
 from .terminus import Terminus
 from .train_control import TrainControl
-from .train_def import Train, TrainInfo
+from .train_def import Train, TrainInfo, obstacle
 
 
 class TKGUI:
@@ -139,7 +139,8 @@ class TKGUI:
         photo_image = ImageTk.PhotoImage(terminus_img)
         self.canvas.create_image(0, 0, anchor=tk.NW, image=photo_image)
         self.sel_platform = self.canvas.create_rectangle(0, 0, 300, 10, fill='blue')
-        self.canvas_images = {'__bg__': photo_image}  # Keep a reference to images to prevent garbage collection
+        obs = obstacle()
+        self.canvas_images = {'__bg__': photo_image, 'Baustelle': ImageTk.PhotoImage(obs.image.resize(fit_image_size(obs.img_res, 80, 30)))}  # Keep a reference to images to prevent garbage collection
         self.canvas_ids = {}
         self.canvas_texts = {}
         for train in control.trains:
@@ -167,7 +168,7 @@ class TKGUI:
         self.window.bind("8", lambda e: self.terminus_set(7))
         self.window.bind("9", lambda e: self.terminus_set(8))
         self.window.bind("0", lambda e: self.terminus_set(9))
-        self.window.bind("O", lambda e: self.terminus_set(-1))
+        self.window.bind("<o>", lambda e: self.terminus_set(-1))
         self.window.bind("<Control-Key-1>", lambda e: self.terminus_select(1))
         self.window.bind("<Control-Key-2>", lambda e: self.terminus_select(2))
         self.window.bind("<Control-Key-3>", lambda e: self.terminus_select(3))
@@ -183,6 +184,9 @@ class TKGUI:
 
     def set_terminus(self, terminus: Terminus):
         self.terminus = terminus
+        for t in terminus.trains:
+            if t.train not in self.canvas_ids:
+                self.canvas_ids[t.train] = self.canvas.create_image(0, 0, anchor=tk.NW, image=self.canvas_images["Baustelle"])
 
     def terminus_select(self, platform: int):
         if self.terminus is not None:
@@ -194,8 +198,8 @@ class TKGUI:
         if self.selected_platform is None:
             return
         if train_id == -1:  # Obstacle
-            # GESPERRT = TrainInfo("Gesperrt", )
-            train = Train(None, "Gesperrt", "", -1, None, 0., img_path="Baustelle.png", functions=())
+            train = obstacle()
+            self.canvas_ids[train] = self.canvas.create_image(0, 0, anchor=tk.NW, image=self.canvas_images["Baustelle"])
         else:
             train = self.control.trains[train_id]
         if self.terminus is not None:
@@ -274,8 +278,9 @@ class TKGUI:
                     x, y = -100, -100
                     label = ""
                 self.canvas.coords(img_id, x, y)
-                self.canvas.coords(self.canvas_texts[train], x, y)
-                self.canvas.itemconfig(self.canvas_texts[train], text=label)
+                if train in self.canvas_texts:
+                    self.canvas.coords(self.canvas_texts[train], x, y)
+                    self.canvas.itemconfig(self.canvas_texts[train], text=label)
             # --- Highlight platform selection ---
             if self.selected_platform is None:
                 self.canvas.coords(self.sel_platform, -100, -100, 1, 1)

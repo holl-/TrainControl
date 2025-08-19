@@ -14,7 +14,7 @@ from fpme.audio import play_announcement, play_background_loop, async_play, set_
 from fpme.helper import schedule_at_fixed_rate
 from fpme.relay8 import Relay8, RelayManager
 from fpme.train_control import TrainControl, TrainState
-from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW, E40, DAMPF, BEIGE, ROT, DIESEL, BUS
+from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW, E40, DAMPF, BEIGE, ROT, DIESEL, BUS, train_by_name
 
 SWITCH_STATE = {  # True -> open_channel, False -> close_channel
     1: {6: False, 8: True},
@@ -174,13 +174,13 @@ class Terminus:
         with open("terminus.json", 'r', encoding='utf-8') as file:
             data = json.load(file)
         for train_data in data['trains']:
-            train = TRAINS_BY_NAME[train_data['name']]
-            state = self.control[train]
+            train = train_by_name(train_data['name'])
             platform = train_data['platform']
             dist_request = train_data['dist_request']
             dist_trip = train_data['dist_trip']
             dist_clear = train_data['dist_clear']
             dist_reverse = train_data['dist_reverse']
+            state = self.control[train] if train in self.control else TrainState(train, set(), {})
             sgn_delta = state.signed_distance - train_data['sgn_dist']
             abs_delta = state.abs_distance - train_data['abs_dist']  # typically < 0
             self.trains.append(ParkedTrain(train, state, 'terminus', platform,
@@ -232,7 +232,7 @@ class Terminus:
         trains = [t for t in self.trains if t.platform == platform]
         for t in trains:
             t.state.track = 'regional' if t.platform <= 3 else 'high-speed'
-            self.control.set_speed_limit(t.train, 'terminus', None)
+            t.state.set_speed_limit('terminus', None, cause='terminus')
         self.trains = [t for t in self.trains if t.platform != platform]
         if self.entering is not None and self.entering.platform == platform:
             self.entering.state.track = self.entering.prev_track

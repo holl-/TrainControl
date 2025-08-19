@@ -1,4 +1,5 @@
 import os
+import random
 from functools import cached_property
 from typing import Tuple, Sequence, Optional, List
 
@@ -137,7 +138,7 @@ S = Train(S_, "BR 648.2 (LINT 41)", "Märklin 37730", 48, (0, 2, 5, 10, 15, 22, 
           functions=(LIGHT, TrainFunction("Innenbeleuchtung", 1, False, (TAG_DEFAULT_LIGHT,)), SOUND, TrainFunction("Horn", 3, False, (TAG_SPECIAL_SOUND,)), INSTANT_ACCELERATION))
 BEIGE = Train(SILBERLING, "BR 218", "Märklin 3074", 73, (0, None, 13, 20, 34, 60, 85, 100, 120, 141, 157, 172, 188, 204, 220), 25., img_path="Thumb_BR218_Beige.png",
               functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
-ROT = Train(RE_TUERKIS, 'BR 218', "Märklin 3075", 74, (0, 15, 31, 47, 62, 78, 94, 110, 125, 141, 157, 172, 188, 204, 220), 40., img_path="Thumb_BR218_Rot.png",
+ROT = Train(RE_TUERKIS, 'BR 218', "Märklin 3075", 74, speeds(220), 40., img_path="Thumb_BR218_Rot.png",
             functions=(LIGHT,
                        TrainFunction("Motor", 1, False, (TAG_DEFAULT_SOUND,)),
                        TrainFunction("Horn 1", 3, False, (TAG_SPECIAL_SOUND,)),
@@ -161,3 +162,14 @@ E40 = Train(GUETER, "BR E40", "Märklin 39140", 23, speeds(220), 30., img_path="
 TRAINS = [ICE, S, BUS, E_RB, E_BW, ROT, BEIGE,   E40, DIESEL, DAMPF]
 
 TRAINS_BY_NAME = {train.id: train for train in TRAINS}
+
+
+def obstacle(no=None):
+    no = random.randint(0, 1_000_000_000) if no is None else no
+    return Train(TrainInfo("Gesperrt", "🚧"), "Gesperrt", str(no), -1, (0,)*15, 0., img_path="Baustelle.png", functions=())
+
+
+def train_by_name(name):
+    if name.startswith("Gesperrt"):
+        return obstacle(no=int(name[11:]))
+    return TRAINS_BY_NAME[name]
