@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -387,14 +388,15 @@ class SignalGenerator:
         self._contact1 = contact1
         self._contact2 = contact2
         self._contact3 = contact3
-        self.stop_on_short_circuit = False
+        self.detect_short_circuit = False
+        self.stop_on_short_circuit = True
         self.on_short_circuit = lambda: print("Short circuit detected")  # function without parameters
         self._time_started_sending = None  # wait a bit before detecting short circuits
         self._ser = None
         self._time_created = time.perf_counter()
         if serial_port.startswith('debug'):
             if serial_port.endswith(':off'):
-                self._short_circuited.value = True
+                self._short_circuited.value = self.detect_short_circuit
         else:
             try:
                 print(f"Opening serial port {serial_port}...")
@@ -456,12 +458,10 @@ class SignalGenerator:
         self._time_started_sending = time.perf_counter()
         while self._active.value:
             if self._ser is None:
-                # print(f"Here be signal: {self._packets}")
-                time.sleep(1)
                 short_circuited = self._short_circuited.value
+                time.sleep(1)
             else:
-                short_circuited = time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
-                short_circuited = False
+                short_circuited = self.detect_short_circuit and time.perf_counter() > self._time_started_sending + 0.1 and self._ser.getCTS()  # 0.1 seconds to test for short circuits
                 self._contact1.value = not self._ser.getRI()
                 self._contact2.value = not self._ser.getCD()
                 self._contact3.value = not self._ser.getDSR()
@@ -485,9 +485,10 @@ class SignalGenerator:
                         self.scheduler.sleep(self, REPEAT_TIME)
                     self.scheduler.sleep(self, EXTRA_GAP)
                 packet = self._packets.get(address)  # get most up-to-date data
+                if self._ser is None:
+                    print(f"Sending address {address}: {packet}", file=sys.stderr)
                 if packet is None:
                     continue  # train has been removed
-                # print(' '.join('{:02x}'.format(x) for x in packet))
                 for i in range(2):
                     self._ser is not None and self._ser.write(packet)
                     self.scheduler.sleep(self, REPEAT_TIME)
