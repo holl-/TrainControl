@@ -484,15 +484,16 @@ class SignalGenerator:
                         self._ser is not None and self._ser.write(prio_packet)
                         self.scheduler.sleep(self, REPEAT_TIME)
                     self.scheduler.sleep(self, EXTRA_GAP)
-                packet = self._packets.get(address)  # get most up-to-date data
+                status_packets = self._packets.get(address)  # get most up-to-date data
                 if self._ser is None:
-                    print(f"Sending address {address}: {packet}", file=sys.stderr)
-                if packet is None:
+                    print(f"Sending address {address}: {status_packets}", file=sys.stderr)
+                if status_packets is None:
                     continue  # train has been removed
-                for i in range(2):
-                    self._ser is not None and self._ser.write(packet)
-                    self.scheduler.sleep(self, REPEAT_TIME)
-                self.scheduler.sleep(self, EXTRA_GAP)
+                for packet in status_packets:
+                    for i in range(2):
+                        self._ser is not None and self._ser.write(packet)
+                        self.scheduler.sleep(self, REPEAT_TIME)
+                    self.scheduler.sleep(self, EXTRA_GAP)
 
 
 REPEAT_TIME = 1.7e-3  # 1.7 ms empty between packet repetitions
