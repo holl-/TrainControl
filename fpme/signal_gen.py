@@ -496,9 +496,9 @@ class SignalGenerator:
                     self.scheduler.sleep(self, EXTRA_GAP)
 
 
-REPEAT_TIME = 1.7e-3  # 1.7 ms empty between packet repetitions
+REPEAT_TIME = 5e-3  # 1.7 ms empty between packet repetitions
 PACKET_GAP = 6e-3  # 6 ms between different pairs
-EXTRA_GAP = 2e-3
+EXTRA_GAP = 0
 
 
 if __name__ == '__main__':
