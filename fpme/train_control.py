@@ -180,10 +180,10 @@ class TrainControl:
 
     def reverse(self, train: Train, cause: str, auto_activate=True):
         state = self[train]
-        if auto_activate and not state.is_active:
+        if auto_activate and not state.is_active:  # ignore input if not active
             self.activate(train, cause)
-            return
-        state.target_speed = - math.copysign(0, state.target_speed)
+        else:  # already active
+            state.target_speed = - math.copysign(0, state.target_speed)
 
     # def set_target_speed(self, train: Train, signed_speed: float, cause: str):
     #     if not self.is_active(train) and signed_speed != 0:
@@ -218,16 +218,17 @@ class TrainControl:
                 state.custom_acceleration_handler(train, controller, acc_input, cause)
             else:
                 if acc_input != 0 and state.acc_input * acc_input <= 0:  # switching acceleration direction or was 0 -> jump to next level
-                    speed_idx = get_speed_index(train, state, acc_input, False, False)  # this rounds up/down depending on sign(acc_input)
-                    if acc_input > 0:
-                        speed_idx = max(1, speed_idx)
-                    elif acc_input < 0:
-                        speed_idx = min(speed_idx, 13)
-                    abs_speed = train.speeds[speed_idx]
-                    abs_speed = max(0, abs_speed + acc_input * 1e-1)
-                    prev_speed = state.speed
-                    state.set_speed(math.copysign(abs_speed, state.target_speed))
-                    print(f"Acceleration {train} = {acc_input} ({prev_speed} ({self._last_sent[train][1]} | {speed_idx}) -> {state.speed:.2f} ({get_speed_index(train, state, acc_input, True)}), target={state.target_speed})")
+                    if math.copysign(1, state.target_speed) == math.copysign(1, state.speed):  # only jump if not breaking because of previous reversing
+                        speed_idx = get_speed_index(train, state, acc_input, False, False)  # this rounds up/down depending on sign(acc_input)
+                        if acc_input > 0:
+                            speed_idx = max(1, speed_idx)
+                        elif acc_input < 0:
+                            speed_idx = min(speed_idx, 13)
+                        abs_speed = train.speeds[speed_idx]
+                        abs_speed = max(0, abs_speed + acc_input * 1e-1)
+                        prev_speed = state.speed
+                        state.set_speed(math.copysign(abs_speed, state.target_speed))
+                        print(f"Acceleration {train} = {acc_input} ({prev_speed} ({self._last_sent[train][1]} | {speed_idx}) -> {state.speed:.2f} ({get_speed_index(train, state, acc_input, True)}), target={state.target_speed})")
                 state.acc_input = acc_input
 
     def emergency_stop_all(self, train: Optional[Train], cause: str):
