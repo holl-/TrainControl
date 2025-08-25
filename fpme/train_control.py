@@ -218,7 +218,7 @@ class TrainControl:
                 state.custom_acceleration_handler(train, controller, acc_input, cause)
             else:
                 if acc_input != 0 and state.acc_input * acc_input <= 0:  # switching acceleration direction or was 0 -> jump to next level
-                    if math.copysign(1, state.target_speed) == math.copysign(1, state.speed):  # only jump if not breaking because of previous reversing
+                    if state.speed is None or math.copysign(1, state.target_speed) == math.copysign(1, state.speed):  # only jump if not breaking because of previous reversing
                         speed_idx = get_speed_index(train, state, acc_input, False, False)  # this rounds up/down depending on sign(acc_input)
                         if acc_input > 0:
                             speed_idx = max(1, speed_idx)
@@ -382,7 +382,7 @@ class TrainControl:
             # --- Input ---
             if state.force_stopping:
                 state.target_speed = math.copysign(0, state.target_speed)
-                if abs(state.speed) == 0:
+                if state.speed is None or abs(state.speed) == 0:
                     state.force_stopping = None
             elif state.acc_input != 0:
                 acc = train.acceleration if state.acc_input > 0 else train.deceleration
