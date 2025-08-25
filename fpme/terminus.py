@@ -33,7 +33,7 @@ PREVENT_EXIT = {  # when entering platform x, train on platforms y must wait
 ENTRY_SIGNAL = 3
 ENTRY_POWER = 4  # no power when open
 
-SPEED_LIMIT = 60.
+SPEED_LIMIT = 50.
 CONTACT_OFFSET = -20
 
 
