@@ -196,8 +196,10 @@ def int_list_to_binary_visual(numbers):
 
 from fpme.train_def import *
 CONTROLS = {
-    '\\\\?\\hid#vid_0810&pid_0001&col01#8&1a1f8825&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}': DAMPF,
-    '\\\\?\\hid#vid_0810&pid_0001&col01#8&2cd938ca&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}': ROT,
+    '\\\\?\\hid#vid_0810&pid_0001&col01#8&3a1c6485&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}': ROT,
+    '\\\\?\\hid#vid_0810&pid_0001&col01#8&14401120&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}': ROT,
+    '\\\\?\\hid#vid_0810&pid_0001&col01#8&186607b&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}': DAMPF,
+    '\\\\?\\hid#vid_0810&pid_0001&col01#8&598cc1&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}': DAMPF,
     '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_e0eebb488ace&col04#b&316fd37&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': ROT,
     '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_fdc80171a4bd&col04#b&2a97252d&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': ICE,
     '\\\\?\\hid#{00001812-0000-1000-8000-00805f9b34fb}_dev_vid&0205ac_pid&022c_rev&011b_1e89fff2c7db&col04#b&20fc5261&0&0003#{4d1e55b2-f16f-11cf-88cb-001111000030}': BUS,
