@@ -138,6 +138,7 @@ class Terminus:
         self.port = port
         self.trains: List[ParkedTrain] = []  # trains in Terminal
         self.entering: Optional[ParkedTrain] = None
+        self.correcting = {}  # Train -> direction
         self._request_lock = Lock()
         relay.close_channel(1)
         relay.close_channel(2)
@@ -253,6 +254,9 @@ class Terminus:
                 self.trains = [t for t in self.trains if t.train != train]
                 print(f"Removed train {train}")
             print(f"Didn't remove {train} from terminus")
+
+    def correct_move(self, train: Train, direction: float):
+        self.correcting[train] = direction
 
     def on_reversed(self, train: Train):
         for t in self.trains:
@@ -436,6 +440,14 @@ class Terminus:
                     if time.perf_counter() - train.time_stopped > 4.:
                         sound, vol = DEPARTURE_SOUNDS[train.train]
                         async_play("departure/"+sound, int(train.platform <= 3) * vol, int(train.platform > 3) * vol)
+            # --- Manual position correction ---
+            if train.train in self.correcting and not train.state.speed:
+                direction = self.correcting[train.train] * (1 if train.entered_forward else -1)
+                if direction:
+                    if train.dist_trip is not None:
+                        train.dist_trip += direction
+                    if train.dist_reverse is not None:
+                        train.dist_reverse += direction
         if self.entering is not None and self.entering.time_trip and time.perf_counter() - self.entering.time_trip > 20:
             print(f"{self.entering} has entered contact {time.perf_counter() - self.entering.time_trip} seconds ago and is still entering. Assuming this was a mistake and clearing entry.")
             self.clear_entering()

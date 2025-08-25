@@ -72,10 +72,10 @@ class InputManager:
         train = CONTROLS.get(device_path)
         device_name = self.connected[device_path].product_name if device_path in self.connected else device_path
         if device_name == "@input.inf,%hid_device_system_game%;HID-compliant game controller":
-            acc, buttons = get_vr_park_state(data)
+            x, acc, buttons = get_vr_park_state(data)
             bindings = VR_PARK_BIND
         elif device_name == "Twin USB Joystick":
-            acc, buttons = get_twin_joystick_state(data)
+            x, acc, buttons = get_twin_joystick_state(data)
             bindings = TWIN_JOYSTICK_BIND
         else:
             warnings.warn(f"Unknown input device: {device_name} @ {device_path}")
@@ -89,6 +89,8 @@ class InputManager:
         # --- Apply control ---
         if self.control is not None and train is not None:
             self.control.set_acceleration_control(train, device_path, acc, cause=device_path)
+            if self.terminus:
+                self.terminus.correct_move(train, x if acc == 0 else 0)
             if 'stop' in actions:
                 if actions['stop'] == 'press':
                     self.control.emergency_stop(train, cause=device_path)
@@ -132,9 +134,10 @@ def is_controller(dev: hid.HidDevice):
     return False
 
 
-def get_twin_joystick_state(data: List) -> Tuple[float, Dict[str, bool]]:
+def get_twin_joystick_state(data: List) -> Tuple[float, float, Dict[str, bool]]:
     # assume in mode RED
     left_y = data[4]  # 0 up, 128 center, 255 down  left joystick or up/down buttons
+    left_x = data[3]  # 0 left, 128 center, 255 right  left joystick or up/down buttons
     rlb_pressed = data[6] & 3  # reverse: either left or right button (upper trigger)
     rlt_pressed = data[6] & 12  # stop: either left or right lower trigger
     y_pressed = data[5] & 16  # Terminus
@@ -142,8 +145,9 @@ def get_twin_joystick_state(data: List) -> Tuple[float, Dict[str, bool]]:
     x_pressed = data[5] & 128  # F2
     b_pressed = data[5] & 32  # F3
     state = {'A': a_pressed, 'B': b_pressed, 'X': x_pressed, 'Y': y_pressed, 'R/LT': rlt_pressed, 'R/LB': rlb_pressed}
-    joystick = {0: 1., 128: 0., 255: -1.}[left_y]
-    return joystick, state
+    y = {0: 1., 128: 0., 255: -1.}[left_y]
+    x = {0: -1., 128: 0., 255: 1.}[left_x]
+    return x, y, state
 
 
 TWIN_JOYSTICK_BIND = {
@@ -156,7 +160,7 @@ TWIN_JOYSTICK_BIND = {
 }
 
 
-def get_vr_park_state(data: List) -> Tuple[float, Dict[str, bool]]:
+def get_vr_park_state(data: List) -> Tuple[float, float, Dict[str, bool]]:
     # data is always [4, 127, 127, 127, 128, button_id, 0, hat, 0]
     _, _, _, _, _, pressed, _, hat, _ = data
     hat_pos = {
@@ -169,9 +173,9 @@ def get_vr_park_state(data: List) -> Tuple[float, Dict[str, bool]]:
         2: (1, -1),
         4: (-1, -1),
         6: (-1, 1),
-    }[hat][1]
+    }[hat]
     state = {'A/T': pressed == 16, 'B/B': pressed == 1, 'C': pressed == 8, 'D': pressed == 2}
-    return hat_pos, state
+    return *hat_pos, state
 
 
 VR_PARK_BIND = {
