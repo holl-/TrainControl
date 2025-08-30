@@ -129,7 +129,7 @@ RE_TUERKIS =        TrainInfo("RE", "🚉", .35)
 
 
 # --- Passenger trains ---
-ICE = Train(ICE_, "BR 402 (ICE 2)", "Märklin 29786", 3, speeds(310), 25., img_path="ICE.png",
+ICE = Train(ICE_, "BR 402 (ICE 2)", "Märklin 29786", 3, speeds(310, 1.4), 25., img_path="ICE.png",
             functions=(LIGHT, SLOW_MODE, INSTANT_ACCELERATION))
 E_BW = Train(INTERREGIO_BLAU, "BR 101", "Märklin 37394", 1, (0, 13, 25, 46, 67, 86, 108, 125, 140, 156, 173, 191, 201, 215, 226), 30., img_path="E-Lok BW.png", stop_by_mm1_reverse=False,
              functions=(LIGHT, TrainFunction("Nebelscheinwerfer", 2, False, (TAG_SPECIAL_LIGHT,), 0., None), TrainFunction("Fahrtlicht hinten", 3, False, (TAG_SPECIAL_LIGHT,)), INSTANT_ACCELERATION))
