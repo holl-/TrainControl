@@ -159,10 +159,14 @@ class TrainControl:
         return any([self.generator.is_sending_on(port) for port in (self[train].ports if train else self.generator.get_open_ports())])
 
     def pause(self):
+        was_paused = self.paused
         self.paused = True
         for port in self.generator.get_open_ports():
             self.generator.stop(port)
         self.last_power_off = (time.perf_counter(), "master pause")
+        if was_paused:
+            for train, state in self.states.items():
+                state.set_speed(0.)
 
     def resume(self):
         self.paused = False
