@@ -342,6 +342,7 @@ class Terminus:
             state = self.control[train]
             self.entering = entering = ParkedTrain(train, state, state.track, platform)
             entering.dist_request = entering.state.signed_distance
+            entering.state.restore_speed_after_reset = True
             self.trains.append(entering)
         self.control.set_speed_limit(train, 'terminus', train.info.max_speed_in_station[LIMIT_INDEX[platform]])
         self.prevent_exit(platform)
@@ -466,6 +467,8 @@ class Terminus:
                 t.state.set_speed_limit('terminus-wait', 0)
 
     def clear_entering(self):
+        if self.entering is not None:
+            self.entering.state.restore_speed_after_reset = False
         self.entering = None
         self.relay.close_channel(ENTRY_SIGNAL)
         self.relay.open_channel(ENTRY_POWER)

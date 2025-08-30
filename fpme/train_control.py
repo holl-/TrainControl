@@ -40,6 +40,7 @@ class TrainState:
     modify_lock = threading.RLock()
     custom_acceleration_handler: Callable = None
     track: str = None  # Which part of the tracks the train is on, e.g. 'high-speed', 'regional', None=Unknown
+    restore_speed_after_reset = False  # e.g. trains entering station
 
     def __repr__(self):
         return f"{self.train.name} {self.speed:.0f} -> {self.target_speed:.0f} func={self.active_functions} controlled by {len(self.controllers)}"
@@ -175,7 +176,8 @@ class TrainControl:
             self.last_power_on = (time.perf_counter(), cause)
             if stop_trains:
                 for train, state in self.states.items():
-                    state.set_speed(0.)
+                    if not state.restore_speed_after_reset:
+                        state.set_speed(0.)
             def delayed_on():
                 time.sleep(1.)
                 with self._power_lock:
@@ -193,7 +195,8 @@ class TrainControl:
         self.last_power_off = (time.perf_counter(), "master pause")
         if was_paused:
             for train, state in self.states.items():
-                state.set_speed(0.)
+                if not state.restore_speed_after_reset:
+                    state.set_speed(0.)
 
     def resume(self):
         self.paused = False
