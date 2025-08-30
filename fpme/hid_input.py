@@ -114,7 +114,7 @@ class InputManager:
                     if actions[fun] == 'press':
                         self.control.use_ability(train, fun_i, cause=device_path, check_cooldown=True)
                     else:  # double-click any function to restore power
-                        self.control.power_on(train, 'Button')
+                        self.control.reset_power(train, cause=train.name, stop_trains=True)
         # --- Remember event ---
         if presses:
             event_text = ','.join([f"{a}-{p} ({b})" for (b, p), a in zip(presses.items(), actions)])

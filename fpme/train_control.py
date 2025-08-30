@@ -114,6 +114,8 @@ class TrainControl:
         self.last_power_off = (0., "")
         self.last_power_on = (0., "")
         self._last_sent = {t: None for t in trains}
+        self._resetting_power = False
+        self._power_lock = threading.RLock()
         for train in trains:
             self._send(train, 0, False, {})
         schedule_at_fixed_rate(self.update_trains, period=.03)
@@ -146,17 +148,42 @@ class TrainControl:
     def power_on(self, train: Optional[Train], cause: str):
         if self.paused:
             return
-        for port in (self[train].ports if train else self.generator.get_open_ports()):
-            self.generator.start(port)
+        with self._power_lock:
+            for port in (self[train].ports if train else self.generator.get_open_ports()):
+                self.generator.start(port)
         self.last_power_on = (time.perf_counter(), cause)
 
     def power_off(self, train: Optional[Train], cause: str):
-        for port in (self[train].ports if train else self.generator.get_open_ports()):
-            self.generator.stop(port)
+        with self._power_lock:
+            for port in (self[train].ports if train else self.generator.get_open_ports()):
+                self.generator.stop(port)
         self.last_power_off = (time.perf_counter(), cause)
 
     def is_power_on(self, train: Optional[Train]):
-        return any([self.generator.is_sending_on(port) for port in (self[train].ports if train else self.generator.get_open_ports())])
+        with self._power_lock:
+            return any([self.generator.is_sending_on(port) for port in (self[train].ports if train else self.generator.get_open_ports())])
+
+    def reset_power(self, train: Optional[Train], cause: str, stop_trains=False):
+        if self.paused:
+            return
+        with self._power_lock:
+            if self._resetting_power:
+                return
+            self._resetting_power = True
+            for port in (self[train].ports if train else self.generator.get_open_ports()):
+                self.generator.stop(port)
+            self.last_power_on = (time.perf_counter(), cause)
+            if stop_trains:
+                for train, state in self.states.items():
+                    state.set_speed(0.)
+            def delayed_on():
+                time.sleep(1.)
+                with self._power_lock:
+                    if self._resetting_power:
+                        for port in (self[train].ports if train else self.generator.get_open_ports()):
+                            self.generator.start(port)
+                        self._resetting_power = False
+            Thread(target=delayed_on).start()
 
     def pause(self):
         was_paused = self.paused
