@@ -182,12 +182,14 @@ class TrainControl:
     def __contains__(self, item):
         return item in self.states
 
-    def reverse(self, train: Train, cause: str, auto_activate=True):
+    def reverse(self, train: Train, cause: str, auto_activate=True, emergency_stop=False):
         state = self[train]
         if auto_activate and not state.is_active:  # ignore input if not active
             self.activate(train, cause)
         else:  # already active
             state.target_speed = - math.copysign(0, state.target_speed)
+            if emergency_stop and state.speed is not None and abs(state.speed) > .1:
+                self.emergency_stop(train, cause)
 
     # def set_target_speed(self, train: Train, signed_speed: float, cause: str):
     #     if not self.is_active(train) and signed_speed != 0:

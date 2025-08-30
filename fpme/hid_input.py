@@ -91,14 +91,14 @@ class InputManager:
             self.control.set_acceleration_control(train, device_path, acc, cause=device_path)
             if self.terminus:
                 self.terminus.correct_move(train, x if acc == 0 else 0)
-            if 'stop' in actions:
-                if actions['stop'] == 'press':
-                    self.control.emergency_stop(train, cause=device_path)
-                else:  # double-click
-                    self.control.emergency_stop_all(train, cause=device_path)
-                    # self.control.power_off(train, cause=device_path)
+            # if 'stop' in actions:
+            #     if actions['stop'] == 'press':
+            #         self.control.emergency_stop(train, cause=device_path)
+            #     else:  # double-click
+            #         self.control.emergency_stop_all(train, cause=device_path)
+            #         # self.control.power_off(train, cause=device_path)
             if 'reverse' in actions and actions['reverse'] == 'press':
-                self.control.reverse(train, cause=device_path)
+                self.control.reverse(train, cause=device_path, emergency_stop=True)
                 if self.terminus:
                     self.terminus.on_reversed(train)
             if 'terminus' in actions:
@@ -109,14 +109,12 @@ class InputManager:
                         self.terminus.remove_train(train)
                 else:
                     print("no terminus set")
-            if 'F1' in actions and actions['F1'] == 'press':
-                self.control.use_ability(train, 0, cause=device_path, check_cooldown=True)
-            if 'F1' in actions and actions['F1'] == 'double':
-                self.control.power_on(train, 'Button')
-            if 'F2' in actions and actions['F2'] == 'press':
-                self.control.use_ability(train, 1, cause=device_path, check_cooldown=True)
-            if 'F3' in actions and actions['F3'] == 'press':
-                self.control.use_ability(train, 2, cause=device_path, check_cooldown=True)
+            for fun_i, fun in TRAIN_FUNCTIONS.items():
+                if fun in actions:
+                    if actions[fun] == 'press':
+                        self.control.use_ability(train, fun_i, cause=device_path, check_cooldown=True)
+                    else:  # double-click any function to restore power
+                        self.control.power_on(train, 'Button')
         # --- Remember event ---
         if presses:
             event_text = ','.join([f"{a}-{p} ({b})" for (b, p), a in zip(presses.items(), actions)])
@@ -124,6 +122,9 @@ class InputManager:
         elif acc:
             event_text = f'a={acc}'
             self.last_events[device_path] = (time.perf_counter(), event_text)
+
+
+TRAIN_FUNCTIONS = {0: 'F1', 1: 'F2', 2: 'F3', 3: 'F4'}
 
 
 def is_controller(dev: hid.HidDevice):
@@ -154,9 +155,9 @@ TWIN_JOYSTICK_BIND = {
     'A': 'F1',
     'B': 'F3',
     'X': 'F2',
-    'Y': 'terminus',
-    'R/LT': 'stop',
-    'R/LB': 'reverse',
+    'Y': 'F4',
+    'R/LT': 'reverse',
+    'R/LB': 'terminus',
 }
 
 
@@ -179,10 +180,10 @@ def get_vr_park_state(data: List) -> Tuple[float, float, Dict[str, bool]]:
 
 
 VR_PARK_BIND = {
-    'A/T': 'stop',
-    'B/B': 'reverse',
-    'C': 'terminus',
-    'D': 'F1',
+    'A/T': 'reverse',
+    'B/B': 'terminus',
+    'C': 'F1',
+    'D': 'F2',
 }
 
 
