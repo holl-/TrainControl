@@ -63,7 +63,7 @@ class TrainState:
         return len(self.controllers) > 0 and self.inactive_time <= 30.
 
     def set_speed_limit(self, name: str, limit: Optional[float], jerk=True, cause: str = None, new_track: str = None):
-        print(f"{self.train}: Speed-limit '{name}'={limit}" if limit is not None else f"{self.train}: Speed-limit '{name}' removed. From: {self.speed_limits}")
+        # print(f"{self.train}: Speed-limit '{name}'={limit}" if limit is not None else f"{self.train}: Speed-limit '{name}' removed. From: {self.speed_limits}")
         with self.modify_lock:
             if limit is None:
                 if name in self.speed_limits:
@@ -264,7 +264,7 @@ class TrainControl:
                         abs_speed = max(0, abs_speed + acc_input * 1e-1)
                         prev_speed = state.speed
                         state.set_speed(math.copysign(abs_speed, state.target_speed))
-                        print(f"Acceleration {train} = {acc_input} ({prev_speed} ({self._last_sent[train][1]} | {speed_idx}) -> {state.speed:.2f} ({get_speed_index(train, state, acc_input, True)}), target={state.target_speed})")
+                        # print(f"Acceleration {train} = {acc_input} ({prev_speed} ({self._last_sent[train][1]} | {speed_idx}) -> {state.speed:.2f} ({get_speed_index(train, state, acc_input, True)}), target={state.target_speed})")
                 state.acc_input = acc_input
 
     def emergency_stop_all(self, train: Optional[Train], cause: str):
@@ -280,7 +280,7 @@ class TrainControl:
 
     def emergency_stop(self, train: Train, cause: str):
         """Immediately stop `train`."""
-        print(f"Emergency stop {train}, mm1={train.stop_by_mm1_reverse}")
+        # print(f"Emergency stop {train}, mm1={train.stop_by_mm1_reverse}")
         state = self[train]
         with state.modify_lock:
             state.target_speed *= 0.
@@ -302,7 +302,7 @@ class TrainControl:
         self[train].set_speed_limit(cause, limit, cause=cause)
 
     def force_stop(self, train: Train, cause: str):
-        print(f"Stopping {train}. cause={cause}")
+        # print(f"Stopping {train}. cause={cause}")
         state = self[train]
         with state.modify_lock:
             state.force_stopping = cause
@@ -327,7 +327,7 @@ class TrainControl:
     def set_train_functions_by_tag(self, train: Train, tag: str, on: bool):
         for func in train.functions:
             if tag in func.tags:
-                print(f"setting {train}.{func.name} = {on}")
+                # print(f"setting {train}.{func.name} = {on}")
                 state = self[train]
                 with state.modify_lock:
                     state.active_functions[func] = on
@@ -354,7 +354,7 @@ class TrainControl:
         state = self[train]
         if state.is_active:
             return
-        print(f"Activating {train} and applying functions {self.global_status_by_tag}")
+        # print(f"Activating {train} and applying functions {self.global_status_by_tag}")
         with state.modify_lock:
             if cause is None:
                 state.controllers.add('default')
@@ -373,12 +373,12 @@ class TrainControl:
                 with state.modify_lock:
                     state.controllers.remove(controller)
                     if not state.controllers:
-                        print(f"Deactivating {train} because it has no more controllers (triggered by removal of {controller})")
+                        # print(f"Deactivating {train} because it has no more controllers (triggered by removal of {controller})")
                         self.set_train_functions_by_tag(train, TAG_DEFAULT_LIGHT, False)
                         self.set_train_functions_by_tag(train, TAG_DEFAULT_SOUND, False)
                         self.force_stop(train, 'deactivation')
-                    else:
-                        print(f"{train} will stay active as it is still controlled by {state.controllers}")
+                    # else:
+                    #     print(f"{train} will stay active as it is still controlled by {state.controllers}")
                 break
         else:
             print(f"Removed controller was not registered with any train: {controller}")
@@ -457,7 +457,7 @@ class TrainControl:
         if data != self._last_sent[train]:
             self._last_sent[train] = data
             protocol = get_preferred_protocol(train)
-            print(f"Sending {train}: {'-' if currently_in_reverse else '+'}{speed_code} {functions} via {protocol}")
+            # print(f"Sending {train}: {'-' if currently_in_reverse else '+'}{speed_code} {functions} via {protocol}")
             self.generator.set(train.address, speed_code, currently_in_reverse, functions, protocol, train.name or train.locomotive)
 
 
