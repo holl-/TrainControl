@@ -14,16 +14,8 @@ import pyttsx3
 pygame.mixer.init()
 engine = pyttsx3.init()
 
-IMPULSE_RESPONSES = {
-    'medium': "IR_DUBWISE E001 M2S.wav",
-    'medium-reduced': "IR-medium-reduced.wav",
-    'empty-lobby': "RA-TRAIN STATION Impulse Response.wav",  # hard to understand
-    'hall-echo': "IR_BigHallE002_M2S.wav",
-    'large-station': "IR_train_station.wav",
-}
-
 DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../assets/sound"))
-_, ir = wavfile.read(DIR + "/ansagen/IR-medium-reduced.wav")
+_, ir = wavfile.read(DIR + "/ansagen/IR-terminus.wav")
 if ir.ndim > 1:
     ir = np.mean(ir, axis=1)
 ir = ir / np.max(np.abs(ir))
@@ -94,6 +86,8 @@ def apply_reverb(file: str, output_file: str):
 
 
 if __name__ == '__main__':
+    # play_announcement("Ihre nächsten Anschlüsse:", cue_vol=1)  # stores speech in assets/sound/speech-reverb.wav
     # apply_reverb("ansagen/gong.wav", "ansagen/gong-reverb-reduced.wav")
+
     play_announcement("S 1 nach Radeburg von Gleis 5", cue='anschlüsse', cue_vol=1)
     time.sleep(100)
