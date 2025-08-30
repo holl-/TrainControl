@@ -3,18 +3,17 @@ import os.path
 import random
 import time
 import warnings
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import cached_property
 from threading import Thread, Lock
 from typing import Optional, List, Tuple
 
-from dataclasses import dataclass
-
 from fpme.audio import play_announcement, play_background_loop, async_play, set_background_volume
 from fpme.helper import schedule_at_fixed_rate
-from fpme.relay8 import Relay8, RelayManager
+from fpme.relay8 import Relay8
 from fpme.train_control import TrainControl, TrainState
-from fpme.train_def import Train, TRAINS_BY_NAME, ICE, S, E_RB, E_BW, E40, DAMPF, BEIGE, ROT, DIESEL, BUS, train_by_name
+from fpme.train_def import Train, ICE, S, E_RB, E_BW, E40, DAMPF, BEIGE, ROT, DIESEL, BUS, train_by_name
 
 SWITCH_STATE = {  # True -> open_channel, False -> close_channel
     1: {6: False, 8: True},
@@ -30,11 +29,12 @@ PREVENT_EXIT = {  # when entering platform x, train on platforms y must wait
     5: [4],
 }
 
+LIMIT_INDEX = {1: 0, 2: 1, 3: 0, 4: 0, 5: 1}  # speed limit index by platform
+
 ENTRY_SIGNAL = 3
 ENTRY_POWER = 4  # no power when open
 
-SPEED_LIMIT = 50.
-CONTACT_OFFSET = -20
+CONTACT_OFFSET = -20  # distance (cm) how far the contact trigger extends beyond the board
 
 
 @dataclass
@@ -42,7 +42,7 @@ class ParkedTrain:
     train: Train
     state: TrainState
     prev_track: Optional[str]
-    platform: int
+    platform: int  # in {1, 2, 3, 4, 5}
     dist_request: float = None  # Signed distance when enter request was sent. None for trains set through the UI.
     dist_trip: float = None  # Signed distance when entering the switches
     time_trip: float = None
@@ -146,7 +146,7 @@ class Terminus:
         relay.open_channel(ENTRY_POWER)
         self.load_state()
         for t in self.trains:
-            t.state.set_speed_limit('terminus', SPEED_LIMIT, new_track='terminus')
+            t.state.set_speed_limit('terminus', t.train.info.max_speed_in_station[LIMIT_INDEX[t.platform]], new_track='terminus')
         schedule_at_fixed_rate(self.save_state, 5.)
         schedule_at_fixed_rate(self.check_exited, 1.)
         schedule_at_fixed_rate(self.update, 0.1)
@@ -343,7 +343,7 @@ class Terminus:
             self.entering = entering = ParkedTrain(train, state, state.track, platform)
             entering.dist_request = entering.state.signed_distance
             self.trains.append(entering)
-        self.control.set_speed_limit(train, 'terminus', SPEED_LIMIT)
+        self.control.set_speed_limit(train, 'terminus', train.info.max_speed_in_station[LIMIT_INDEX[platform]])
         self.prevent_exit(platform)
         set_switches_for(self.relay, platform)
         self.relay.open_channel(ENTRY_SIGNAL)

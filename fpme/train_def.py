@@ -37,9 +37,10 @@ class TrainInfo:
     name: Optional[str]
     icon: str
     regional_prob: float = .5
-    max_delay: int = 60
+    max_delay: int = 60  # arrival delay in minutes
     delay_rate: float = .2
     can_reverse: bool = True
+    max_speed_in_station: Tuple[float, float, float] = (50., 50., 60.)  # (multiple switches, single switch, going straight)
 
 
 @dataclass(frozen=True)
@@ -116,16 +117,16 @@ def speeds(s15, exponent=1.3):
     return (*np.linspace(0, s15 ** (1/exponent), 15) ** exponent,)
 
 
-GUETER =            TrainInfo(None, "🚂/🛲", 1, 0, 0, can_reverse=False)
+GUETER =            TrainInfo(None, "🚂/🛲", 1, 0, 0, can_reverse=False, max_speed_in_station=(65, 65, 70))
 # --- Rail cars ---
 ICE_ =              TrainInfo("ICE", "🚅", .33, max_delay=95, delay_rate=.35)
-S_ =                TrainInfo("S", "Ⓢ", .75, max_delay=30, delay_rate=.2)
-BUS_ =              TrainInfo("Bus", "🚌", .8, max_delay=10, delay_rate=0.1)
+S_ =                TrainInfo("S", "Ⓢ", .75, max_delay=30, delay_rate=.2, max_speed_in_station=(50, 55, 60))
+BUS_ =              TrainInfo("Bus", "🚌", .8, max_delay=10, delay_rate=0.1, max_speed_in_station=(70, 70, 70))
 # --- Wagons ---
 INTERREGIO_BLAU =   TrainInfo("IC", "🚉", .3)
 RB_ROT =            TrainInfo("RB", "🚉", .7)
 SILBERLING =        TrainInfo("N/E", "🚉", .6)  # Nahverkehrszug / Eilzug
-RE_TUERKIS =        TrainInfo("RE", "🚉", .35)
+RE_TUERKIS =        TrainInfo("RE", "🚉", .35, max_speed_in_station=(55, 55, 65))
 
 
 # --- Passenger trains ---
