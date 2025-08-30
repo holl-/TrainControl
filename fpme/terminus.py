@@ -442,10 +442,10 @@ class Terminus:
                         async_play("departure/"+sound, int(train.platform <= 3) * vol, int(train.platform > 3) * vol)
             # --- Manual position correction ---
             if train.train in self.correcting and not train.state.speed:
-                direction = self.correcting[train.train] * (1 if train.entered_forward else -1)
+                direction = self.correcting[train.train] * (-2 if train.entered_forward else 2)
                 if direction:
                     if train.dist_trip is not None:
-                        train.dist_trip += direction
+                        train.dist_trip -= direction
                     if train.dist_reverse is not None:
                         train.dist_reverse += direction
         if self.entering is not None and self.entering.time_trip and time.perf_counter() - self.entering.time_trip > 20:
