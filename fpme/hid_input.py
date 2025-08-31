@@ -3,7 +3,9 @@ Requires VR-Park controllers to be in mode C.
 
 Cross-platform unlike winusb. Both can read messages from VR-Park controllers in mode C.
 """
+import sys
 import time
+import traceback
 import warnings
 from functools import partial
 from threading import Thread
@@ -68,60 +70,63 @@ class InputManager:
         Thread(target=detection_loop).start()
 
     def process_event(self, data: List, device_path: str):
-        t = time.perf_counter()
-        train = CONTROLS.get(device_path)
-        device_name = self.connected[device_path].product_name if device_path in self.connected else device_path
-        if device_name == "@input.inf,%hid_device_system_game%;HID-compliant game controller":
-            x, acc, buttons = get_vr_park_state(data)
-            bindings = VR_PARK_BIND
-        elif device_name == "Twin USB Joystick":
-            x, acc, buttons = get_twin_joystick_state(data)
-            bindings = TWIN_JOYSTICK_BIND
-        else:
-            warnings.warn(f"Unknown input device: {device_name} @ {device_path}")
-            self.last_events[device_path] = (time.perf_counter(), int_list_to_binary_visual(data))
-            return
-        # --- Evaluate presses, double clicks ---
-        prev = self.button_states.setdefault(device_path, {b: (False, -1) for b in buttons})
-        self.button_states[device_path] = {b: (p, t if p else self.button_states[device_path][b][1]) for b, p in buttons.items()}
-        presses = {b: 'double' if t - prev[b][1] < 0.4 else 'press' for b, p in buttons.items() if p and not prev[b][0]}
-        actions = {bindings[b]: p for b, p in presses.items()}  # e.g. {'stop': 'press'}
-        # --- Apply control ---
-        if self.control is not None and train is not None:
-            self.control.set_acceleration_control(train, device_path, acc, cause=device_path)
-            if self.terminus:
-                self.terminus.correct_move(train, x if acc == 0 else 0)
-            # if 'stop' in actions:
-            #     if actions['stop'] == 'press':
-            #         self.control.emergency_stop(train, cause=device_path)
-            #     else:  # double-click
-            #         self.control.emergency_stop_all(train, cause=device_path)
-            #         # self.control.power_off(train, cause=device_path)
-            if 'reverse' in actions and actions['reverse'] == 'press':
-                self.control.reverse(train, cause=device_path, emergency_stop=True)
+        try:
+            t = time.perf_counter()
+            train = CONTROLS.get(device_path)
+            device_name = self.connected[device_path].product_name if device_path in self.connected else device_path
+            if device_name == "@input.inf,%hid_device_system_game%;HID-compliant game controller":
+                x, acc, buttons = get_vr_park_state(data)
+                bindings = VR_PARK_BIND
+            elif device_name == "Twin USB Joystick":
+                x, acc, buttons = get_twin_joystick_state(data)
+                bindings = TWIN_JOYSTICK_BIND
+            else:
+                warnings.warn(f"Unknown input device: {device_name} @ {device_path}")
+                self.last_events[device_path] = (time.perf_counter(), int_list_to_binary_visual(data))
+                return
+            # --- Evaluate presses, double clicks ---
+            prev = self.button_states.setdefault(device_path, {b: (False, -1) for b in buttons})
+            self.button_states[device_path] = {b: (p, t if p else self.button_states[device_path][b][1]) for b, p in buttons.items()}
+            presses = {b: 'double' if t - prev[b][1] < 0.4 else 'press' for b, p in buttons.items() if p and not prev[b][0]}
+            actions = {bindings[b]: p for b, p in presses.items()}  # e.g. {'stop': 'press'}
+            # --- Apply control ---
+            if self.control is not None and train is not None:
+                self.control.set_acceleration_control(train, device_path, acc, cause=device_path)
                 if self.terminus:
-                    self.terminus.on_reversed(train)
-            if 'terminus' in actions:
-                if self.terminus:
-                    if actions['terminus'] == 'press':
-                        self.terminus.request_entry(train)
+                    self.terminus.correct_move(train, x if acc == 0 else 0)
+                # if 'stop' in actions:
+                #     if actions['stop'] == 'press':
+                #         self.control.emergency_stop(train, cause=device_path)
+                #     else:  # double-click
+                #         self.control.emergency_stop_all(train, cause=device_path)
+                #         # self.control.power_off(train, cause=device_path)
+                if 'reverse' in actions and actions['reverse'] == 'press':
+                    self.control.reverse(train, cause=device_path, emergency_stop=True)
+                    if self.terminus:
+                        self.terminus.on_reversed(train)
+                if 'terminus' in actions:
+                    if self.terminus:
+                        if actions['terminus'] == 'press':
+                            self.terminus.request_entry(train)
+                        else:
+                            self.terminus.remove_train(train)
                     else:
-                        self.terminus.remove_train(train)
-                else:
-                    print("no terminus set")
-            for fun_i, fun in TRAIN_FUNCTIONS.items():
-                if fun in actions:
-                    if actions[fun] == 'press':
-                        self.control.use_ability(train, fun_i, cause=device_path, check_cooldown=True)
-                    else:  # double-click any function to restore power
-                        self.control.reset_power(train, cause=train.name, stop_trains=True)
-        # --- Remember event ---
-        if presses:
-            event_text = ','.join([f"{a}-{p} ({b})" for (b, p), a in zip(presses.items(), actions)])
-            self.last_events[device_path] = (time.perf_counter(), event_text)
-        elif acc:
-            event_text = f'a={acc}'
-            self.last_events[device_path] = (time.perf_counter(), event_text)
+                        print("no terminus set")
+                for fun_i, fun in TRAIN_FUNCTIONS.items():
+                    if fun in actions:
+                        if actions[fun] == 'press':
+                            self.control.use_ability(train, fun_i, cause=device_path, check_cooldown=True)
+                        else:  # double-click any function to restore power
+                            self.control.reset_power(train, cause=train.name, stop_trains=True)
+            # --- Remember event ---
+            if presses:
+                event_text = ','.join([f"{a}-{p} ({b})" for (b, p), a in zip(presses.items(), actions)])
+                self.last_events[device_path] = (time.perf_counter(), event_text)
+            elif acc:
+                event_text = f'a={acc}'
+                self.last_events[device_path] = (time.perf_counter(), event_text)
+        except BaseException as err:  # make sure the event loop stays active
+            traceback.print_exc()
 
 
 TRAIN_FUNCTIONS = {0: 'F1', 1: 'F2', 2: 'F3', 3: 'F4'}
