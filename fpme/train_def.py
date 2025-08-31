@@ -41,11 +41,15 @@ class TrainInfo:
     delay_rate: float = .2
     can_reverse: bool = True
     max_speed_in_station: Tuple[float, float, float] = (50., 50., 60.)  # (multiple switches, single switch, going straight)
-    max_speed_by_track: Dict[str, float] = field(default_factory=lambda: {'regional': 160, None: 160})
+    max_speed_by_track: Dict[str, float] = field(default_factory=lambda: {'regional': 160})
     switch_avoidance: float = 0.  # .5 -> 2/5 and is the threshold between 1/3
 
     def __hash__(self):
         return hash(self.name)
+
+    @cached_property
+    def speed_limit_unknown_track(self) -> Optional[float]:
+        return None if not self.max_speed_by_track else min(self.max_speed_by_track.values())
 
 
 @dataclass(frozen=True)
@@ -124,14 +128,14 @@ def speeds(s15, exponent=1.3):
 
 GUETER =            TrainInfo(None, "🚂/🛲", 1, 0, 0, can_reverse=False, max_speed_in_station=(65, 65, 70))
 # --- Rail cars ---
-ICE_ =              TrainInfo("ICE", "🚅", .33, max_delay=95, delay_rate=.35, max_speed_in_station=(45, 55, 60), switch_avoidance=.9)
+ICE_ =              TrainInfo("ICE", "🚅", .33, max_delay=95, delay_rate=.35, max_speed_in_station=(45, 55, 60), switch_avoidance=.9, max_speed_by_track={'regional': 140})
 S_ =                TrainInfo("S", "Ⓢ", .75, max_delay=30, delay_rate=.2, max_speed_in_station=(50, 55, 60), switch_avoidance=.5)
 BUS_ =              TrainInfo("Bus", "🚌", .8, max_delay=10, delay_rate=0.1, max_speed_in_station=(70, 70, 70))
 # --- Wagons ---
-INTERREGIO_BLAU =   TrainInfo("IC", "🚉", .3, switch_avoidance=1.)
-RB_ROT =            TrainInfo("RB", "🚉", .7, switch_avoidance=.55)
-SILBERLING =        TrainInfo("N/E", "🚉", .6, switch_avoidance=.55)  # Nahverkehrszug / Eilzug
-RE_TUERKIS =        TrainInfo("RE", "🚉", .35, max_speed_in_station=(55, 55, 65), switch_avoidance=.45)
+INTERREGIO_BLAU =   TrainInfo("IC", "🚉", .3, switch_avoidance=1., max_speed_by_track={'regional': 140})
+RB_ROT =            TrainInfo("RB", "🚉", .7, switch_avoidance=.55, max_speed_by_track={'regional': 140})
+SILBERLING =        TrainInfo("N/E", "🚉", .6, switch_avoidance=.55, max_speed_by_track={'regional': 140})  # Nahverkehrszug / Eilzug
+RE_TUERKIS =        TrainInfo("RE", "🚉", .35, max_speed_in_station=(55, 55, 65), switch_avoidance=.45, max_speed_by_track={'regional': 140})
 
 
 # --- Passenger trains ---

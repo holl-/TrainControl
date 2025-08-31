@@ -81,14 +81,19 @@ class TrainState:
             if not self.speed_limits:
                 self.target_speed = target_speed
             else:
-                self.target_speed = math.copysign(min(abs(target_speed), *self.speed_limits.values()), target_speed)
+                self.target_speed = math.copysign(min(abs(target_speed), self.track_speed_limit, *self.speed_limits.values()), target_speed)
 
     def set_speed(self, speed):
         with self.modify_lock:
             if not self.speed_limits:
                 self.speed = speed
             else:
-                self.speed = math.copysign(min(abs(speed), *self.speed_limits.values()), speed)
+                self.speed = math.copysign(min(abs(speed), self.track_speed_limit, *self.speed_limits.values()), speed)
+
+    @property
+    def track_speed_limit(self) -> Optional[float]:
+        limit = self.train.info.speed_limit_unknown_track if self.track is None else self.train.info.max_speed_by_track.get(self.track, None)
+        return limit if limit is not None else 99999
 
     @property
     def can_use_primary_ability(self):
