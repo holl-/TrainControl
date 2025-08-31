@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import cached_property
 from threading import Thread, Lock
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 
 from fpme.audio import play_announcement, play_background_loop, async_play, set_background_volume
 from fpme.helper import schedule_at_fixed_rate
@@ -334,7 +334,7 @@ class Terminus:
                     print(f"Cannot play announcement. sound={self.control.sound}, speed={t.state.speed}, previous={t.announcements_played}, time={time.perf_counter() - t.time_last_announcement - t.duration_last_announcement}")
                 return
             # --- prepare entry ---
-            platform = self.select_track(train)
+            platform = select_track(train, self.get_platform_state())
             print(f"Terminus: {train} assigned to platform {platform}")
             if platform is None:  # cannot enter
                 self.control.force_stop(train, "no platform")
@@ -493,33 +493,34 @@ class Terminus:
                 state[t.platform] = 'exiting'
         return state
 
-    def select_track(self, train: Train) -> Optional[int]:
-        """ Returns `None` if the train cannot enter because of collisions. """
-        state = self.get_platform_state()
-        can_enter = {
-            1: state[1] == 'empty' and state[2] != 'exiting' and state[3] != 'exiting',
-            2: state[2] == 'empty' and state[3] != 'exiting',
-            3: state[3] == 'empty',
-            4: state[4] == 'empty',
-            5: state[5] == 'empty' and state[4] != 'exiting',
-        }
-        can_enter = [p for p, c in can_enter.items() if c]
-        if not can_enter:
-            return None
-        regional = random.random() < train.info.regional_prob
-        cost_regional = int(not regional)
-        cost_far_distance = int(regional)
-        base_cost = {
-            1: cost_regional,
-            2: cost_regional + .1,
-            3: cost_regional + .2,
-            4: cost_far_distance + .1,
-            5: cost_far_distance,
-        }
-        cost = {p: base_cost[p] for p in can_enter}
-        best = min(cost, key=cost.get)
-        print(f"{train.name} -> platform {best},  costs={cost} (others cannot be entered due to occupancy or currently exiting trains)")
-        return best
+
+def select_track(train: Train, state: Dict[int, str]):
+    """ Returns `None` if the train cannot enter because of collisions. """
+    can_enter = {
+        1: state[1] == 'empty' and state[2] != 'exiting' and state[3] != 'exiting',
+        2: state[2] == 'empty' and state[3] != 'exiting',
+        3: state[3] == 'empty',
+        4: state[4] == 'empty',
+        5: state[5] == 'empty' and state[4] != 'exiting',
+    }
+    can_enter = [p for p, c in can_enter.items() if c]
+    if not can_enter:
+        return None
+    regional = random.random() < train.info.regional_prob
+    cost_regional = int(not regional)
+    cost_far_distance = int(regional)
+    sw_av = .25 * train.info.switch_avoidance
+    base_cost = {
+        1: cost_regional + 0. + sw_av,
+        2: cost_regional + .1,
+        3: cost_regional + .25 - sw_av,
+        4: cost_far_distance + -.1 + sw_av,
+        5: cost_far_distance,
+    }
+    cost = {p: base_cost[p] for p in can_enter}
+    best = min(cost, key=cost.get)
+    print(f"{train.name} -> platform {best},  costs={cost} (others cannot be entered due to occupancy or currently exiting trains)")
+    return best
 
 
 def set_switches_for(relay, platform: int):
@@ -850,5 +851,8 @@ if __name__ == '__main__':
             # relay.close_channel(8)
             # time.sleep(1)
     # relays.on_connected(main)
-    play_connections(2, [(E_RB, 1), (S, 3)])
-    time.sleep(20)
+    # play_connections(2, [(E_RB, 1), (S, 3)])
+    # time.sleep(20)
+
+    for i in range(10):
+        print(select_track(E_BW, {i: 'empty' for i in range(1, 6)}))
