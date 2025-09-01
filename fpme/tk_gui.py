@@ -144,7 +144,7 @@ class TKGUI:
         self.canvas_ids = {}
         self.canvas_texts = {}
         for train in control.trains:
-            train_photo = self.canvas_images[train.name] = ImageTk.PhotoImage(train.image.resize(fit_image_size(train.img_res, 80, 30)))
+            train_photo = self.canvas_images[train] = ImageTk.PhotoImage(train.image.resize(fit_image_size(train.img_res, 80, 30)))
             self.canvas_ids[train] = self.canvas.create_image(0, 0, anchor=tk.NW, image=train_photo)
             self.canvas_texts[train] = self.canvas.create_text(0, 0, anchor=tk.NW)
         # --- Hotkeys ---
